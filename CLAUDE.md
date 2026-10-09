@@ -4,14 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Chrome extension (Manifest V3, Chromium browsers only) that adds diagnostic and query tools to the HTML pages served by ArcGIS Server REST endpoints (`.../rest/services/...`). It packages the bookmarklets from [ESRI REST Diagnostics](https://github.com/raykendo/ESRI_REST_Diagnostics) into one tool. The code is plain vanilla JS with no framework, no bundler, and no runtime dependencies.
+Services Directory Toolkit is a Chrome extension (Manifest V3, Chromium browsers only) that adds diagnostic and query tools to the HTML pages served by ArcGIS Server REST endpoints (`.../rest/services/...`). It packages the bookmarklets from [ESRI REST Diagnostics](https://github.com/raykendo/ESRI_REST_Diagnostics) into one tool. The code is plain vanilla JS with no framework, no bundler, and no runtime dependencies.
+
+It is an independent continuation of Ken Doman's [Map Services Enhanced](https://github.com/raykendo/Map-Services-Enhanced), which stopped at 1.4.0 on Manifest V2. The `upstream` remote points at the original, and its full history is in this repo. The old name should appear only where it credits the original: the README, the manifest and `package.json` descriptions, and the options page footer. Keep Ken's line in both `LICENSE` files.
 
 ## Commands
 
 Requires Node 20.19+. Run `npm install` first.
 
 - `npm run lint`: ESLint 10 (flat config in `eslint.config.js`) over the repo. Formatting rules come from `@stylistic` (2-space indent, double quotes, semicolons).
-- `npm run build`: lint, then zip `src/` into `build/map-services-enhanced-<version>.zip`. The build fails if the versions in `package.json` and `src/manifest.json` differ, so bump both together.
+- `npm run build`: lint, then zip `src/` into `build/<package name>-<version>.zip` (currently `services-directory-toolkit-<version>.zip`). The build fails if the versions in `package.json` and `src/manifest.json` differ, so bump both together.
 - To try the extension, open `chrome://extensions`, turn on Developer mode, and use "Load unpacked" on `src/`. Branded Chrome ignores `--load-extension`, so automated browser tests need Playwright's bundled Chromium.
 
 - `npm run test:smoke`: loads the unpacked extension into the installed Google Chrome and checks every feature against Esri's public sample server (override with `MSE_TEST_SERVER`). It opens a visible Chrome window for about a minute, so don't run it while the user is working. Branded Chrome ignores `--load-extension`, so `tests/smoke.js` loads the extension over CDP (`Extensions.loadUnpacked`). That needs `--enable-unsafe-extension-debugging`, Developer mode in the throwaway profile, and `ignoreDefaultArgs: ["--disable-extensions"]`. The popup open/refuse checks occasionally fail because of window-focus timing.

@@ -1,4 +1,4 @@
-// Packages src/ into build/map-services-enhanced-<version>.zip for the Chrome Web Store.
+// Packages src/ into build/<package name>-<version>.zip for the Chrome Web Store.
 import { createWriteStream, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { ZipArchive } from "archiver";
 
@@ -11,7 +11,7 @@ if (pkg.version !== manifest.version) {
 }
 
 mkdirSync("build", { recursive: true });
-const outFile = `build/map-services-enhanced-${pkg.version}.zip`;
+const outFile = `build/${pkg.name}-${pkg.version}.zip`;
 const output = createWriteStream(outFile);
 const archive = new ZipArchive({ zlib: { level: 9 } });
 
