@@ -1,7 +1,7 @@
 # Store readiness: fixes, tests and tooling
 
 - **Date:** 2026-10-09
-- **Status:** awaiting owner review
+- **Status:** approved by the owner on 2026-10-09
 - **Scope:** everything needed before the first Chrome Web Store release of Services Directory Toolkit 2.0.0
 
 This is the single spec for the work. Each phase in section 6 gets its own short implementation plan and its own pull request against `main`.
@@ -65,6 +65,10 @@ These were established by experiment and the design depends on them.
 - **Service-worker errors.** Uncaught errors in the service worker reach no Playwright event unless the test installs `error` and `unhandledrejection` listeners in the worker.
 - **Today's code** emits no console messages on the main paths: root, service, layer, query, print, options and popup.
 - **Web-accessible resources.** Removing `web_accessible_resources` stops a content-script `<img src=getURL(...)>` from loading, while `fetch` of the same file still works.
+- **Host access from content-script patterns:**
+  - Chrome turns the content-script `matches` into host access per origin, so the extension's pages can make cross-origin requests to every site. The path part of each pattern is dropped (Chromium `cors_util.cc` keeps only scheme, host and port).
+  - The path does still limit where the content scripts run.
+  - These patterns don't expose `tab.url`. That needs `activeTab`.
 
 ## 4. Requirements for every phase
 
@@ -74,7 +78,8 @@ These are part of each phase's definition of done.
 
 - A fix that changes behaviour starts with a failing test.
 - Known bugs that already reproduce are added in Phase 1 as Playwright `test.fail()` cases. The phase that fixes a bug turns its case into a normal passing test.
-- Exempt from the failing-test rule, and covered by review or lint instead: dead-code removal, CSS typos, artwork, policy and listing text, and the prerender sender check.
+- Exempt from the failing-test rule, and covered by review or lint instead: dead-code removal, CSS typos, artwork, and policy and listing text.
+- Behaviour that a browser test can't drive, such as a prerendered page, still gets a failing test. Put the decision in a pure function in `src/src/lib/` and unit-test that function with `node --test`.
 - Tests find elements by role or text where possible. Class names change during this work.
 
 ### 4.2 Accessibility
@@ -148,7 +153,7 @@ Not code; it runs in parallel with the phases.
   - "Not affiliated with or endorsed by Esri or Ken Doman. ArcGIS is a registered trademark of Esri."
 - **Developer account** registration, 2-step verification and trader declaration.
 - **Permission justifications:**
-  - Host access: ArcGIS Server runs on arbitrary hosts, and the patterns are restricted to `/rest/services` paths.
+  - Host access: ArcGIS Server runs on arbitrary hosts, so the extension can't list them in advance. Chrome grants host access per origin, so the content-script patterns give access to every site. The `/rest/services` part of each pattern only limits where the content scripts run, and the scripts then do nothing unless the page is a Services Directory page.
   - `activeTab`: reads the active tab's URL when the user clicks the toolbar button, to shorten it and to start the REST search from it.
   - `storage`: saves settings.
 
@@ -333,7 +338,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Background:**
 - `action.default_state: "disabled"`, with the existing `onInstalled` and `onStartup` disable kept as a fallback.
-- The message handler checks `sender.id`, `sender.tab`, `frameId === 0` and `documentLifecycle === "active"`.
+- The message handler checks `sender.id`, `sender.tab`, `frameId === 0` and `documentLifecycle === "active"`. Those checks live in a pure function in `src/src/lib/`, which the service worker loads with `importScripts`.
 - `enable()` failures are caught.
 
 **Gear:**
@@ -354,6 +359,13 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - The URL-pattern matrix test covers root, `?f=html`, `submitJob`, `queryDomains`, a non-ArcGIS `/rest/services` page and a JSON view.
 - No web-accessible resources are present, checked by a build test.
 - Page-dispatched clicks reach no extension handler.
+- Unit tests show the sender check rejects:
+  - a message from another extension
+  - a message from a frame other than the top one
+  - a message from a document that is prerendering or in the back/forward cache
+  - a message with no tab
+
+  It accepts a message from the active top frame of a tab.
 - axe-core passes on the gear and popup.
 
 ### Phase 4: Settings
@@ -671,7 +683,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | POP-6 | M | Crawl URL building breaks on hyphens, hashes and operation pages | 9 | Fix (token part in 2) |
 | POP-7 | M | URL shortener leaves stray `?`, uses unanchored regexes and `execCommand` | 9 | Fix |
 | POP-8 | M | Popup accessibility | 9 | Fix |
-| BG-2 | M | Prerendered pages can leave the action in the wrong state | 3 | Fix (sender lifecycle check only, no browser test) |
+| BG-2 | M | Prerendered pages can leave the action in the wrong state | 3 | Fix (sender lifecycle check in a unit-tested pure function; no browser test) |
 | POP-9 | L | `X-Requested-With` and `Content-type` on GET force preflights | 2 | Fix |
 | MAN-3 | L | `_locales` is template boilerplate (also CWS-5) | 1 | Fix |
 | POP-10 | L | Empty search submits the form and reloads the popup | 9 | Fix |
