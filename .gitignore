@@ -39,3 +39,8 @@ jspm_packages
 # distributed builds
 dist
 .DS_Store
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/

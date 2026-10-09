@@ -2,9 +2,13 @@ import js from "@eslint/js";
 import stylistic from "@stylistic/eslint-plugin";
 import globals from "globals";
 
+// Extension code builds DOM with loadElement and text nodes. HTML strings would let server data
+// become markup.
+const NO_HTML_STRINGS = "Build DOM nodes with loadElement and text nodes; don't write HTML strings.";
+
 export default [
   {
-    ignores: ["build/", "node_modules/"]
+    ignores: ["build/", "dist/", "node_modules/", "test-results/", "playwright-report/", "blob-report/"]
   },
   js.configs.recommended,
   {
@@ -16,6 +20,13 @@ export default [
         ...globals.browser,
         ...globals.webextensions
       }
+    },
+    rules: {
+      "no-restricted-syntax": ["error",
+        { selector: "AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]", message: NO_HTML_STRINGS },
+        { selector: "CallExpression[callee.property.name='insertAdjacentHTML']", message: NO_HTML_STRINGS },
+        { selector: "CallExpression[callee.object.name='document'][callee.property.name=/^(write|writeln)$/]", message: NO_HTML_STRINGS }
+      ]
     }
   },
   {
@@ -34,6 +45,10 @@ export default [
         ...globals.browser,
         ...globals.webextensions
       }
+    },
+    rules: {
+      // Playwright fixtures that need no other fixture take an empty object pattern.
+      "no-empty-pattern": ["error", { allowObjectPatternsAsParameters: true }]
     }
   },
   {
