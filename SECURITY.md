@@ -8,7 +8,7 @@ Security fixes go into the latest release and `main`. Older versions don't get f
 |---|---|
 | 2.x, latest release | Yes |
 | Older 2.x releases | No |
-| Map Services Enhanced 1.x, the original extension | No |
+| 1.x releases of the original extension this one continues | No |
 
 ## Reporting a vulnerability
 
@@ -33,14 +33,14 @@ In scope:
 Out of scope:
 
 - ArcGIS Server and other Esri products and services. Report those to Esri.
-- Map Services Enhanced, the original extension this one continues. It is no longer maintained.
+- The original extension this one continues, which is no longer maintained (see the README).
 - Attacks that need control of the user's browser, device or Chrome profile.
 
 ## How the extension handles data
 
 This helps you judge what counts as a vulnerability.
 
-- The extension runs only on pages whose path contains `/rest/services`. It treats the content of those pages, and every server response, as untrusted.
+- Its content scripts run only on pages whose path contains `/rest/services`. The extension treats the content of those pages, and every server response, as untrusted.
 - It sends requests only to ArcGIS services linked from the page you are viewing.
 - It has no analytics and sends nothing to the developer or anyone else.
 - It keeps its settings in Chrome's extension storage.
