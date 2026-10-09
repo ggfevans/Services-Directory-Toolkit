@@ -21,17 +21,18 @@
   "scripts": {
     "lint": "eslint . --max-warnings=0",
     "build": "npm run lint && node scripts/build.js",
-    "test": "npm run test:unit",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:e2e": "playwright test",
     "test:unit": "node --test \"tests/unit/**/*.test.js\"",
     "test:smoke": "node tests/smoke.js"
   },
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.64.0",
     "@stylistic/eslint-plugin": "^5.10.0",
     "archiver": "^8.0.0",
     "eslint": "^10.11.0",
-    "globals": "^17.12.0",
-    "playwright": "^1.63.0"
+    "globals": "^17.12.0"
   }
 }

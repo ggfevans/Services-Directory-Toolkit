@@ -6,7 +6,7 @@
 //
 // Branded Chrome ignores --load-extension, so the extension is loaded over CDP (Extensions.loadUnpacked),
 // which needs --enable-unsafe-extension-debugging and Developer mode in the throwaway profile.
-import { chromium } from "playwright";
+import { chromium } from "@playwright/test";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
