@@ -83,13 +83,28 @@ test.describe("the fixture records", () => {
     await page.goto(`${REST_ROOT}/Parcels/MapServer`);
     await clickAction(page);
     await popupView.waitForOpen();
+    // Each call reaches one relay hook. The error event and the rejection are created in the popup's own
+    // realm, so they fire the popup's listeners. A helper-realm timer that throws would report to the
+    // helper page instead and bypass the popup.
     await popupView.page.evaluate(() => {
       const popup = chrome.extension.getViews({ type: "popup" })[0];
       popup.console.error("popup console");
       popup.alert("popup alert");
+      popup.confirm("popup confirm");
+      popup.prompt("popup prompt");
+      popup.dispatchEvent(new popup.ErrorEvent("error", { message: "popup error event" }));
+      popup.Promise.reject(new popup.Error("popup rejection"));
     });
-    await expect.poll(() => harness.errors).toContainEqual(expect.stringContaining("[popup] popup console"));
-    await expect.poll(() => harness.errors).toContainEqual(expect.stringContaining("[popup] dialog: popup alert"));
+    for (const expected of [
+      "[popup] popup console",
+      "[popup] dialog: popup alert",
+      "[popup] dialog: popup confirm",
+      "[popup] dialog: popup prompt",
+      "[popup] Uncaught: popup error event",
+      "[popup] Unhandled rejection: Error: popup rejection"
+    ]) {
+      await expect.poll(() => harness.errors, { message: `popup relay: ${expected}` }).toContainEqual(expect.stringContaining(expected));
+    }
     harness.forgive();
   });
 
