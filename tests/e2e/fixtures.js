@@ -10,6 +10,9 @@
 // - logs a console error
 // - throws
 // - opens a dialog
+//
+// The violations are recorded on the `harness` fixture. A test that provokes one on purpose asserts
+// that the right list caught it, then calls harness.forgive().
 import { test as base, chromium, expect } from "@playwright/test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -50,7 +53,24 @@ export const test = base.extend({
     await use([]);
   },
 
-  context: async ({ extraLaunchArgs, droppedDefaultArgs, fakeServer, expectedErrors }, use, testInfo) => {
+  // The violations the context fixture records, checked when the test ends. forgive() clears them,
+  // and the fake server's problems, in place, for a test that provokes one on purpose.
+  harness: async ({ fakeServer }, use) => {
+    const harness = {
+      offHost: [],
+      unmatched: [],
+      dialogs: [],
+      errors: [],
+      forgive() {
+        for (const list of [harness.offHost, harness.unmatched, harness.dialogs, harness.errors, fakeServer.problems]) {
+          list.length = 0;
+        }
+      }
+    };
+    await use(harness);
+  },
+
+  context: async ({ extraLaunchArgs, droppedDefaultArgs, fakeServer, expectedErrors, harness }, use, testInfo) => {
     const profile = mkdtempSync(join(tmpdir(), "sdt-profile-"));
     const context = await chromium.launchPersistentContext(profile, {
       // Playwright's default headless shell can't load extensions; the full Chromium build can.
@@ -67,18 +87,14 @@ export const test = base.extend({
       ignoreDefaultArgs: droppedDefaultArgs
     });
 
-    const errors = [];
-    const dialogs = [];
-    const offHost = [];
-    const unmatched = [];
     context.on("console", (message) => {
       if (message.type() === "error") {
-        errors.push(`${message.text()} [${message.location().url}]`);
+        harness.errors.push(`${message.text()} [${message.location().url}]`);
       }
     });
-    context.on("weberror", (webError) => errors.push(`Uncaught: ${webError.error().message}`));
+    context.on("weberror", (webError) => harness.errors.push(`Uncaught: ${webError.error().message}`));
     context.on("dialog", async (dialog) => {
-      dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+      harness.dialogs.push(`${dialog.type()}: ${dialog.message()}`);
       await dialog.dismiss();
     });
 
@@ -86,7 +102,7 @@ export const test = base.extend({
     await context.route(/^https?:\/\//, async (route) => {
       const request = route.request();
       if (new URL(request.url()).origin !== FAKE_ORIGIN) {
-        offHost.push(request.url());
+        harness.offHost.push(request.url());
         await route.abort("blockedbyclient");
         return;
       }
@@ -94,7 +110,7 @@ export const test = base.extend({
       if (response) {
         await route.fulfill(response);
       } else {
-        unmatched.push(`${request.method()} ${request.url()}`);
+        harness.unmatched.push(`${request.method()} ${request.url()}`);
         await route.fulfill({ status: 404, contentType: "text/plain", body: "No fixture for this URL" });
       }
     });
@@ -113,15 +129,16 @@ export const test = base.extend({
     await context.close();
     rmSync(profile, { recursive: true, force: true });
 
-    const unexpectedErrors = errors.filter((error) => !expectedErrors.some((pattern) => pattern.test(error)));
-    expect(offHost, "requests to hosts other than the fake ArcGIS Server").toEqual([]);
-    expect(unmatched, "requests the fake ArcGIS Server has no fixture for").toEqual([]);
+    const unexpectedErrors = harness.errors.filter((error) => !expectedErrors.some((pattern) => pattern.test(error)));
+    expect(harness.offHost, "requests to hosts other than the fake ArcGIS Server").toEqual([]);
+    expect(harness.unmatched, "requests the fake ArcGIS Server has no fixture for").toEqual([]);
     expect(fakeServer.problems, "requests the fake ArcGIS Server could not interpret").toEqual([]);
-    expect(dialogs, "dialogs").toEqual([]);
+    expect(harness.dialogs, "dialogs").toEqual([]);
     expect(unexpectedErrors, "console errors and uncaught exceptions").toEqual([]);
   },
 
-  // The extension's service worker. It is automatic so that every test gets the error hooks.
+  // The extension's service worker. It is automatic so that every test gets the error hooks. The hooks
+  // go in after the worker has started, so errors and rejections during worker startup aren't caught.
   serviceWorker: [async ({ context }, use) => {
     const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
     // Uncaught service-worker errors reach no Playwright event on their own. Re-log them as console
@@ -196,14 +213,43 @@ export const test = base.extend({
 
   // A background extension tab that can reach the real popup through chrome.extension.getViews.
   // It opens before the toolbar click, because bringing any tab to the front closes the popup.
+  //
+  // Playwright exposes no Page for the real popup, so waitForOpen() relays the popup's errors, console
+  // errors and dialogs to this helper page, which the context fixture watches. Errors raised during the
+  // popup's initial load, before the relay is installed, aren't caught. Test popup logic with
+  // openPopupTab, which is a normal page, and use this only for what needs the real toolbar popup.
   popupView: async ({ context, extensionId }, use) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    const isOpen = () => page.evaluate(() => chrome.extension.getViews({ type: "popup" }).length > 0);
     await use({
       page,
       // Poll on a timer: animation frames, the default, don't run in a background tab.
-      waitForOpen: () => page.waitForFunction(() => chrome.extension.getViews({ type: "popup" }).length > 0, undefined, { polling: 100 }),
-      isOpen: () => page.evaluate(() => chrome.extension.getViews({ type: "popup" }).length > 0)
+      waitForOpen: async () => {
+        await page.waitForFunction(() => chrome.extension.getViews({ type: "popup" }).length > 0, undefined, { polling: 100 });
+        await page.evaluate(() => {
+          const popup = chrome.extension.getViews({ type: "popup" })[0];
+          const relay = (message) => console.error(`[popup] ${message}`);
+          popup.addEventListener("error", (event) => relay(`Uncaught: ${event.message}`));
+          popup.addEventListener("unhandledrejection", (event) => relay(`Unhandled rejection: ${event.reason}`));
+          const popupConsoleError = popup.console.error.bind(popup.console);
+          popup.console.error = (...args) => {
+            popupConsoleError(...args);
+            relay(args.join(" "));
+          };
+          // The dialogs never open: the relay reports them and returns what a dismissed dialog returns.
+          popup.alert = (message) => relay(`dialog: ${message}`);
+          popup.confirm = (message) => {
+            relay(`dialog: ${message}`);
+            return false;
+          };
+          popup.prompt = (message) => {
+            relay(`dialog: ${message}`);
+            return null;
+          };
+        });
+      },
+      isOpen
     });
   }
 });
