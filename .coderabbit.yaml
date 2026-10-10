@@ -10,7 +10,7 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
-    base_branches: ["master"]
+    base_branches: ["main"]
   path_filters:
     - "!package-lock.json"
     - "!build/**"
@@ -22,17 +22,24 @@ reviews:
         untrusted ArcGIS REST pages and render untrusted server JSON: flag any innerHTML,
         insertAdjacentHTML, outerHTML, document.write or eval, and require DOM construction
         with text nodes instead. Flag MV2-only APIs (chrome.extension.*, background pages,
-        page_action).
+        the page_action manifest key, chrome.pageAction). The src/src/page_action/ folder
+        name is historical and fine.
     - path: "src/manifest.json"
       instructions: |
         Flag any new permissions or host_permissions and explain why each is needed. The
-        declarativeContent rule in src/src/bg/background.js must stay in sync with the
-        content_scripts match patterns. The version must match package.json.
+        toolbar button is enabled by an enableAction message from status.js, not by
+        declarativeContent rules; flag any attempt to reintroduce them. The version must
+        match package.json.
     - path: "src/src/{options,config}/**"
       instructions: |
-        Settings are defined in three places that must agree: options.html/options.js,
+        Settings defaults are repeated in places that must agree: options.html/options.js,
         src/src/config/options.json, and each content script's chrome.storage.sync.get
         defaults. Flag keys, values or defaults that diverge.
+    - path: "tests/fixtures/**"
+      instructions: |
+        Fixtures must be synthetic. Flag anything that looks copied from a real ArcGIS
+        Server or Esri sample service: real service names, descriptions or captured
+        responses.
   tools:
     eslint:
       enabled: true

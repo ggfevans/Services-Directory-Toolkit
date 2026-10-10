@@ -1,28 +1,21 @@
-// Smoke test: loads the unpacked extension into the locally installed Google Chrome and checks each
-// feature against a live ArcGIS Server (Esri's public sample server by default).
+// Live check: loads the unpacked extension into the locally installed Google Chrome and checks each
+// feature against a real ArcGIS Server (Esri's public sample server by default). It is not part of
+// CI; the deterministic tests are in tests/e2e. Runs headless; set HEADED=1 to watch.
 //
-//   npm run test:smoke
-//   MSE_TEST_SERVER=https://host/arcgis/rest/services npm run test:smoke
+//   npm run test:live
+//   SDT_TEST_SERVER=https://host/arcgis/rest/services npm run test:live
 //
 // Branded Chrome ignores --load-extension, so the extension is loaded over CDP (Extensions.loadUnpacked),
 // which needs --enable-unsafe-extension-debugging and Developer mode in the throwaway profile.
-import { chromium } from "playwright";
+import { chromium } from "@playwright/test";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SRC = fileURLToPath(new URL("../src", import.meta.url));
-const BASE = process.env.MSE_TEST_SERVER || "https://sampleserver6.arcgisonline.com/arcgis/rest/services";
+const SRC = fileURLToPath(new URL("../../src", import.meta.url));
+const BASE = process.env.SDT_TEST_SERVER || process.env.MSE_TEST_SERVER || "https://sampleserver6.arcgisonline.com/arcgis/rest/services";
 const REST_PAGE = /^https?:\/\/[^/]+\/.+\/rest\/services(\/.*)?$/;
-
-// Test-only copy with the "tabs" permission, so the harness can read tab URLs when checking the action state.
-const EXT = mkdtempSync(join(tmpdir(), "mse-ext-"));
-const PROFILE = mkdtempSync(join(tmpdir(), "mse-profile-"));
-cpSync(SRC, EXT, { recursive: true });
-const manifest = JSON.parse(readFileSync(join(EXT, "manifest.json"), "utf8"));
-manifest.permissions.push("tabs");
-writeFileSync(join(EXT, "manifest.json"), JSON.stringify(manifest));
 
 // How long each check waits for the live server and extension callbacks before failing.
 const TIMEOUT = 30000;
@@ -45,15 +38,27 @@ const record = (name, ok, detail = "") => {
   console.log(`${ok === null ? "SKIP" : ok ? "PASS" : "FAIL"}  ${name}${detail ? `  (${detail})` : ""}`);
 };
 
-const ctx = await chromium.launchPersistentContext(PROFILE, {
-  channel: "chrome",
-  headless: false,
-  args: ["--enable-unsafe-extension-debugging"],
-  // Playwright passes --disable-extensions by default, which would unload the extension.
-  ignoreDefaultArgs: ["--disable-extensions"]
-});
+let EXT;
+let PROFILE;
+let ctx;
 
 try {
+  // Test-only copy with the "tabs" permission, so the harness can read tab URLs when checking the action state.
+  EXT = mkdtempSync(join(tmpdir(), "sdt-ext-"));
+  PROFILE = mkdtempSync(join(tmpdir(), "sdt-profile-"));
+  cpSync(SRC, EXT, { recursive: true });
+  const manifest = JSON.parse(readFileSync(join(EXT, "manifest.json"), "utf8"));
+  manifest.permissions.push("tabs");
+  writeFileSync(join(EXT, "manifest.json"), JSON.stringify(manifest));
+
+  ctx = await chromium.launchPersistentContext(PROFILE, {
+    channel: "chrome",
+    headless: !process.env.HEADED,
+    args: ["--enable-unsafe-extension-debugging"],
+    // Playwright passes --disable-extensions by default, which would unload the extension.
+    ignoreDefaultArgs: ["--disable-extensions"]
+  });
+
   // 1. Load the extension.
   const extensionsPage = await ctx.newPage();
   await extensionsPage.goto("chrome://extensions");
@@ -205,9 +210,12 @@ try {
 } catch (err) {
   record("test harness", false, err.stack);
 } finally {
-  await ctx.close();
-  rmSync(EXT, { recursive: true, force: true });
-  rmSync(PROFILE, { recursive: true, force: true });
+  await ctx?.close();
+  for (const dir of [EXT, PROFILE]) {
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
   const failed = results.filter((r) => r.ok === false).length;
   const skipped = results.filter((r) => r.ok === null).length;
   console.log(`\n${results.length - failed - skipped}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""}`);
