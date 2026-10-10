@@ -50,6 +50,10 @@ Requires Node 20.19 or later. Run `npm install` first.
 - `npm run build` runs the linter, then packages `src/` into `build/services-directory-toolkit-<version>.zip`. The versions in `package.json` and `src/manifest.json` must match.
 - `npm run test:smoke` loads the extension into Google Chrome and checks each feature against Esri's public sample server. Set `MSE_TEST_SERVER` to test a different server. It opens a visible Chrome window for about a minute.
 
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md). Please don't open a public issue for it.
+
 ## License
 
 MIT. See [LICENSE](LICENSE), which keeps Ken Doman's original copyright notice.
