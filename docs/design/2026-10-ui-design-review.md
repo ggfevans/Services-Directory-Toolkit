@@ -2,7 +2,7 @@
 
 - **Issue:** #7. Inputs are #6 (map preview placement, decided) and the store readiness spec, `docs/superpowers/specs/2026-10-09-store-readiness-design.md`.
 - **Date:** 2026-10-09
-- **Status:** accepted. The owner took every recommendation in section 9 on 2026-10-09, and the spec now includes them. Section 10 drafts the follow-up issues for Phases 5 to 9.
+- **Status:** accepted. The owner took every recommendation in section 9 on 2026-10-09, and the spec now includes them. Section 10 holds the follow-up issues for Phases 5 to 9, #13 to #27.
 - **Deliverables:** this document, static mockups in `docs/design/mockups/`, and screenshots in `docs/design/images/`. Section 11 explains how to regenerate them.
 
 ## Contents
@@ -16,7 +16,7 @@
 7. [Accessibility testing](#7-accessibility-testing)
 8. [Fit with the spec](#8-fit-with-the-spec)
 9. [Decisions](#9-decisions)
-10. [Proposed follow-up issues](#10-proposed-follow-up-issues)
+10. [Follow-up issues](#10-follow-up-issues)
 11. [Regenerating the images](#11-regenerating-the-images)
 
 ## 1. Summary
@@ -662,11 +662,11 @@ The owner accepted the recommendation in each item below on 2026-10-09. The alte
 10. **Insert buttons ignore synthetic clicks.** Recommended: "Insert default where clause" and "Insert saved web map" check `event.isTrusted`. Alternative: the spec as written, where a page script can click the button to read the stored value.
 11. **Where value counts go.** Recommended: inline at the end of each field's row, as today. Alternative: one summary table (field, with values, not empty, coded values) above the field list, which is easier to scan but repeats the page's list.
 
-## 10. Proposed follow-up issues
+## 10. Follow-up issues
 
-Drafts only; none are created. Criteria are written to test, in the style of #6, and each surface issue carries its section 6 accessibility table as a criterion.
+Created on 2026-10-09 as issues #13 to #27. Criteria are written to test, in the style of #6, and each surface issue carries its section 6 accessibility table as a criterion.
 
-### 10.1 Shared style, theme check and accessibility test helpers
+### 10.1 Shared style, theme check and accessibility test helpers (#13)
 
 - **Labels:** `enhancement`, `accessibility`, `size:M`
 - **Phase:** 5 (first, before the other Phase 5 issues)
@@ -681,7 +681,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - `check-contrast.js` passes in CI and fails when a token is changed to a failing value.
 - The build includes `sdt.css`; nothing else in `src/` changes appearance yet.
 
-### 10.2 Status bar replaces the corner status indicator
+### 10.2 Status bar replaces the corner status indicator (#14)
 
 - **Labels:** `enhancement`, `accessibility`, `size:S`
 - **Phase:** 5
@@ -698,7 +698,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - The bar itself has no click handler.
 - Every row of the WCAG 2.2 AA table in section 6.3 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.3 Spatial reference badges from a tested palette
+### 10.3 Spatial reference badges from a tested palette (#15)
 
 - **Labels:** `enhancement`, `accessibility`, `size:S`
 - **Phase:** 5
@@ -714,7 +714,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - "Dynamic" or "Tiled" appears only when `singleFusedMapCache` exists.
 - Every row of the WCAG 2.2 AA table in section 6.4 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.4 Service and layer details in an inline disclosure
+### 10.4 Service and layer details in an inline disclosure (#16)
 
 - **Labels:** `enhancement`, `accessibility`, `size:M`
 - **Phase:** 5
@@ -730,7 +730,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - Loading, error with Retry, and not-loaded rows match the mockup.
 - Every row of the WCAG 2.2 AA table in section 6.5 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.5 Feature and value counts: inline counts, zero warnings, Count values
+### 10.5 Feature and value counts: inline counts, zero warnings, Count values (#17)
 
 - **Labels:** `enhancement`, `accessibility`, `size:L`
 - **Phase:** 5
@@ -747,7 +747,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - Counts attach by field name (INJ-7).
 - Every row of the WCAG 2.2 AA table in section 6.6 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.6 Map preview pop-up: look and states
+### 10.6 Map preview pop-up: look and states (#18)
 
 - **Labels:** `enhancement`, `accessibility`, `size:S`
 - **Phase:** 6, with #6
@@ -764,7 +764,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - #6's criteria still pass.
 - Every row of the WCAG 2.2 AA table in section 6.8 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.7 Docked side panel for the Query and Find Helpers
+### 10.7 Docked side panel for the Query and Find Helpers (#19)
 
 - **Labels:** `enhancement`, `accessibility`, `size:M`
 - **Phase:** 7
@@ -781,7 +781,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - The panel is an `<aside>` named by its heading.
 - Every row of the WCAG 2.2 AA table in section 6.7 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.8 Query Helper layout and keyboard use
+### 10.8 Query Helper layout and keyboard use (#20)
 
 - **Labels:** `enhancement`, `accessibility`, `size:L`
 - **Phase:** 7
@@ -799,7 +799,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - Insert default ignores synthetic clicks (decision 10).
 - Every row of the WCAG 2.2 AA table in section 6.7 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.9 Find Helper layout
+### 10.9 Find Helper layout (#21)
 
 - **Labels:** `enhancement`, `accessibility`, `size:S`
 - **Phase:** 7
@@ -814,7 +814,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - A keyboard-only test fills Search Text and Search Fields.
 - Every row of the WCAG 2.2 AA table in section 6.7 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.10 Print task controls and Insert saved web map
+### 10.10 Print task controls and Insert saved web map (#22)
 
 - **Labels:** `enhancement`, `accessibility`, `size:S`
 - **Phase:** 8
@@ -829,7 +829,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - Insert saved web map inserts on a trusted click only and shows the "nothing saved" text when empty.
 - Every row of the WCAG 2.2 AA table in section 6.9 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.11 Popup layout and states for search and Trim query URL
+### 10.11 Popup layout and states for search and Trim query URL (#23)
 
 - **Labels:** `enhancement`, `accessibility`, `size:L`
 - **Phase:** 9
@@ -845,7 +845,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - The popup reflows at 320 px when opened as a tab.
 - Every row of the WCAG 2.2 AA table in section 6.1 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.12 Quick settings and Reload page in the popup
+### 10.12 Quick settings and Reload page in the popup (#24)
 
 - **Labels:** `enhancement`, `accessibility`, `size:M`
 - **Phase:** 9
@@ -862,7 +862,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - A unit test ties the three keys to boolean schema entries.
 - Every row of the WCAG 2.2 AA table in section 6.1 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.13 Options page layout
+### 10.13 Options page layout (#25)
 
 - **Labels:** `enhancement`, `accessibility`, `size:M`
 - **Phase:** 9
@@ -878,7 +878,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - axe runs with and without errors showing.
 - Every row of the WCAG 2.2 AA table in section 6.10 holds, checked with axe in both schemes and a keyboard-only test.
 
-### 10.14 Store assets that match the UI
+### 10.14 Store assets that match the UI (#26)
 
 - **Labels:** `enhancement`, `size:S`
 - **Phase:** 9, with Track S
@@ -892,7 +892,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 - The promo tile uses the accent and glyph.
 - `npm run screenshots` produces light and dark store screenshots from the real extension against the fake server.
 
-### 10.15 Screen-reader pass before release
+### 10.15 Screen-reader pass before release (#27)
 
 - **Labels:** `accessibility`, `size:S`
 - **Phase:** 9
