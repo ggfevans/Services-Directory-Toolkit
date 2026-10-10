@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint, unit tests, build, browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      # Playwright recommends downloading browsers on each run rather than caching them.
+      - run: npx playwright install --with-deps --no-shell chromium
+      - run: node scripts/build.js
+      - run: unzip -q build/*.zip -d dist
+      # Test the unzipped build, which is exactly what ships.
+      - run: npx playwright test
+        env:
+          EXT_PATH: dist
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: extension-zip
+          path: build/*.zip
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
