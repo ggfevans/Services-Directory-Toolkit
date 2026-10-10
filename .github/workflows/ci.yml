@@ -59,6 +59,8 @@ jobs:
       - run: npx playwright install-deps chromium
       - id: chrome
         run: echo "path=$(npx --yes @puppeteer/browsers@3.2.4 install chrome@120 --path "$RUNNER_TEMP/cft" | sed 's/^[^ ]* //')" >> "$GITHUB_OUTPUT"
-      - run: npx playwright test --retries=0 --max-failures=3
+      # The @cdp tests click the toolbar button with Extensions.triggerAction, which Chrome 120's
+      # DevTools protocol doesn't have.
+      - run: npx playwright test --retries=0 --max-failures=3 --grep-invert @cdp
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.path }}
