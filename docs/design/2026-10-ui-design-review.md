@@ -494,7 +494,7 @@ It keeps everything Phase 3 asks of the indicator: an inline SVG, an accessible 
 4. **Operators:** 19 buttons in a grid, 40 × 28 px, monospace. Symbols get names such as "Insert parentheses".
 5. **Statistics:** always visible, disabled with the reason ("Choose the Output Statistics box to add a statistic") until Output Statistics is the target. Today they're hidden until focus.
 6. **Quick queries:** "Select all", "All but geometry" and "Count only" carry a run icon and a hint that says what they do with the current setting ("These fill the form and run it with GET. Change this in All settings."). "Distinct values of FIELD" fills only. The asterisks go.
-7. **Default where clause:** shown only when one is saved. The button carries the clause itself, "Insert STATUS = 'A'", and is Phase 7's Insert default.
+7. **Default where clause:** shown only when one is saved. The button reads "Insert default where clause" and is Phase 7's Insert default. Its label never shows the clause, because page scripts can read any text the extension adds to the page.
 
 **Find Helper:** the same panel and picker. A status line says what it did to the Layers box ("Filled Layers with 0,1: every layer that has fields."). Values go in as plain text, and there are no operators, statistics or quick queries.
 
@@ -797,6 +797,7 @@ Created on 2026-10-09 as issues #13 to #27. Criteria are written to test, in the
 - Statistics are visible and disabled with a reason until Output Statistics is the target.
 - Quick queries say whether they run, with GET or POST, from the setting.
 - Insert default ignores synthetic clicks (decision 10).
+- The Insert default button's text and accessible name never include the saved clause.
 - Every row of the WCAG 2.2 AA table in section 6.7 holds, checked with axe in both schemes and a keyboard-only test.
 
 ### 10.9 Find Helper layout (#21)

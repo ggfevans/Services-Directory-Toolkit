@@ -513,7 +513,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Submit buttons are found within the form, and the auto-submit label covers every button marked with an asterisk.
 
 **Other behaviour:**
-- The default where clause goes in through an "Insert default" button, whose handler ignores clicks with `event.isTrusted === false`.
+- The default where clause goes in through an "Insert default" button, whose handler ignores clicks with `event.isTrusted === false`. The button's label never includes the clause.
 - If outStatistics text is not valid JSON, entries are inserted at the caret, not replaced.
 - ImageServer query and service-level FeatureServer query are classified and handled: fields from the service root, or no picker.
 
