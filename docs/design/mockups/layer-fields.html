@@ -1,0 +1,117 @@
+<!doctype html>
+<!--
+  Mockup: a layer page of an invented server after the user pressed "Count values" (Phase 5:
+  per-field and per-coded-value counts run on demand). Everything inside an element with class
+  "sdt" is what the extension would add. Fields show different results on purpose: all values,
+  some empty, none (zero warning), coded values with a zero, and a field type that is skipped.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Layer: Parcels (ID: 0) (mockup)</title>
+<link rel="stylesheet" href="host-standin.css">
+<link rel="stylesheet" href="sdt.css">
+<style>
+  /* Mockup only: the fake page's field list items are long; keep them readable. */
+  .rbody li { margin-bottom: 0.15rem; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right"><a href="#login">Login</a></td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+<a href="#home">Home</a>
+  &gt; <a href="#services">services</a>
+  &gt; <a href="#parcels">Parcels (MapServer)</a>
+  &gt; <a href="#layer">Parcels</a>
+</td>
+<td align="right"><a href="#help">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="#json">JSON</a></td></tr>
+</table>
+<h2>Layer: Parcels (ID: 0)</h2>
+<div class="rbody">
+<b>Name:</b> Parcels<br/><br/>
+<b>Display Field:</b> OWNER_NAME<br/><br/>
+<b>Type: </b> Feature Layer<br/><br/>
+<b>Geometry Type:</b> esriGeometryPolygon<br/><br/>
+<b>Fields: </b>
+<!-- Extension: the on-demand control and its result line, next to the page's own label. -->
+<span class="sdt sdt-annot">
+  <button class="sdt-button" type="button">Count values again</button>
+  <span class="sdt-status" data-tone="ok" role="status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-check"/></svg>Counted 7 fields and 3 coded values in 7 requests (0.6 s). 3 features in total.</span>
+</span>
+<ul>
+<li>
+    OBJECTID<i>
+(
+type: esriFieldTypeOID, alias: OBJECTID
+)
+</i><span class="sdt sdt-annot"><span class="sdt-count"><b>3</b> with values</span></span></li>
+<li>
+    SHAPE<i>
+(
+type: esriFieldTypeGeometry, alias: Shape
+)
+</i><span class="sdt sdt-annot"><span class="sdt-count"><b>2</b> with shapes</span></span></li>
+<li>
+    PARCEL_ID<i>
+(
+type: esriFieldTypeString, alias: Parcel ID, length: 20
+)
+</i><span class="sdt sdt-annot"><span class="sdt-count"><b>3</b> with values</span><span class="sdt-count"><b>3</b> not empty</span></span></li>
+<li>
+    OWNER_NAME<i>
+(
+type: esriFieldTypeString, alias: Owner, length: 50
+)
+</i><span class="sdt sdt-annot"><span class="sdt-count"><b>2</b> with values</span><span class="sdt-count"><b>1</b> not empty</span></span></li>
+<li>
+    LAND_USE<i>
+(
+type: esriFieldTypeString, alias: Land use, length: 2
+)
+</i><span class="sdt sdt-annot"><span class="sdt-count"><b>3</b> with values</span><span class="sdt-count"><b>3</b> not empty</span></span>
+  <ul class="sdt sdt-list sdt-list--counts" aria-label="Coded value counts for LAND_USE">
+    <li><span>Residential <span class="sdt-mono sdt-muted">R</span></span><span class="sdt-list__value">2</span></li>
+    <li><span>Commercial <span class="sdt-mono sdt-muted">C</span></span><span class="sdt-list__value">1</span></li>
+    <li><span>Agricultural <span class="sdt-mono sdt-muted">A</span></span><span class="sdt-list__value"><span class="sdt-badge sdt-badge--warn"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg><span class="sdt-visually-hidden">Warning: </span>0</span></span></li>
+  </ul>
+</li>
+<li>
+    ZONE_NOTE<i>
+(
+type: esriFieldTypeString, alias: Zoning note, length: 120
+)
+</i><span class="sdt sdt-annot"><span class="sdt-badge sdt-badge--warn"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg><span class="sdt-visually-hidden">Warning: </span>0 with values</span></span></li>
+<li>
+    ACRES<i>
+(
+type: esriFieldTypeDouble, alias: Acres
+)
+</i><span class="sdt sdt-annot"><span class="sdt-count"><b>2</b> with values</span></span></li>
+<li>
+    SITE_PHOTO<i>
+(
+type: esriFieldTypeBlob, alias: Site photo
+)
+</i><span class="sdt sdt-annot">Not counted: blob fields can't be queried</span></li>
+</ul>
+<b>Supported Operations: </b> <a href="#query">Query</a>
+</div>
+</body>
+</html>

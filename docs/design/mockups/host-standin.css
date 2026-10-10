@@ -1,0 +1,105 @@
+/*
+ * A stand-in for a Services Directory page's own stylesheet. The design screenshots and mockups
+ * use it so the extension's additions can be judged against a plausible page. It is invented:
+ * small Verdana-style type, a title bar, a breadcrumb bar and table layout. It copies nothing
+ * from Esri's stylesheet.
+ *
+ * The dark block is the "dark variant of the fake Services Directory page" from issue #7. It
+ * stands in for a page made dark by its own CSS or by a recolouring tool such as Dark Reader.
+ */
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1f2328;
+  background: #ffffff;
+}
+
+a {
+  color: #1f4e8c;
+}
+
+a:visited {
+  color: #5b3b8c;
+}
+
+.userTable {
+  border-collapse: collapse;
+  background: #33475b;
+  color: #ffffff;
+}
+
+.userTable td {
+  padding: 10px 16px;
+}
+
+.userTable a {
+  color: #ffffff;
+}
+
+.titlecell {
+  font-size: 17px;
+  font-weight: bold;
+}
+
+.navTable {
+  border-collapse: collapse;
+  background: #e8edf2;
+  border-bottom: 1px solid #c3ccd6;
+}
+
+.navTable td {
+  padding: 6px 16px;
+}
+
+.apiref {
+  padding: 4px 16px;
+  font-size: 12px;
+}
+
+h2 {
+  margin: 10px 16px;
+  font-size: 16px;
+}
+
+.rbody {
+  margin: 0 16px 32px;
+}
+
+.formTable td {
+  padding: 3px 6px;
+  vertical-align: top;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    color: #d8dde3;
+    background: #16191d;
+  }
+
+  a {
+    color: #8ab4f8;
+  }
+
+  a:visited {
+    color: #c3a6f0;
+  }
+
+  .userTable {
+    background: #23303d;
+  }
+
+  .navTable {
+    background: #20262d;
+    border-bottom-color: #39424c;
+  }
+}

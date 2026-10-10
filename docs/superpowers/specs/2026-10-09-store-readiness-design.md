@@ -40,12 +40,14 @@ Six review agents produced about 115 findings, and the owner then had three adve
 |---|---|---|
 | Delivery | One spec (this document); a short plan and pull request per phase; a store track in parallel | Lower overhead for one maintainer and about 2,600 lines |
 | Shared code | Shared classic scripts in `src/src/lib/` load first in every content-script group and extension page and expose one global, `SDT` | Five copies of `ajax` and two copies of the field picker have drifted; one copy gets fixed once |
-| In-page settings form | Removed. The gear becomes a status indicator only. The popup gets an Options link. | Page scripts can drive the form and can fire the gear's click (both verified) |
+| In-page settings form | Removed. The gear becomes a status indicator in Phase 3 and a status bar under the page heading in Phase 5. The popup gets an Options link in Phase 3, which Phase 9 turns into three quick switches, All settings and Reload page. | Page scripts can drive the form and can fire the gear's click (both verified) |
+| UI design | Phases 5 to 9 follow the UI design review for issue #7, `docs/design/2026-10-ui-design-review.md`: one shared stylesheet, a teal accent, system type, and monospace for identifiers and numbers. The owner accepted its eleven recommendations on 2026-10-09. | The UI was inconsistent and settings sat behind an in-page gear (OWN-4) |
+| Theme | In-page additions match the host page's computed background through `SDT.theme`. The popup and options page follow `prefers-color-scheme`. 2.0.0 has no theme setting. | Most Services Directory pages are white, so in-page additions that followed a dark system theme would put dark panels on a white page |
 | Site access | Keep the URL-pattern content scripts and add a page-type check | Broad access is justified because ArcGIS Server runs on any host. The check is a correctness filter, not a security control. |
 | Minimum Chrome | 120 | Covers every API the phases need. Only Windows 7, 8.1 and Server 2012 R2 (stuck at Chrome 109) and macOS 10.13/10.14 (stuck at 116) are excluded. Edge also honours `minimum_chrome_version`. |
 | `activeTab` | Keep | Verified: content-script patterns let the popup's requests through without CORS but do not reveal `tab.url`. Only a toolbar click's activeTab grant does. |
 | Feature counts | Per-layer counts stay automatic. Per-field and per-domain-value counts run on demand from a "Count values" button. | One page on Esri's own server triggers 1,352 automatic requests today. A combined statistics query returns all zeros when the shape field is included (verified). |
-| Stored defaults in pages | The default where clause and the print web map are inserted by an "Insert default" button, never automatically. The print web map lives in `storage.local` and starts empty. | Anything filled into the page can be read by the page's own scripts. Print web maps often contain internal URLs or tokens. |
+| Stored defaults in pages | The default where clause and the print web map are inserted by an "Insert default" button, never automatically. The button's handler ignores clicks with `event.isTrusted === false`. The print web map lives in `storage.local` and starts empty. | Anything filled into the page can be read by the page's own scripts, and a page script can call `.click()` on the button. Print web maps often contain internal URLs or tokens. |
 | Test data | Hand-written synthetic fixtures modelled on the ArcGIS REST format | Esri's terms of use grant no right to redistribute sample-server content |
 | Find Helper | Fixed and kept | Apart from two bugs it works, and it fills in the `layers` parameter that find requires |
 | Version | 2.0.0. The listing says it is a new extension and that settings do not carry over from Map Services Enhanced. | Never published; the new listing has a new extension ID |
@@ -89,7 +91,7 @@ These are part of each phase's definition of done.
 ### 4.2 Accessibility
 
 - UI added by the extension meets WCAG 2.2 AA. That covers injected panels, badges, details and controls, plus the options page and the popup.
-- `@axe-core/playwright` reports zero violations, scoped to the extension's own elements on host pages.
+- `@axe-core/playwright` reports zero violations with the `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and `wcag22aa` tags, scoped to the extension's own elements on host pages. It runs in both the light and dark colour schemes.
 - Keyboard-only tests cover each interactive feature the phase touches.
 - Animation respects `prefers-reduced-motion`.
 
@@ -352,12 +354,13 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Has an accessible name and live status text, and respects reduced motion.
 - No click handler.
 - The loading spinner keeps working, driven by the busy states the scripts already set.
+- Phase 5 moves it into the page flow as the status bar.
 
 **Removals:**
 - the in-page settings form, its CSS, `src/src/config/options.json` and `settings.svg`
 - `web_accessible_resources`, entirely
 
-**Popup:** add an Options link that calls `chrome.runtime.openOptionsPage()`. This is the minimum. The design review (#7) may also move settings into the popup itself, built from the Phase 4 schema.
+**Popup:** add an Options link that calls `chrome.runtime.openOptionsPage()`. Phase 9 replaces it with All settings beside three quick switches.
 
 **Manifest metadata:** `short_name` "SD Toolkit". The toolbar icon becomes a size dictionary once the Track S artwork exists.
 
@@ -411,6 +414,14 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Failure handling.** Count and detail chains use `fetchJson` and the limiter. A failed item shows an error line and the chain continues. Busy states clear in `finally`.
 
+**Shared style and theme:**
+- `src/src/lib/sdt.css` holds the design review's tokens and components (section 4). It comes first in every content-script `css` list and is linked by the popup and the options page.
+- `SDT.theme` sets `data-sdt-theme` on `<html>` from the page's computed background, and checks again when the page's styles change (design review section 5.2). The light-or-dark decision is a pure function of a colour, with a table-driven unit test.
+
+**Status bar.** The Phase 3 indicator becomes a one-line status bar in the page flow, under the page's `<h2>` (design review section 6.3). It reports busy, done (with the number of requests made), budget reached (with a Load more button) and server pushback. Pages with nothing to report show no bar.
+
+**Settings.** `autoFieldCounts` and `autoDomainCounts` leave the schema, the options page and every reader, because the Count values button replaces them. Nothing migrates, because 2.0.0 is unpublished.
+
 **Per-layer counts** stay automatic, within the request budget:
 - total features: `returnCountOnly`
 - features with shapes: `geometryField` or the shape field
@@ -432,7 +443,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - An ESLint rule bans entity literals such as `&copy;` in strings.
 
 **Badges:**
-- Colour comes from a hash of the WKID, with at least 4.5:1 contrast.
+- Colour is one of eight tested colour sets, picked by an FNV-1a hash of `latestWkid`, or of `wkid` when there is no `latestWkid`. A WKID gets the same colour on every page. Every set meets 4.5:1 for text and 3:1 for borders in both palettes.
 - Layers use `extent.spatialReference`.
 - "tiled" and "dynamic" appear only when `singleFusedMapCache` exists.
 - WKT is truncated, with the full text in `title`.
@@ -448,7 +459,8 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - The INJ-2 and INJ-11 `test.fail()` cases pass.
 - Request-count tests prove the budget.
 - The all-zeros statistics fixture is detected and falls back.
-- axe-core and keyboard tests pass on the details and the "Count values" control.
+- axe-core and keyboard tests pass on the details, the status bar and the "Count values" control, on a light and a dark host page.
+- The theme unit test passes.
 
 ### Phase 6: Map previews (`mapImages.js`)
 
@@ -463,6 +475,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Panel and labels:**
 - The preview becomes a pop-up beside the hovered or focused link, replacing the fixed top-right panel. See issue #6 for placement, closing rules and acceptance criteria.
+  - It opens to the right of the row's last annotation (the badges and the Details summary), centred vertically on the link, and flips left or above when there is no room. This refines #6, whose "right of the link text" would cover the row's badges.
   - It never covers the page header, the page's own links or the link itself.
   - It closes on Escape or when the pointer and focus leave, and it stays open while the pointer is over it (WCAG 2.2 SC 1.4.13).
   - Its alt text names the service.
@@ -489,6 +502,8 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - The target field is chosen with a `focusin` listener on the form, falling back to `where` or `searchText`.
 - Insertion uses `setRangeText`.
 
+**Panels.** Both helpers dock at the right edge in a column the page gives up, so no field ends up under them (design review section 6.7). A Hide button collapses a panel to a strip. A panel starts open only when the form fits beside it, and in a window narrower than 40rem it goes into the page flow after the form.
+
 **SQL literals.** A shared helper quotes values by field type: strings with doubled quotes, numbers bare, dates as `TIMESTAMP`, null as `NULL`. Find inserts raw text.
 
 **Presets:**
@@ -498,7 +513,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Submit buttons are found within the form, and the auto-submit label covers every button marked with an asterisk.
 
 **Other behaviour:**
-- The default where clause goes in through an "Insert default" button.
+- The default where clause goes in through an "Insert default" button, whose handler ignores clicks with `event.isTrusted === false`. The button's label never includes the clause.
 - If outStatistics text is not valid JSON, entries are inserted at the caret, not replaced.
 - ImageServer query and service-level FeatureServer query are classified and handled: fields from the service root, or no picker.
 
@@ -506,6 +521,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - The INJ-3 and QRY-1 `test.fail()` cases pass.
 - SQL-literal unit tests use a table of value and type cases.
 - Preset sequence tests pass.
+- A `.click()` on the Insert default button from a page script inserts nothing.
 - axe-core and keyboard tests pass on both panels.
 
 ### Phase 8: Print and geoprocessing pages (`printTask.js`)
@@ -518,12 +534,12 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - `GPMultiValue` parameters are skipped.
 - The new `<select>` takes over the page's `<label for>`. Choosing "Other..." moves focus to the input.
 
-**Web map.** The print web map goes in through an "Insert default" button. It is read from `storage.local`.
+**Web map.** The print web map goes in through an "Insert default" button. It is read from `storage.local`. The button's handler ignores clicks with `event.isTrusted === false`.
 
 **Acceptance:**
 - No dialog appears on JSON results or `submitJob` pages.
 - Choice-list tests cover the first parameter, a value missing from the list, and an empty default.
-- The insert-default test passes.
+- The insert-default test passes, and a `.click()` on the button from a page script inserts nothing.
 
 ### Phase 9: Popup and release
 
@@ -548,6 +564,13 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Uses `URL` and `URLSearchParams`, with the default-value list taken from the current query form.
 - Copies with `navigator.clipboard.writeText` and reports failure.
 
+**Settings in the popup** (design review section 6.2):
+- Three switches for `autoMetadata`, `autoFeatureCounts` and `showMapImages`. Their labels, defaults and validation come from `SDT.settings`.
+- Each switch saves when it changes, through the Phase 4 writer. On failure the switch flips back and the status line says why.
+- The counts switch is disabled while service details are off, with the reason shown under its label.
+- After a change, a Reload page button calls `chrome.tabs.reload` and closes the popup.
+- All settings replaces the Options link and calls `chrome.runtime.openOptionsPage()`.
+
 **Popup accessibility:** `lang`, labels, a `role="status"` line, and focus kept on the button.
 
 **Release:**
@@ -569,6 +592,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - The POP-1, POP-2 and POP-3 `test.fail()` cases pass.
 - Crawl tests cover the cap, the visited set and a failed folder.
 - URL-trimming table tests pass.
+- A unit test checks that each popup switch's key exists in the schema and is a boolean.
 - axe-core passes on the popup.
 - The live check passes on the release zip.
 - `npm run screenshots` regenerates every image in `docs/images/` from a clean checkout. Every image the README or store listing uses comes from it.
