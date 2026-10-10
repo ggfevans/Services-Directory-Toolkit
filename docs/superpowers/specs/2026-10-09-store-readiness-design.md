@@ -416,7 +416,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Shared style and theme:**
 - `src/src/lib/sdt.css` holds the design review's tokens and components (section 4). It comes first in every content-script `css` list and is linked by the popup and the options page.
-- `SDT.theme` sets `data-sdt-theme` on `<html>` from the page's computed background, and checks again when the page's styles change (design review section 5.2). The light-or-dark decision is a pure function of a colour, with a table-driven unit test.
+- `SDT.theme` sets `data-sdt-theme` on `<html>` from the page's computed background, and checks again when the page's styles change: attributes on `<html>` or `<body>`, or elements added to `<head>` (design review section 5.2). It writes its attributes only when their values change and ignores its own writes. The light-or-dark decision is a pure function of a colour, with a table-driven unit test.
 
 **Status bar.** The Phase 3 indicator becomes a one-line status bar in the page flow, under the page's `<h2>` (design review section 6.3). It reports busy, done (with the number of requests made), budget reached (with a Load more button) and server pushback. Pages with nothing to report show no bar.
 

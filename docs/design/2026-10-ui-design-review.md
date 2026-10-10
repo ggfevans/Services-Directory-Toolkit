@@ -267,11 +267,11 @@ The popup and the options page follow `prefers-color-scheme` and declare `color-
 
 1. Read `getComputedStyle(document.body).backgroundColor`. If it is transparent, use `<html>`'s. If both are transparent, use the canvas colour: dark when `<html>`'s computed `color-scheme` includes `dark`, white otherwise.
 2. Pick dark when white text would contrast more than black text with that colour (relative luminance under 0.179).
-3. Set `data-sdt-theme="dark"` or `"light"` on `<html>`. The content-script CSS keys its dark tokens to `html[data-sdt-theme="dark"]`.
-4. If `--sdt-fg-muted` would fall under 4.5:1 on the measured background (a mid-grey page), also set `data-sdt-contrast="more"`, which makes muted text use `--sdt-fg`. `prefers-contrast: more` does the same.
-5. Watch for change with one `MutationObserver` on `<html>` attributes and `<head>` children, debounced to 500 ms, and re-run the check.
+3. Set `data-sdt-theme="dark"` or `"light"` on `<html>`, only when the value changes. The content-script CSS keys its dark tokens to `html[data-sdt-theme="dark"]`.
+4. If `--sdt-fg-muted` would fall under 4.5:1 on the measured background (a mid-grey page), also set `data-sdt-contrast="more"`, again only on a change, which makes muted text use `--sdt-fg`. `prefers-contrast: more` does the same.
+5. Watch for change with one `MutationObserver` on the attributes of `<html>` and `<body>` and the children of `<head>`, debounced to 500 ms, and re-run the check. The observer ignores records for `data-sdt-theme` and `data-sdt-contrast`, so the check never reacts to its own writes.
 
-The decision is a pure function of a colour and gets a `node --test` unit test with a table of backgrounds.
+The decision is a pure function of a colour and gets a `node --test` unit test with a table of backgrounds. A browser test checks that one change to the host page's style causes exactly one recheck.
 
 **Dark-mode tools.**
 
@@ -298,11 +298,11 @@ Each surface lists its states and an accessibility note. The notes take the WCAG
 
 | A. On a query page | B. Searching | C. Finished, setting changed |
 |---|---|---|
-| ![](images/after-popup-a.png) | ![](images/after-popup-b.png) | ![](images/after-popup-c.png) |
+| ![Popup on a query page, with Trim query URL, search and settings](images/after-popup-a.png) | ![Popup while a search runs](images/after-popup-b.png) | ![Popup after a search, with a changed setting and Reload page](images/after-popup-c.png) |
 
 | D. Problems | E. No matches | A, dark |
 |---|---|---|
-| ![](images/after-popup-d.png) | ![](images/after-popup-e.png) | ![](images/after-popup-a-dark.png) |
+| ![Popup with failed locations listed](images/after-popup-d.png) | ![Popup with no matches](images/after-popup-e.png) | ![Popup on a query page, dark](images/after-popup-a-dark.png) |
 
 Source: `docs/design/mockups/popup.html`. Every frame also exists as `after-popup-*-dark.png`.
 
@@ -678,6 +678,7 @@ Created on 2026-10-09 as issues #13 to #27. Criteria are written to test, in the
 **Acceptance criteria.**
 - `node --test` covers the theme decision for a table of backgrounds: white, `#16191d`, transparent with and without `color-scheme: dark`, and a mid-grey that triggers `data-sdt-contrast="more"`.
 - A browser test on the dark fixture page finds `data-sdt-theme="dark"` on `<html>`.
+- Changing the class of the host page's `<body>` to a dark style switches the palette, with exactly one recheck. The check never reacts to its own attribute writes.
 - `check-contrast.js` passes in CI and fails when a token is changed to a failing value.
 - The build includes `sdt.css`; nothing else in `src/` changes appearance yet.
 
