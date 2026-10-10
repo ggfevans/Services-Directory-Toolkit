@@ -42,3 +42,23 @@ jobs:
           path: |
             playwright-report/
             test-results/
+
+  chrome-120:
+    name: Browser tests on Chrome 120 (minimum version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Informational: Playwright supports only its own Chromium, so a failure here doesn't block.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install-deps chromium
+      - id: chrome
+        run: echo "path=$(npx --yes @puppeteer/browsers install chrome@120 --path "$RUNNER_TEMP/cft" | sed 's/^[^ ]* //')" >> "$GITHUB_OUTPUT"
+      - run: npx playwright test
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.path }}

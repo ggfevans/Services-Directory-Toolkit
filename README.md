@@ -50,7 +50,7 @@ Requires Node 20.19 or later. Run `npm install` first.
 - `npm run build` runs the linter, then packages `src/` into `build/services-directory-toolkit-<version>.zip`. The versions in `package.json` and `src/manifest.json` must match.
 - `npm run test:smoke` loads the extension into Google Chrome and checks each feature against Esri's public sample server. Set `MSE_TEST_SERVER` to test a different server. It opens a visible Chrome window for about a minute.
 
-Before a release, check the minimum Chrome version by hand: install Chrome for Testing 120 (`npx @puppeteer/browsers install chrome@120`), load `src/` unpacked, and try the services root, a layer page, a query page and the popup.
+CI also runs the browser tests on Chrome for Testing 120 as a non-blocking check, which can't run on recent macOS. Before a release, check the minimum Chrome version by hand: install Chrome for Testing 120 (`npx @puppeteer/browsers install chrome@120`), load `src/` unpacked, and try the services root, a layer page, a query page and the popup.
 
 ## Security
 
