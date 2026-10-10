@@ -558,6 +558,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Add a `version` npm script that keeps `package.json` and `src/manifest.json` in step.
 - Add a tag-triggered release workflow that attaches the zip to a GitHub release.
 - Run the live check against the exact zip before upload.
+- Upload only after the performance and bug review (#8) has run on the merged Phase 9 code and every Critical and High finding is fixed. That review measures against the section 4.3 request budget and adds `npm run perf`.
 
 **Acceptance:**
 - The POP-1, POP-2 and POP-3 `test.fail()` cases pass.
@@ -770,3 +771,4 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | OWN-2 | M | No security policy | Separate PR (#5) | Fix (`SECURITY.md`, GitHub private vulnerability reporting) |
 | OWN-3 | M | No code scanning | Separate PR (#5) | Fix (CodeQL workflow, `security-extended`, JavaScript and Actions) |
 | OWN-4 | H | The UI is inconsistent and awkward to use; settings sit behind an in-page gear | Design review (#7) before Phase 5, then Phases 5 to 9 | Fix (UI design spec, shared style, settings in the toolbar popup) |
+| OWN-5 | H | No measured check of performance or real-world bugs before release | Review (#8) after Phase 9, before upload | Fix (measured review, `npm run perf`, one issue per finding; Critical and High fixed before upload) |
