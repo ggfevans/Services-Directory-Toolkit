@@ -10,7 +10,9 @@ This is the single spec for the work. Each phase in section 6 gets its own short
 
 Services Directory Toolkit is a Manifest V3 Chrome extension. It adds diagnostic and query tools to ArcGIS Server REST Services Directory pages (`.../rest/services...`). It continues Ken Doman's Map Services Enhanced (MIT; last store release 1.4.0 in 2020, Manifest V2). The extension has never been published under the new name.
 
-The extension supports, and is tested against, every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, plus ArcGIS Online (issue #9). Esri's product life cycle decides it: versions in General Availability, Extended Support or Mature Support count, and a version drops out on its Esri retirement date. On 10 October 2026 that is 12.1, the current release, back to 10.9.1. Public sample servers such as sampleserver6 run 10.9.1, so 12.x behaviour has to be checked by other means.
+The extension supports every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, plus ArcGIS Online (issue #9). Esri's life cycle for ArcGIS Enterprise on Windows and Linux decides the list: versions in General Availability, Extended Support or Mature Support count, and a version drops out on its Esri retirement date. On 10 October 2026 that is 12.1, the current release, back to 10.9.1. ArcGIS Enterprise on Kubernetes is outside the testing scope, and its separate life cycle doesn't change the list.
+
+Tests cover these versions by Services Directory markup, one fixture variant per markup family. The fixtures model 10.9 and 11.x pages, Phase 2 adds a 12.x variant if 12.1's markup differs, and later phases add ArcGIS Online. Public sample servers such as sampleserver6 run 10.9.1, so the live check can't reach 12.x, and 12.x behaviour has to be checked by other means.
 
 The code is about 2,600 lines of plain JavaScript, with no framework, bundler or runtime dependencies:
 
@@ -557,7 +559,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Fill in the Privacy tab.
 - Write test instructions for the reviewer, with public sample URLs.
 - Add a `CHANGELOG.md`.
-- Re-check Esri's ArcGIS Enterprise life cycle page, update the README's supported-version table and drop retired versions (#9).
+- Re-check Esri's life cycle page for ArcGIS Enterprise on Windows and Linux, update the README's supported-version table and drop retired versions (#9). Kubernetes stays out of scope.
 - Add a `version` npm script that keeps `package.json` and `src/manifest.json` in step.
 - Add a tag-triggered release workflow that attaches the zip to a GitHub release.
 - Run the live check against the exact zip before upload.
