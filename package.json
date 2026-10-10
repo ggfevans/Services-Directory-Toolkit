@@ -24,7 +24,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "playwright test",
     "test:unit": "node --test \"tests/unit/**/*.test.js\"",
-    "test:smoke": "node tests/smoke.js"
+    "test:live": "node tests/live/smoke.js"
   },
   "license": "MIT",
   "devDependencies": {
