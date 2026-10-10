@@ -91,6 +91,9 @@ export const test = base.extend({
         `--load-extension=${EXTENSION_PATH}`,
         // Lets clickAction use the CDP Extensions domain.
         "--enable-unsafe-extension-debugging",
+        // Playwright passes a bare --headless, which Chrome before 132 reads as the old headless
+        // mode, and that mode doesn't run extensions. The last value of a switch wins.
+        ...(process.env.CHROME_PATH && !process.env.HEADED ? ["--headless=new"] : []),
         ...extraLaunchArgs
       ],
       ignoreDefaultArgs: droppedDefaultArgs
