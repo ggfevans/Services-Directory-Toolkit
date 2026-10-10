@@ -22,10 +22,15 @@ export default [
       }
     },
     rules: {
+      // Each selector appears twice: el.innerHTML has the name in property.name, and el["innerHTML"]
+      // has it in property.value.
       "no-restricted-syntax": ["error",
         { selector: "AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]", message: NO_HTML_STRINGS },
+        { selector: "AssignmentExpression[left.property.value=/^(innerHTML|outerHTML)$/]", message: NO_HTML_STRINGS },
         { selector: "CallExpression[callee.property.name='insertAdjacentHTML']", message: NO_HTML_STRINGS },
-        { selector: "CallExpression[callee.object.name='document'][callee.property.name=/^(write|writeln)$/]", message: NO_HTML_STRINGS }
+        { selector: "CallExpression[callee.property.value='insertAdjacentHTML']", message: NO_HTML_STRINGS },
+        { selector: "CallExpression[callee.object.name='document'][callee.property.name=/^(write|writeln)$/]", message: NO_HTML_STRINGS },
+        { selector: "CallExpression[callee.object.name='document'][callee.property.value=/^(write|writeln)$/]", message: NO_HTML_STRINGS }
       ]
     }
   },

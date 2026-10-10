@@ -177,6 +177,10 @@ export const createFakeArcGIS = (catalog = defaultCatalog) => {
      * handler(url, params). The handler returns route.fulfill() options, or a Promise of them.
      */
     override(pattern, handler) {
+      // test() on a g or y pattern starts at lastIndex, so it would miss every other request.
+      if (pattern.global || pattern.sticky) {
+        throw new TypeError(`override pattern ${pattern} must not use the g or y flag`);
+      }
       overrides.push({ pattern, handler, used: false });
     },
     /** The patterns, as strings, of the overrides that have not matched a request yet. */

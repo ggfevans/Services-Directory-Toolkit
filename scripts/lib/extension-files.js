@@ -14,8 +14,8 @@ export const listFiles = (dir, prefix = "") => readdirSync(join(dir, prefix), { 
   })
   .sort();
 
-// <script src> and <link href> in extension pages.
-const HTML_REFERENCE = /<(?:script|link)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["']/gi;
+// <script src>, <link href> and <img src> in extension pages.
+const HTML_REFERENCE = /<(?:script|link|img)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["']/gi;
 const GET_URL_CALL = /chrome\.runtime\.getURL\(([^)]*)\)/g;
 const STRING_LITERAL = /^\s*(["'`])([^"'`$]+)\1\s*$/;
 

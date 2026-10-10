@@ -61,6 +61,13 @@ test("reports a file that nothing references", (t) => {
   assert.deepEqual(problems, ["notes.txt: not referenced by the manifest, an extension page or a chrome.runtime.getURL call"]);
 });
 
+test("an image an extension page shows counts as referenced", (t) => {
+  const page = `${FILES["popup/popup.html"]}<img alt="" src="logo.png">`;
+  const { files, problems } = referencedFiles(makeExtension(t, { ...FILES, "popup/popup.html": page, "popup/logo.png": "png" }));
+  assert.deepEqual(problems, []);
+  assert.ok(files.includes("popup/logo.png"), files.join("\n"));
+});
+
 test("reports a getURL call whose argument is not a string literal", (t) => {
   const dir = makeExtension(t, { ...FILES, "cs.js": "chrome.runtime.getURL(base + \"gear.svg\");" });
   const { problems } = referencedFiles(dir);

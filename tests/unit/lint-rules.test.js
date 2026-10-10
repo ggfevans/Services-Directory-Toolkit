@@ -26,6 +26,13 @@ test("insertAdjacentHTML and document.write are errors in extension code", async
   assert.deepEqual(await ruleIds("document.write(\"x\");\n"), ["no-restricted-syntax"]);
 });
 
+test("computed access with a string key is caught too", async () => {
+  assert.deepEqual(await ruleIds("document.body[\"innerHTML\"] = \"x\";\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("document.body[\"outerHTML\"] += \"x\";\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("document.body[\"insertAdjacentHTML\"](\"beforeend\", \"x\");\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("document[\"write\"](\"x\");\n"), ["no-restricted-syntax"]);
+});
+
 test("the HTML-string rules do not apply outside src/", async () => {
   assert.deepEqual(await ruleIds("document.body.innerHTML = \"x\";\n", "tests/e2e/example.js"), []);
 });

@@ -110,6 +110,12 @@ test("overrides take precedence, and every request is recorded", () => {
   assert.deepEqual(server.requests, ["GET /arcgis/rest/services/Transport?f=json"]);
 });
 
+test("an override pattern with the g or y flag is refused, because test() would then skip matches", () => {
+  const server = createFakeArcGIS();
+  assert.throws(() => server.override(/\/page$/g, () => html("x")), /g or y flag/);
+  assert.throws(() => server.override(/\/page$/y, () => html("x")), /g or y flag/);
+});
+
 test("an override that returns a Promise is passed through for the caller to await", async () => {
   const server = createFakeArcGIS();
   server.override(/\/slow$/, async () => {
