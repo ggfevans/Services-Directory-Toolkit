@@ -4,6 +4,10 @@
 //
 // SHOW_KNOWN_BUGS=1 runs them as normal tests, to check that each fails on its last assertion and
 // not in its setup.
+//
+// Re-run with SHOW_KNOWN_BUGS=1 after any change that renames the extension's classes or changes
+// the requests it sends, such as Phase 2's class prefix: a renamed selector would still fail,
+// but no longer on the bug.
 import { test, expect, REST_ROOT } from "./fixtures.js";
 
 const knownBug = (id, title, body) => {
@@ -25,6 +29,10 @@ knownBug("INJ-1", "a layer's JSON view gets no requests and no spinner", async (
   expect(await page.evaluate(() => document.body.className)).not.toMatch(/loading-/);
 });
 
+// Phase 5 replaces these automatic per-field GET counts with an on-demand "Count values" button
+// backed by one statistics POST, which skips geometry fields. When that lands, rewrite this test
+// for the new flow; don't just turn knownBug() into test(). Keep the same intent: one failed count
+// request shows an error for that field and doesn't stop the others.
 knownBug("INJ-2", "one failed count query does not stop the counts for the other fields", async ({ page, fakeServer, expectedErrors }) => {
   fakeServer.override(/where=not\+PARCEL_ID\+is\+null&/, BAD_GATEWAY);
   expectedErrors.push(/status of 502/);
