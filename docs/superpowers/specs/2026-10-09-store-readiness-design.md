@@ -456,7 +456,10 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - A new hover cancels the previous request, and a stale response never replaces the current image.
 
 **Panel and labels:**
-- The panel no longer covers page links. It has a close button and alt text naming the service.
+- The preview becomes a pop-up beside the hovered or focused link, replacing the fixed top-right panel. See issue #6 for placement, closing rules and acceptance criteria.
+  - It never covers the page header, the page's own links or the link itself.
+  - It closes on Escape or when the pointer and focus leave, and it stays open while the pointer is over it (WCAG 2.2 SC 1.4.13).
+  - Its alt text names the service.
 - Previews for FeatureServer links appear only when a matching MapServer link is on the same page. Otherwise the dead branch is removed.
 - Labels read "Preview image width/height (px)". Styles are set through `style` properties, not concatenated strings.
 
