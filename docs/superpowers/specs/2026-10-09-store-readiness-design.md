@@ -10,6 +10,8 @@ This is the single spec for the work. Each phase in section 6 gets its own short
 
 Services Directory Toolkit is a Manifest V3 Chrome extension. It adds diagnostic and query tools to ArcGIS Server REST Services Directory pages (`.../rest/services...`). It continues Ken Doman's Map Services Enhanced (MIT; last store release 1.4.0 in 2020, Manifest V2). The extension has never been published under the new name.
 
+The extension supports, and is tested against, every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, plus ArcGIS Online (issue #9). Esri's product life cycle decides it: versions in General Availability, Extended Support or Mature Support count, and a version drops out on its Esri retirement date. On 10 October 2026 that is 12.1, the current release, back to 10.9.1. Public sample servers such as sampleserver6 run 10.9.1, so 12.x behaviour has to be checked by other means.
+
 The code is about 2,600 lines of plain JavaScript, with no framework, bundler or runtime dependencies:
 
 - **Content scripts** (`src/src/inject/`):
@@ -191,7 +193,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - root, folder, MapServer, FeatureServer, layer, query, find, and a GP execute page
   - a static CSS stub
 
-  Later phases add variants they need, such as ArcGIS Online and pages missing parts.
+  Later phases add variants they need, such as 12.x and ArcGIS Online markup and pages missing parts.
 - **Popup, two ways:**
   - For logic tests, open `page_action.html` as a tab with `chrome.tabs.query` stubbed.
   - For the real popup, click the action through CDP `Extensions.triggerAction` and reach the popup with `chrome.extension.getViews({type: "popup"})` from an extension tab.
@@ -309,7 +311,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **`SDT` page classifier:**
 - It returns root, folder, service, layer, query, find, gpTask, jsonView or other.
-- It relies on markers common to 10.9, 11.x and ArcGIS Online.
+- It relies on markers common to 10.9, 11.x, 12.x (12.1 is current) and ArcGIS Online. Check the 12.1 Services Directory markup before choosing the markers, and add a 12.x fixture variant if it differs.
 - On `jsonView` and `other` the scripts do nothing and show no spinner.
 
 **Extension-context guard:** stops cleanly after an update cuts off old content scripts.
@@ -555,6 +557,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Fill in the Privacy tab.
 - Write test instructions for the reviewer, with public sample URLs.
 - Add a `CHANGELOG.md`.
+- Re-check Esri's ArcGIS Enterprise life cycle page, update the README's supported-version table and drop retired versions (#9).
 - Add a `version` npm script that keeps `package.json` and `src/manifest.json` in step.
 - Add a tag-triggered release workflow that attaches the zip to a GitHub release.
 - Run the live check against the exact zip before upload.
@@ -772,3 +775,4 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | OWN-3 | M | No code scanning | Separate PR (#5) | Fix (CodeQL workflow, `security-extended`, JavaScript and Actions) |
 | OWN-4 | H | The UI is inconsistent and awkward to use; settings sit behind an in-page gear | Design review (#7) before Phase 5, then Phases 5 to 9 | Fix (UI design spec, shared style, settings in the toolbar popup) |
 | OWN-5 | H | No measured check of performance or real-world bugs before release | Review (#8) after Phase 9, before upload | Fix (measured review, `npm run perf`, one issue per finding; Critical and High fixed before upload) |
+| OWN-6 | M | Supported ArcGIS versions aren't documented | 9 and README (#9) | Fix (README Compatibility section following Esri's life cycle, bug report template, release-checklist step) |
