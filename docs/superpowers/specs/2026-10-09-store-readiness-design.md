@@ -10,6 +10,8 @@ This is the single spec for the work. Each phase in section 6 gets its own short
 
 Services Directory Toolkit is a Manifest V3 Chrome extension. It adds diagnostic and query tools to ArcGIS Server REST Services Directory pages (`.../rest/services...`). It continues Ken Doman's Map Services Enhanced (MIT; last store release 1.4.0 in 2020, Manifest V2). The extension has never been published under the new name.
 
+The current ArcGIS Enterprise and ArcGIS Server release is 12.1. The extension targets 12.x, 11.x and 10.9.x servers and ArcGIS Online. Public sample servers such as sampleserver6 run 10.9.1, so 12.x behaviour has to be checked by other means.
+
 The code is about 2,600 lines of plain JavaScript, with no framework, bundler or runtime dependencies:
 
 - **Content scripts** (`src/src/inject/`):
@@ -191,7 +193,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - root, folder, MapServer, FeatureServer, layer, query, find, and a GP execute page
   - a static CSS stub
 
-  Later phases add variants they need, such as ArcGIS Online and pages missing parts.
+  Later phases add variants they need, such as 12.x and ArcGIS Online markup and pages missing parts.
 - **Popup, two ways:**
   - For logic tests, open `page_action.html` as a tab with `chrome.tabs.query` stubbed.
   - For the real popup, click the action through CDP `Extensions.triggerAction` and reach the popup with `chrome.extension.getViews({type: "popup"})` from an extension tab.
@@ -309,7 +311,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **`SDT` page classifier:**
 - It returns root, folder, service, layer, query, find, gpTask, jsonView or other.
-- It relies on markers common to 10.9, 11.x and ArcGIS Online.
+- It relies on markers common to 10.9, 11.x, 12.x (12.1 is current) and ArcGIS Online. Check the 12.1 Services Directory markup before choosing the markers, and add a 12.x fixture variant if it differs.
 - On `jsonView` and `other` the scripts do nothing and show no spinner.
 
 **Extension-context guard:** stops cleanly after an update cuts off old content scripts.
