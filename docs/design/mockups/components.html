@@ -1,0 +1,187 @@
+<!doctype html>
+<!--
+  Mockup: the shared components and their states, on one sheet. Render it with
+  colorScheme "light" and "dark" to see both palettes. Focus rings are drawn with the
+  .mock-focus class so they show in a static picture; in the extension they come from
+  :focus-visible in sdt.css.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shared components (mockup)</title>
+<link rel="stylesheet" href="sdt.css">
+<style>
+  body { margin: 0; padding: 16px 24px 32px; background: var(--sdt-bg); }
+  .mock-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 32px; }
+  .mock-grid > section { min-width: 0; }
+  .mock-grid h2 { margin: 0 0 10px; padding-bottom: 4px; border-bottom: 1px solid var(--sdt-border); font-size: var(--sdt-text-m); font-weight: 600; }
+  .mock-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+  .mock-label { width: 100%; margin: 4px 0 0; color: var(--sdt-fg-muted); font-size: var(--sdt-text-xs); }
+  .mock-focus { outline: var(--sdt-focus-width) solid var(--sdt-focus); outline-offset: var(--sdt-focus-offset); }
+  .mock-span2 { grid-column: span 2; }
+  .mock-skeleton { display: grid; place-items: center; width: 240px; height: 120px; }
+  h1 { margin: 0 0 16px; font-size: var(--sdt-text-l); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></symbol>
+  <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.3v.1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-insert" viewBox="0 0 24 24"><path d="M19 5v7a3 3 0 0 1-3 3H6"/><path d="M10 11l-4 4 4 4"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+<main class="sdt">
+<h1>Shared components and states</h1>
+<div class="mock-grid">
+
+  <section aria-labelledby="c-badges">
+    <h2 id="c-badges">Badges</h2>
+    <div class="mock-row">
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr0" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>4326</a>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr1" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>26910</a>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>3857</a>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr3" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>32610</a>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr4" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>2913</a>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr5" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>3005</a>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr6" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>2263</a>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr7" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>2394</a>
+      <p class="mock-label">Spatial reference: WKID hashed into 8 tested colour sets</p>
+    </div>
+    <div class="mock-row">
+      <span class="sdt-badge">Dynamic</span><span class="sdt-badge">Tiled</span><span class="sdt-badge">Table</span>
+      <span class="sdt-badge sdt-badge--sr" title="PROJCS[&quot;Example_Local_Grid&quot;]"><span class="sdt-visually-hidden">Spatial reference </span>WKT PROJCS["Example_Lo…</span>
+      <p class="mock-label">Neutral, and WKT-only references</p>
+    </div>
+    <div class="mock-row">
+      <span class="sdt-badge sdt-badge--warn"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg><span class="sdt-visually-hidden">Warning: </span>0 with values</span>
+      <span class="sdt-badge sdt-badge--error"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Failed</span>
+      <a class="sdt-badge sdt-badge--sr sdt-badge--sr2 mock-focus" href="#b"><span class="sdt-visually-hidden">Spatial reference </span>3857</a>
+      <p class="mock-label">Zero warning (replaces the red "!!!"), error, keyboard focus</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="c-buttons">
+    <h2 id="c-buttons">Buttons</h2>
+    <div class="mock-row">
+      <button class="sdt-button" type="button">Count values</button>
+      <button class="sdt-button sdt-button--primary" type="button">Save changes</button>
+      <button class="sdt-button sdt-button--quiet" type="button">Retry</button>
+      <p class="mock-label">Default, primary, quiet</p>
+    </div>
+    <div class="mock-row">
+      <button class="sdt-button" type="button" aria-disabled="true"><span class="sdt-spinner" aria-hidden="true"></span>Counting</button>
+      <button class="sdt-button" type="button" disabled>Insert value</button>
+      <button class="sdt-button mock-focus" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-insert"/></svg>Insert field</button>
+      <p class="mock-label">Busy (keeps focus), disabled, keyboard focus</p>
+    </div>
+    <div class="mock-row">
+      <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert &lt;&gt;">&lt;&gt;</button>
+      <button class="sdt-button sdt-button--sql" type="button">LIKE</button>
+      <button class="sdt-button sdt-button--sql mock-focus" type="button">AND</button>
+      <button class="sdt-button sdt-button--sql" type="button" disabled>sum</button>
+      <p class="mock-label">SQL buttons: at least 40 × 28 px (WCAG 2.5.8 asks for 24 × 24)</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="c-status">
+    <h2 id="c-status">Status lines</h2>
+    <p class="sdt-status"><span class="sdt-spinner" aria-hidden="true"></span>Counting features</p>
+    <p class="sdt-status" data-tone="ok"><svg class="sdt-icon" aria-hidden="true"><use href="#i-check"/></svg>Counted 7 fields in 7 requests (0.6 s)</p>
+    <p class="sdt-status" data-tone="warn"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg>2 locations failed</p>
+    <p class="sdt-status" data-tone="error"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Details unavailable: HTTP 502</p>
+    <p class="mock-label">Busy, done, warning, error. Icons and words carry the meaning; colour repeats it.</p>
+  </section>
+
+  <section class="mock-span2" aria-labelledby="c-bar">
+    <h2 id="c-bar">Page status bar</h2>
+    <div class="sdt-statusbar" style="margin: 0 0 8px">
+      <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-check"/></svg>Loaded details for 8 services in 9 requests.</p>
+    </div>
+    <div class="sdt-statusbar" data-tone="warn" style="margin: 0 0 8px">
+      <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg>Paused after 50 automatic requests. 8 layers not loaded yet.</p>
+      <span class="sdt-statusbar__actions"><button class="sdt-button" type="button">Load 8 more layers</button></span>
+    </div>
+    <div class="sdt-statusbar" data-tone="error" style="margin: 0">
+      <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>The server asked for fewer requests (HTTP 429). Automatic requests stopped on this page.</p>
+    </div>
+    <p class="mock-label">Done, budget reached, server pushback. The message is a role="status" live region.</p>
+  </section>
+
+  <section aria-labelledby="c-counts">
+    <h2 id="c-counts">Counts</h2>
+    <p style="margin:0 0 6px">OWNER_NAME<span class="sdt-annot"><span class="sdt-count"><b>2</b> with values</span><span class="sdt-count"><b>1</b> not empty</span></span></p>
+    <p style="margin:0 0 6px">ZONE_NOTE<span class="sdt-annot"><span class="sdt-badge sdt-badge--warn"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg><span class="sdt-visually-hidden">Warning: </span>0 with values</span></span></p>
+    <ul class="sdt-list sdt-list--counts" aria-label="Coded value counts for LAND_USE">
+      <li><span>Residential <span class="sdt-mono sdt-muted">R</span></span><span class="sdt-list__value">2</span></li>
+      <li><span>Agricultural <span class="sdt-mono sdt-muted">A</span></span><span class="sdt-list__value"><span class="sdt-badge sdt-badge--warn"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg><span class="sdt-visually-hidden">Warning: </span>0</span></span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="c-fields">
+    <h2 id="c-fields">Fields</h2>
+    <div class="sdt-field">
+      <label for="f1">Default where clause</label>
+      <input class="sdt-input sdt-input--mono" id="f1" type="text" value="STATUS = 'A'">
+    </div>
+    <div class="sdt-field">
+      <label for="f2">Preview image width (px)</label>
+      <input class="sdt-input mock-focus" id="f2" type="number" value="300">
+      <p class="sdt-hint">Keyboard focus</p>
+    </div>
+    <div class="sdt-field">
+      <label for="f3">Preview image height (px)</label>
+      <input class="sdt-input" id="f3" type="number" value="" aria-invalid="true" aria-describedby="f3-e">
+      <p class="sdt-error" id="f3-e"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Enter a whole number from 100 to 2,000.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="c-choice">
+    <h2 id="c-choice">Choices</h2>
+    <label class="sdt-switch"><span class="sdt-switch__text">Switch on</span><input type="checkbox" role="switch" checked></label>
+    <label class="sdt-switch"><span class="sdt-switch__text">Switch off</span><input type="checkbox" role="switch"></label>
+    <label class="sdt-switch"><span class="sdt-switch__text">Switch disabled<span class="sdt-hint" id="c-sw-h">Needs service details turned on.</span></span><input type="checkbox" role="switch" checked disabled aria-describedby="c-sw-h"></label>
+    <fieldset class="sdt-fieldset" style="margin-top: 8px">
+      <legend>Radio group in a fieldset</legend>
+      <label class="sdt-check"><input type="radio" name="r" checked>Run the query with GET</label>
+      <label class="sdt-check"><input type="radio" name="r">Fill the form only</label>
+    </fieldset>
+    <label class="sdt-check"><input type="checkbox" checked>Checkbox (submitted with Save)</label>
+  </section>
+
+  <section aria-labelledby="c-disc">
+    <h2 id="c-disc">Disclosure and list</h2>
+    <details class="sdt-details"><summary>Details <span class="sdt-details__meta">2 layers, max 1,000 records</span></summary></details>
+    <details class="sdt-details" open><summary class="mock-focus">Details <span class="sdt-details__meta">Point, 4 fields</span></summary>
+      <div class="sdt-details__body">
+        <dl class="sdt-dl">
+          <dt>Geometry</dt><dd>Point</dd>
+          <dt>Display field</dt><dd class="sdt-mono">ADDRESS</dd>
+        </dl>
+      </div>
+    </details>
+    <div class="sdt-field" style="margin-top: 10px">
+      <label for="lb">Fields</label>
+      <select class="sdt-listbox" id="lb" size="3"><option>PARCEL_ID</option><option selected>OWNER_NAME</option><option>LAND_USE</option></select>
+    </div>
+  </section>
+
+  <section aria-labelledby="c-preview">
+    <h2 id="c-preview">Map preview states</h2>
+    <div class="sdt-popover" style="position: static; width: max-content; margin-bottom: 10px">
+      <div class="sdt-popover__head">Elevation <span class="sdt-badge">ImageServer</span></div>
+      <div class="sdt-popover__media mock-skeleton"><p class="sdt-status" role="status"><span class="sdt-spinner" aria-hidden="true"></span>Loading preview</p></div>
+    </div>
+    <div class="sdt-popover" style="position: static; width: max-content">
+      <div class="sdt-popover__head">Hydrants <span class="sdt-badge">MapServer</span></div>
+      <div class="sdt-popover__media mock-skeleton"><p class="sdt-status" data-tone="error" role="status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>No preview: HTTP 500</p></div>
+    </div>
+  </section>
+
+</div>
+</main>
+</body>
+</html>

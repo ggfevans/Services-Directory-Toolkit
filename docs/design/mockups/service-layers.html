@@ -1,0 +1,88 @@
+<!doctype html>
+<!--
+  Mockup: a MapServer service page of an invented server, with per-layer badges, feature
+  counts and details, and the request budget (spec section 4.3) reached part way down.
+  Everything inside an element with class "sdt" is what the extension would add.
+  Rows show different states on purpose: counted, zero, counting, failed, not loaded.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Parcels (MapServer) (mockup)</title>
+<link rel="stylesheet" href="host-standin.css">
+<link rel="stylesheet" href="sdt.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></symbol>
+  <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.3v.1"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right"><a href="#login">Login</a></td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+<a href="#home">Home</a>
+  &gt; <a href="#services">services</a>
+  &gt; <a href="#parcels">Parcels (MapServer)</a>
+</td>
+<td align="right"><a href="#help">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="#json">JSON</a></td></tr>
+</table>
+<h2>Parcels (MapServer)</h2>
+
+<!-- Extension: page status bar. Warn tone: the automatic budget is spent. -->
+<div class="sdt sdt-statusbar" data-tone="warn">
+  <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+  <p class="sdt-status" role="status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg>Paused after 50 automatic requests. 8 layers not loaded yet.</p>
+  <span class="sdt-statusbar__actions"><button class="sdt-button" type="button">Load 8 more layers</button></span>
+</div>
+
+<div class="rbody">
+<b>Service Description: </b> Parcel boundaries, site addresses and survey data for an invented county.<br/><br/>
+<a href="#all-layers">All Layers and Tables</a><br/><br/>
+<b>Layers: </b>
+<ul>
+<li><a href="#l0">Parcels</a> (0)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#sr-3857"><span class="sdt-visually-hidden">Spatial reference </span>3857</a><span class="sdt-count"><b>3</b> features</span><span class="sdt-count"><b>2</b> with shapes</span></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">Polygon, 6 fields</span></summary></details></li>
+<li><a href="#l1">Addresses</a> (1)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#sr-3857"><span class="sdt-visually-hidden">Spatial reference </span>3857</a><span class="sdt-count"><b>2</b> features</span><span class="sdt-count"><b>2</b> with shapes</span></span><details class="sdt sdt-details sdt-details--inline" open><summary>Details <span class="sdt-details__meta">Point, 4 fields</span></summary>
+    <div class="sdt-details__body">
+      <dl class="sdt-dl">
+        <dt>Geometry</dt><dd>Point</dd>
+        <dt>Display field</dt><dd class="sdt-mono">ADDRESS</dd>
+        <dt>Object ID field</dt><dd class="sdt-mono">OBJECTID</dd>
+        <dt>Visible by default</dt><dd>Yes</dd>
+        <dt>Scale range</dt><dd>None set</dd>
+        <dt>Max record count</dt><dd class="sdt-mono">1000</dd>
+        <dt>Query formats</dt><dd>JSON, geoJSON</dd>
+        <dt>Extent</dt><dd class="sdt-mono">-13660000, 5700000, -13620000, 5730000</dd>
+        <dt>Advanced queries</dt><dd>Statistics, order by, distinct, pagination</dd>
+      </dl>
+    </div>
+  </details></li>
+<li><a href="#l2">Easements</a> (2)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#sr-3857"><span class="sdt-visually-hidden">Spatial reference </span>3857</a><span class="sdt-badge sdt-badge--warn"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg><span class="sdt-visually-hidden">Warning: </span>0 features</span></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">Polygon, 5 fields</span></summary></details></li>
+<li><a href="#l3">Lot Lines</a> (3)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#sr-3857"><span class="sdt-visually-hidden">Spatial reference </span>3857</a><span class="sdt-status"><span class="sdt-spinner" aria-hidden="true"></span>Counting features</span></span></li>
+<li><a href="#l4">Survey Monuments</a> (4)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr1" href="#sr-26910"><span class="sdt-visually-hidden">Spatial reference </span>26910</a><span class="sdt-count"><b>412</b> features</span><span class="sdt-status" data-tone="error"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Shape count failed: HTTP 500</span><button class="sdt-button sdt-button--quiet" type="button">Retry<span class="sdt-visually-hidden"> shape count for Survey Monuments</span></button></span></li>
+<li><a href="#l5">Tax Districts</a> (5)<span class="sdt sdt-annot"><span class="sdt-badge">Table</span><span class="sdt-count"><b>58</b> rows</span></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">Table, 9 fields</span></summary></details></li>
+<li><a href="#l6">Subdivisions</a> (6)<span class="sdt sdt-annot"><button class="sdt-button" type="button">Load 8 more layers</button></span></li>
+<li><a href="#l7">Right of Way</a> (7)</li>
+<li><a href="#l8">Benchmarks</a> (8)</li>
+<li><a href="#l9">Parcel Labels</a> (9)</li>
+<li><a href="#l10">Section Lines</a> (10)</li>
+<li><a href="#l11">Annexations</a> (11)</li>
+<li><a href="#l12">Plat Index</a> (12)</li>
+<li><a href="#l13">Control Points</a> (13)</li>
+</ul>
+
+<b>Copyright Text: </b> Example County GIS<br/><br/>
+</div>
+</body>
+</html>

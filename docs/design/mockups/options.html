@@ -1,0 +1,93 @@
+<!doctype html>
+<!--
+  Mockup: the options page (Phase 4 rebuilds its behaviour; the design review sets its look).
+  It stays static HTML with one control per schema key and follows prefers-color-scheme.
+  State shown: the user pressed Save with two invalid values, so nothing was written and both
+  fields show inline errors. The settings keys are the Phase 4 ones, without autoFieldCounts and
+  autoDomainCounts, which decision 2 in the design review proposes to retire.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Services Directory Toolkit settings (mockup)</title>
+<link rel="stylesheet" href="sdt.css">
+<style>
+  /* In the extension this rule lives in the options page's own stylesheet. */
+  body { margin: 0; background: var(--sdt-bg-subtle); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.3v.1"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+<main class="sdt sdt-page">
+  <header class="sdt-page__head">
+    <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+    <h1>Services Directory Toolkit settings</h1>
+  </header>
+  <p class="sdt-page__intro">Changes apply when you reload a Services Directory page. Settings sync with your Chrome profile, except the saved web map, which stays on this computer.</p>
+
+  <form novalidate>
+    <section class="sdt-card" aria-labelledby="h-auto">
+      <h2 id="h-auto">Automatic requests</h2>
+      <p class="sdt-hint">Sent when a Services Directory page opens, only to that page's server. At most 50 per page; the rest wait for Load more.</p>
+      <label class="sdt-check"><input type="checkbox" checked aria-describedby="hint-meta"><span>Load service details and spatial references<span class="sdt-hint" id="hint-meta" style="display:block">One request for each service or layer link on the page.</span></span></label>
+      <label class="sdt-check"><input type="checkbox" checked aria-describedby="hint-count"><span>Count features in each layer<span class="sdt-hint" id="hint-count" style="display:block">Two requests for each layer. Needs service details.</span></span></label>
+    </section>
+
+    <section class="sdt-card" aria-labelledby="h-prev">
+      <h2 id="h-prev">Map previews</h2>
+      <label class="sdt-check" style="margin-bottom: 1rem"><input type="checkbox" checked>Show map previews on hover and focus</label>
+      <div class="sdt-pair">
+        <div class="sdt-field">
+          <label for="width">Preview image width (px)</label>
+          <input class="sdt-input" id="width" type="number" inputmode="numeric" min="100" max="2000" step="1" value="" aria-invalid="true" aria-describedby="width-error width-hint">
+          <p class="sdt-error" id="width-error"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Enter a whole number from 100 to 2,000.</p>
+          <p class="sdt-hint" id="width-hint">The server's own image limit applies too.</p>
+        </div>
+        <div class="sdt-field">
+          <label for="height">Preview image height (px)</label>
+          <input class="sdt-input" id="height" type="number" inputmode="numeric" min="100" max="2000" step="1" value="200" aria-describedby="height-hint">
+          <p class="sdt-hint" id="height-hint">From 100 to 2,000.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sdt-card" aria-labelledby="h-query">
+      <h2 id="h-query">Query Helper</h2>
+      <fieldset class="sdt-fieldset">
+        <legend>Quick queries that fill and run the form</legend>
+        <label class="sdt-check"><input type="radio" name="selectAll" value="get" checked>Run the query with GET</label>
+        <label class="sdt-check"><input type="radio" name="selectAll" value="post">Run the query with POST, for long where clauses</label>
+        <label class="sdt-check"><input type="radio" name="selectAll" value="donothing">Fill the form only</label>
+      </fieldset>
+      <div class="sdt-field">
+        <label for="where">Default where clause</label>
+        <input class="sdt-input sdt-input--mono" id="where" type="text" value="STATUS = 'A'" aria-describedby="where-hint">
+        <p class="sdt-hint" id="where-hint">Query pages show it on an Insert button. It never goes into the page by itself.</p>
+      </div>
+    </section>
+
+    <section class="sdt-card" aria-labelledby="h-print">
+      <h2 id="h-print">Print tasks</h2>
+      <div class="sdt-field">
+        <label for="webmap">Saved web map (JSON)</label>
+        <textarea class="sdt-textarea" id="webmap" rows="6" aria-invalid="true" aria-describedby="webmap-error webmap-hint">{"operationalLayers":[],"baseMap":{"title":"Example basemap","baseMapLayers":[]},"exportOptions":{"dpi":96,"outputSize":[800,600],}}</textarea>
+        <p class="sdt-error" id="webmap-error"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Not valid JSON: unexpected "}" at line 1, column 121.</p>
+        <p class="sdt-hint" id="webmap-hint">Stored on this computer only. Print task pages show it on an Insert button.</p>
+      </div>
+    </section>
+
+    <div class="sdt-savebar">
+      <button class="sdt-button sdt-button--primary" type="submit">Save changes</button>
+      <p class="sdt-status" data-tone="error" role="status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>2 settings need fixing. Nothing was saved.</p>
+    </div>
+  </form>
+
+  <footer class="sdt-about">
+    <p>Version 2.0.0. Based on Map Services Enhanced by Ken Doman. <a href="#privacy">Privacy policy</a>, <a href="#source">source code</a>.</p>
+  </footer>
+</main>
+</body>
+</html>

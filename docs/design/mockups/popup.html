@@ -1,0 +1,233 @@
+<!doctype html>
+<!--
+  Mockup: the toolbar popup (Phases 3 and 9), shown as five frames so every state fits on one
+  page. In the extension each frame is the whole popup document, 23.75rem wide, and follows
+  prefers-color-scheme. Settings use the recommended option 2: three quick switches from the
+  Phase 4 schema, saved on change, with All settings opening the options page.
+  A On a query page: trim, search, settings
+  B Searching from the services root
+  C Search finished with failures; a setting changed, so Reload page appears
+  D Problems: copy failed, invalid pattern, a switch disabled by another
+  E No matches
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Toolbar popup (mockup)</title>
+<link rel="stylesheet" href="sdt.css">
+<style>
+  /* Mockup only: lays the frames out side by side. */
+  body { margin: 0; padding: 16px; background: var(--sdt-bg-subtle); }
+  .mock-grid { display: grid; grid-template-columns: repeat(3, 23.75rem); gap: 16px; align-items: start; }
+  .mock-frame { border: 1px solid var(--sdt-border-strong); border-radius: var(--sdt-radius-m); overflow: hidden; box-shadow: var(--sdt-shadow-pop); }
+  .mock-caption { margin: 0 0 6px; font: 12px var(--sdt-font-sans); color: var(--sdt-fg-muted); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.3v.1"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+<main class="mock-grid">
+
+<!-- A -->
+<div id="frame-a">
+  <p class="mock-caption">A. On a query page</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">arcgis.test/arcgis/rest/services/Parcels/MapServer/0/query</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="a-trim">
+      <h2 id="a-trim">Trim query URL</h2>
+      <div class="sdt-field">
+        <label class="sdt-visually-hidden" for="a-url">Trimmed URL</label>
+        <textarea class="sdt-textarea" id="a-url" rows="2" readonly aria-describedby="a-url-hint">https://arcgis.test/arcgis/rest/services/Parcels/MapServer/0/query?where=1%3D1&amp;outFields=*</textarea>
+        <p class="sdt-hint" id="a-url-hint">Removed 11 empty or default parameters: 312 to 96 characters.</p>
+      </div>
+      <div class="sdt-row"><button class="sdt-button sdt-button--primary" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-copy"/></svg>Copy URL</button></div>
+    </section>
+    <section class="sdt-popup__section" aria-labelledby="a-search">
+      <h2 id="a-search">Search this server</h2>
+      <form class="sdt-field" role="search" aria-labelledby="a-search">
+        <label for="a-q">Find names, fields and descriptions</label>
+        <div class="sdt-row">
+          <input class="sdt-input" id="a-q" type="search" required aria-describedby="a-scope">
+          <button class="sdt-button" type="submit"><svg class="sdt-icon" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
+        </div>
+        <label class="sdt-check"><input type="checkbox">Regular expression</label>
+        <p class="sdt-hint" id="a-scope">Starts at Parcels/MapServer/0 and follows the layers and tables below it.</p>
+      </form>
+    </section>
+    <section class="sdt-popup__section" aria-labelledby="a-set">
+      <h2 id="a-set">Settings <a class="sdt-button sdt-button--quiet" href="#options">All settings<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a></h2>
+      <label class="sdt-switch"><span class="sdt-switch__text">Load service details and spatial references</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Count features in each layer</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Show map previews on hover and focus</span><input type="checkbox" role="switch" checked></label>
+    </section>
+  </div>
+</div>
+
+<!-- B -->
+<div id="frame-b">
+  <p class="mock-caption">B. Searching from the services root</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">arcgis.test/arcgis/rest/services</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="b-search">
+      <h2 id="b-search">Search this server</h2>
+      <form class="sdt-field" role="search" aria-labelledby="b-search">
+        <label for="b-q">Find names, fields and descriptions</label>
+        <div class="sdt-row">
+          <input class="sdt-input" id="b-q" type="search" required value="parcel">
+          <button class="sdt-button" type="submit" aria-disabled="true"><span class="sdt-spinner" aria-hidden="true"></span>Searching</button>
+        </div>
+        <label class="sdt-check"><input type="checkbox">Regular expression</label>
+      </form>
+      <p class="sdt-status" role="status">Searched 9 locations so far: 4 matches.</p>
+      <p class="sdt-hint">Results open in a new tab.</p>
+      <ul class="sdt-results">
+        <li><a href="#r1" target="_blank"><span class="sdt-results__match"><mark>Parcel</mark>s</span><span class="sdt-results__where">Service name in <span class="sdt-mono">Parcels/MapServer</span></span></a></li>
+        <li><a href="#r2" target="_blank"><span class="sdt-results__match"><mark>Parcel</mark>s</span><span class="sdt-results__where">Service name in <span class="sdt-mono">Parcels/FeatureServer</span></span></a></li>
+        <li><a href="#r3" target="_blank"><span class="sdt-results__match"><mark>Parcel</mark> boundaries and site addresses for an invented county.</span><span class="sdt-results__where">Description of <span class="sdt-mono">Parcels/MapServer</span></span></a></li>
+        <li><a href="#r4" target="_blank"><span class="sdt-results__match"><mark>PARCEL</mark>_ID</span><span class="sdt-results__where">Field in <span class="sdt-mono">Parcels/MapServer/0</span></span></a></li>
+      </ul>
+    </section>
+    <section class="sdt-popup__section" aria-labelledby="b-set">
+      <h2 id="b-set">Settings <a class="sdt-button sdt-button--quiet" href="#options">All settings<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a></h2>
+      <label class="sdt-switch"><span class="sdt-switch__text">Load service details and spatial references</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Count features in each layer</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Show map previews on hover and focus</span><input type="checkbox" role="switch" checked></label>
+    </section>
+  </div>
+</div>
+
+<!-- C -->
+<div id="frame-c">
+  <p class="mock-caption">C. Finished, with failures; a setting changed</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">arcgis.test/arcgis/rest/services</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="c-search">
+      <h2 id="c-search">Search this server</h2>
+      <form class="sdt-field" role="search" aria-labelledby="c-search">
+        <label for="c-q">Find names, fields and descriptions</label>
+        <div class="sdt-row">
+          <input class="sdt-input" id="c-q" type="search" required value="roads">
+          <button class="sdt-button" type="submit"><svg class="sdt-icon" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
+        </div>
+      </form>
+      <p class="sdt-status" data-tone="warn" role="status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg>Searched 42 locations: 2 matches. 2 locations failed.</p>
+      <details class="sdt-details">
+        <summary>Show the 2 failed locations</summary>
+        <ul class="sdt-list sdt-details__body" style="font-size: var(--sdt-text-xs)">
+          <li><span class="sdt-mono">Utilities/PrintingTools/GPServer</span>: HTTP 500</li>
+          <li><span class="sdt-mono">Transport/Bridges/MapServer</span>: no answer in 10 s</li>
+        </ul>
+      </details>
+      <ul class="sdt-results">
+        <li><a href="#r5" target="_blank"><span class="sdt-results__match"><mark>Roads</mark></span><span class="sdt-results__where">Service name in <span class="sdt-mono">Transport/Roads/MapServer</span></span></a></li>
+        <li><a href="#r6" target="_blank"><span class="sdt-results__match"><mark>Roads</mark> 2019</span><span class="sdt-results__where">Layer in <span class="sdt-mono">Transport/Roads/MapServer/0</span></span></a></li>
+      </ul>
+    </section>
+    <section class="sdt-popup__section" aria-labelledby="c-set">
+      <h2 id="c-set">Settings <a class="sdt-button sdt-button--quiet" href="#options">All settings<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a></h2>
+      <label class="sdt-switch"><span class="sdt-switch__text">Load service details and spatial references</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Count features in each layer</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Show map previews on hover and focus</span><input type="checkbox" role="switch"></label>
+      <div class="sdt-row">
+        <p class="sdt-status" data-tone="ok" role="status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-check"/></svg>Saved. Reload the page to apply it.</p>
+        <button class="sdt-button sdt-button--primary" type="button" style="margin-inline-start:auto"><svg class="sdt-icon" aria-hidden="true"><use href="#i-reload"/></svg>Reload page</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- D -->
+<div id="frame-d">
+  <p class="mock-caption">D. Problems</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">arcgis.test/arcgis/rest/services/Transport/Roads/MapServer/0/query</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="d-trim">
+      <h2 id="d-trim">Trim query URL</h2>
+      <div class="sdt-field">
+        <label class="sdt-visually-hidden" for="d-url">Trimmed URL</label>
+        <textarea class="sdt-textarea" id="d-url" rows="3" readonly>https://arcgis.test/arcgis/rest/services/Transport/Roads/MapServer/0/query?where=ROAD_NAME+LIKE+%27S%25%27</textarea>
+      </div>
+      <div class="sdt-row">
+        <button class="sdt-button sdt-button--primary" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-copy"/></svg>Copy URL</button>
+        <p class="sdt-status" data-tone="error" role="status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Couldn't copy. Select the URL and press Ctrl+C.</p>
+      </div>
+    </section>
+    <section class="sdt-popup__section" aria-labelledby="d-search">
+      <h2 id="d-search">Search this server</h2>
+      <form class="sdt-field" role="search" aria-labelledby="d-search">
+        <label for="d-q">Find names, fields and descriptions</label>
+        <div class="sdt-row">
+          <input class="sdt-input" id="d-q" type="search" required value="road(s" aria-invalid="true" aria-describedby="d-q-error">
+          <button class="sdt-button" type="submit"><svg class="sdt-icon" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
+        </div>
+        <p class="sdt-error" id="d-q-error"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Not a valid regular expression: a group is missing its closing ")".</p>
+        <label class="sdt-check"><input type="checkbox" checked>Regular expression</label>
+      </form>
+    </section>
+    <section class="sdt-popup__section" aria-labelledby="d-set">
+      <h2 id="d-set">Settings <a class="sdt-button sdt-button--quiet" href="#options">All settings<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a></h2>
+      <label class="sdt-switch"><span class="sdt-switch__text">Load service details and spatial references</span><input type="checkbox" role="switch"></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Count features in each layer<span class="sdt-hint" id="d-needs">Needs service details turned on.</span></span><input type="checkbox" role="switch" checked disabled aria-describedby="d-needs"></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Show map previews on hover and focus</span><input type="checkbox" role="switch" checked></label>
+    </section>
+  </div>
+</div>
+
+<!-- E -->
+<div id="frame-e">
+  <p class="mock-caption">E. No matches</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">arcgis.test/arcgis/rest/services/Utilities</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="e-search">
+      <h2 id="e-search">Search this server</h2>
+      <form class="sdt-field" role="search" aria-labelledby="e-search">
+        <label for="e-q">Find names, fields and descriptions</label>
+        <div class="sdt-row">
+          <input class="sdt-input" id="e-q" type="search" required value="hydrant">
+          <button class="sdt-button" type="submit"><svg class="sdt-icon" aria-hidden="true"><use href="#i-search"/></svg>Search</button>
+        </div>
+        <label class="sdt-check"><input type="checkbox">Regular expression</label>
+      </form>
+      <p class="sdt-status" role="status">No matches in 6 locations below Utilities.</p>
+      <p class="sdt-hint">Search starts at the page you're on. Open the services root to search the whole server.</p>
+    </section>
+    <section class="sdt-popup__section" aria-labelledby="e-set">
+      <h2 id="e-set">Settings <a class="sdt-button sdt-button--quiet" href="#options">All settings<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a></h2>
+      <label class="sdt-switch"><span class="sdt-switch__text">Load service details and spatial references</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Count features in each layer</span><input type="checkbox" role="switch" checked></label>
+      <label class="sdt-switch"><span class="sdt-switch__text">Show map previews on hover and focus</span><input type="checkbox" role="switch" checked></label>
+    </section>
+  </div>
+</div>
+
+</main>
+</body>
+</html>
