@@ -1,8 +1,8 @@
 # UI design review: a consistent, easier UI with settings in the toolbar popup
 
-- **Issue:** #7. Inputs are #6 (map preview placement, decided) and the store readiness spec, `docs/superpowers/specs/2026-10-09-store-readiness-design.md` on the `store-readiness-spec` branch.
+- **Issue:** #7. Inputs are #6 (map preview placement, decided) and the store readiness spec, `docs/superpowers/specs/2026-10-09-store-readiness-design.md`.
 - **Date:** 2026-10-09
-- **Status:** proposal for the owner. Section 9 lists the decisions to take. Section 10 drafts the follow-up issues for Phases 5 to 9.
+- **Status:** accepted. The owner took every recommendation in section 9 on 2026-10-09, and the spec now includes them. Section 10 drafts the follow-up issues for Phases 5 to 9.
 - **Deliverables:** this document, static mockups in `docs/design/mockups/`, and screenshots in `docs/design/images/`. Section 11 explains how to regenerate them.
 
 ## Contents
@@ -15,7 +15,7 @@
 6. [Per-surface proposals](#6-per-surface-proposals)
 7. [Accessibility testing](#7-accessibility-testing)
 8. [Fit with the spec](#8-fit-with-the-spec)
-9. [Decisions needed from the owner](#9-decisions-needed-from-the-owner)
+9. [Decisions](#9-decisions)
 10. [Proposed follow-up issues](#10-proposed-follow-up-issues)
 11. [Regenerating the images](#11-regenerating-the-images)
 
@@ -646,7 +646,9 @@ The proposal stays within the spec's decisions and requirements: vanilla JS, DOM
 | New | Reload page in the popup, from issue #7 | 1 |
 | New | `SDT.theme`, the in-page theme check | 5, 6 |
 
-## 9. Decisions needed from the owner
+## 9. Decisions
+
+The owner accepted the recommendation in each item below on 2026-10-09. The alternatives stay listed for the record.
 
 1. **Settings in the popup.** Recommended: option 2, three quick switches (service details, layer counts, map previews) from the Phase 4 schema, saved on change, with All settings and a Reload page button after a change. Alternatives: option 1, a full Settings view in the popup; option 3, the Options link only.
 2. **Retire `autoFieldCounts` and `autoDomainCounts`.** Phase 5 makes value counts run from the Count values button, so both keys have nothing left to switch. Recommended: remove them from the schema in Phase 5 (nothing to migrate, because 2.0.0 is unpublished). Alternatives: keep them to hide the Count values button, or merge them into one "count coded values too" key.
@@ -735,7 +737,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 
 **Problem.** Zero is a red "!!!" that fails contrast and relies on colour. The lines are wordy, errors dump objects, and counting is automatic and unbounded (INJ-2, INJ-4, INJ-7, ADV-5).
 
-**Proposal.** Section 6.6, with the Phase 5 statistics query behind Count values, and the removal of `autoFieldCounts` and `autoDomainCounts` if decision 2 is accepted.
+**Proposal.** Section 6.6, with the Phase 5 statistics query behind Count values, and the removal of `autoFieldCounts` and `autoDomainCounts` (decision 2).
 
 **Acceptance criteria.**
 - Zero shows the warning badge with an icon, text and hidden "Warning:"; no "!!!" remains.
@@ -850,7 +852,7 @@ Drafts only; none are created. Criteria are written to test, in the style of #6,
 
 **Problem.** Settings left the page in Phase 3, and the options page is several steps away from the page you're looking at (#7).
 
-**Proposal.** Section 6.2, option 2, if decision 1 is accepted.
+**Proposal.** Section 6.2, option 2 (decision 1).
 
 **Acceptance criteria.**
 - Three switches show the stored values, save on change through the Phase 4 writer, and flip back with an error message on failure.
