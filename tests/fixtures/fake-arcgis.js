@@ -1,6 +1,7 @@
 // A fake ArcGIS Server for the browser tests. The Playwright fixture (tests/e2e/fixtures.js) routes
 // every request for https://arcgis.test through respond(), which answers from catalog.js and
-// pages.js, or returns null when no fixture matches.
+// pages.js, or returns null when no fixture matches. A test can also add overrides, whose handlers
+// may be async, so a test can serve a slow response or one that never arrives.
 import { catalog as defaultCatalog } from "./catalog.js";
 import { executePage, findPage, folderPage, layerPage, otherPage, queryPage, REST_PATH, servicePage } from "./pages.js";
 
@@ -9,10 +10,10 @@ export const REST_ROOT = `${FAKE_ORIGIN}${REST_PATH}`;
 
 const SERVICE_TYPES = ["MapServer", "FeatureServer", "ImageServer", "GPServer"];
 
-const html = (body) => ({ status: 200, contentType: "text/html; charset=utf-8", body });
+export const html = (body) => ({ status: 200, contentType: "text/html; charset=utf-8", body });
 
 // ArcGIS Server sends f=json as application/json and f=pjson as indented plain text.
-const json = (data, format) => ({
+export const json = (data, format) => ({
   status: 200,
   contentType: format === "pjson" ? "text/plain; charset=utf-8" : "application/json; charset=utf-8",
   // Keys starting with "_" hold fixture data that a real server would not send.
@@ -20,7 +21,7 @@ const json = (data, format) => ({
 });
 
 // ArcGIS Server reports most request errors as HTTP 200 with an error object.
-const arcgisError = (message, format) => json({ error: { code: 400, message, details: [] } }, format);
+export const arcgisError = (message, format) => json({ error: { code: 400, message, details: [] } }, format);
 
 /** Evaluates the where clauses the extension sends. Returns null for anything else. */
 export const whereMatcher = (where) => {
@@ -161,7 +162,8 @@ const route = (catalog, url, params, problems) => {
 
 /**
  * Creates a fake server. respond(request) takes a Playwright Request and returns options for
- * route.fulfill(), or null when nothing matches.
+ * route.fulfill(), or null when nothing matches. An override's handler may be async, and then
+ * respond() returns its Promise.
  */
 export const createFakeArcGIS = (catalog = defaultCatalog) => {
   const overrides = [];
@@ -170,9 +172,22 @@ export const createFakeArcGIS = (catalog = defaultCatalog) => {
   return {
     requests,
     problems,
-    /** Answers requests whose path and query (as sent, still encoded) match pattern with handler(url, params). */
+    /**
+     * Answers requests whose path and query (as sent, still encoded) match pattern with
+     * handler(url, params). The handler returns route.fulfill() options, or a Promise of them.
+     */
     override(pattern, handler) {
-      overrides.push({ pattern, handler });
+      overrides.push({ pattern, handler, used: false });
+    },
+    /** The patterns, as strings, of the overrides that have not matched a request yet. */
+    unusedOverrides() {
+      return overrides.filter(({ used }) => !used).map(({ pattern }) => String(pattern));
+    },
+    /** Counts every override added so far as used, for a test that adds one it doesn't mean to request. */
+    markOverridesUsed() {
+      overrides.forEach((override) => {
+        override.used = true;
+      });
     },
     respond(request) {
       const url = new URL(request.url());
@@ -182,7 +197,11 @@ export const createFakeArcGIS = (catalog = defaultCatalog) => {
       }
       requests.push(`${request.method()} ${url.pathname}${url.search}`);
       const override = overrides.find(({ pattern }) => pattern.test(`${url.pathname}${url.search}`));
-      return override ? override.handler(url, params) : route(catalog, url, params, problems);
+      if (override) {
+        override.used = true;
+        return override.handler(url, params);
+      }
+      return route(catalog, url, params, problems);
     }
   };
 };

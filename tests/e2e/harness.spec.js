@@ -1,4 +1,4 @@
-import { test, expect, FAKE_ORIGIN, REST_ROOT } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, html, REST_ROOT } from "./fixtures.js";
 
 test("the extension loads with no manifest errors", async ({ page, extensionId }) => {
   await page.goto("chrome://extensions");
@@ -108,6 +108,23 @@ test.describe("the fixture records", () => {
     harness.forgive();
   });
 
+  test("an override that returned no status", async ({ page, fakeServer, harness }) => {
+    fakeServer.override(/^\/no-status$/, () => ({ body: "no status here" }));
+    await page.goto(`${FAKE_ORIGIN}/no-status`);
+    expect(fakeServer.problems).toEqual(["override for /no-status returned no status"]);
+    expect(await page.locator("body").innerText()).toBe("The override returned no status");
+    harness.forgive();
+  });
+
+  test("an override that never matched a request", async ({ page, fakeServer, harness }) => {
+    fakeServer.override(/^\/never-requested$/, () => html("unused"));
+    fakeServer.override(/^\/requested$/, () => html("used"));
+    await page.goto(`${FAKE_ORIGIN}/requested`);
+    expect(fakeServer.unusedOverrides()).toEqual(["/^\\/never-requested$/"]);
+    harness.forgive();
+    expect(fakeServer.unusedOverrides()).toEqual([]);
+  });
+
   // No forgive() here: a console error that the test declares it expects must not fail it.
   test("a console error the test expects, which does not fail it", async ({ page, harness, expectedErrors }) => {
     expectedErrors.push(/expected one/);
@@ -117,11 +134,84 @@ test.describe("the fixture records", () => {
   });
 });
 
-// The one expected failure. It proves the fixture enforces its checks at the end of a test: a violation
-// that nothing forgives fails the test. The test body has no assertion on that failure itself; the
-// fixture's teardown is what is under test.
-test.fail("a violation left at the end still fails the test", async ({ page, harness }) => {
-  await page.goto(`${FAKE_ORIGIN}/other/page`);
-  await page.evaluate(() => console.error("left over"));
-  await expect.poll(() => harness.errors).toContainEqual(expect.stringContaining("left over"));
+// Slow and hanging answers. They are normal tests: the fixture has to wait for the delayed route, and to
+// close cleanly with a route that never completes.
+test.describe("an override may answer late", () => {
+  test("a delayed response is served after the delay", async ({ page, fakeServer, expectedErrors }) => {
+    expectedErrors.push(/status of 502/);
+    fakeServer.override(/^\/slow$/, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { ...html("<html><body>Bad Gateway</body></html>"), status: 502 };
+    });
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    const { status, elapsed } = await page.evaluate(async (url) => {
+      const started = performance.now();
+      const response = await fetch(url);
+      return { status: response.status, elapsed: performance.now() - started };
+    }, `${FAKE_ORIGIN}/slow`);
+    expect(status).toBe(502);
+    expect(elapsed).toBeGreaterThanOrEqual(250);
+  });
+
+  test("a hanging response can be aborted by the caller", async ({ page, fakeServer }) => {
+    fakeServer.override(/^\/hang$/, () => new Promise(() => {}));
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    const outcome = await page.evaluate(async (url) => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 200);
+      try {
+        await fetch(url, { signal: controller.signal });
+        return "resolved";
+      } catch (error) {
+        return error.name;
+      }
+    }, `${FAKE_ORIGIN}/hang`);
+    expect(outcome).toBe("AbortError");
+  });
+});
+
+// Each test below leaves one violation unforgiven and is expected to fail. It proves that the fixture
+// enforces that list at the end of a test. The test bodies assert nothing about the failure itself: the
+// fixture's teardown is what is under test. Each body first asserts that the violation was recorded, so
+// a hook that stops recording fails the body, not just the teardown. It then clears every other list
+// the violation also fills, such as the browser's console error for a blocked request, so that only
+// the list under test can fail the test.
+test.describe("a violation left at the end still fails the test", () => {
+  test.fail("a leftover console error", async ({ page, harness }) => {
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    await page.evaluate(() => console.error("left over"));
+    await expect.poll(() => harness.errors).toContainEqual(expect.stringContaining("left over"));
+  });
+
+  test.fail("a leftover request to another host", async ({ page, harness }) => {
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    await page.evaluate(() => fetch("https://elsewhere.test/").catch(() => {}));
+    expect(harness.offHost).toContainEqual("https://elsewhere.test/");
+    harness.errors.length = 0;
+  });
+
+  test.fail("a leftover request the fake server has no fixture for", async ({ page, harness }) => {
+    await page.goto(`${REST_ROOT}/NoSuchService/MapServer`);
+    expect(harness.unmatched).toContainEqual(`GET ${REST_ROOT}/NoSuchService/MapServer`);
+    harness.errors.length = 0;
+  });
+
+  test.fail("a leftover problem the fake server recorded", async ({ page, fakeServer, harness }) => {
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    await page.evaluate((url) => fetch(url).then((response) => response.text()), `${REST_ROOT}/Parcels/MapServer/0/query?where=ACRES%20%3E%201&f=json`);
+    expect(fakeServer.problems).toContainEqual(expect.stringMatching(/ACRES > 1/));
+    harness.errors.length = 0;
+  });
+
+  test.fail("a leftover dialog", async ({ page, harness }) => {
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    await page.evaluate(() => alert("left over"));
+    expect(harness.dialogs).toContainEqual("alert: left over");
+    harness.errors.length = 0;
+  });
+
+  test.fail("a leftover override that never matched", async ({ fakeServer }) => {
+    fakeServer.override(/^\/never-requested$/, () => html("unused"));
+    expect(fakeServer.unusedOverrides()).toEqual(["/^\\/never-requested$/"]);
+  });
 });

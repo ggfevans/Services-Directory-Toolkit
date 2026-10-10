@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createFakeArcGIS, FAKE_ORIGIN, whereMatcher } from "../fixtures/fake-arcgis.js";
+import { arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, whereMatcher } from "../fixtures/fake-arcgis.js";
 
 // A stand-in for a Playwright Request.
 const request = (path, { method = "GET", body } = {}) => ({
@@ -108,6 +108,68 @@ test("overrides take precedence, and every request is recorded", () => {
   server.override(/\/Transport\?f=json$/, () => ({ status: 502, contentType: "text/html", body: "Bad Gateway" }));
   assert.equal(get(server, "/arcgis/rest/services/Transport?f=json").status, 502);
   assert.deepEqual(server.requests, ["GET /arcgis/rest/services/Transport?f=json"]);
+});
+
+test("an override that returns a Promise is passed through for the caller to await", async () => {
+  const server = createFakeArcGIS();
+  server.override(/\/slow$/, async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return { status: 503, contentType: "text/plain", body: "Late" };
+  });
+  const pending = get(server, "/slow");
+  assert.ok(pending instanceof Promise);
+  assert.deepEqual(await pending, { status: 503, contentType: "text/plain", body: "Late" });
+  assert.equal(get(server, "/favicon.ico").status, 204);
+});
+
+test("an override's result is returned as it is, even without a status", () => {
+  const server = createFakeArcGIS();
+  server.override(/\/odd$/, () => undefined);
+  assert.equal(get(server, "/odd"), undefined);
+});
+
+test("unusedOverrides lists the patterns that have not matched a request", () => {
+  const server = createFakeArcGIS();
+  assert.deepEqual(server.unusedOverrides(), []);
+  server.override(/\/first$/, () => html("first"));
+  server.override(/^\/second\?f=json$/, () => html("second"));
+  assert.deepEqual(server.unusedOverrides(), ["/\\/first$/", "/^\\/second\\?f=json$/"]);
+  get(server, "/second?f=json");
+  assert.deepEqual(server.unusedOverrides(), ["/\\/first$/"]);
+});
+
+test("an override that an earlier override shadows counts as unused", () => {
+  const server = createFakeArcGIS();
+  server.override(/\/page$/, () => html("early"));
+  server.override(/\/page$/, () => html("late"));
+  assert.equal(get(server, "/page").body, "early");
+  assert.deepEqual(server.unusedOverrides(), ["/\\/page$/"]);
+});
+
+test("markOverridesUsed clears the list, and only for the overrides added so far", () => {
+  const server = createFakeArcGIS();
+  server.override(/\/one$/, () => html("one"));
+  server.markOverridesUsed();
+  assert.deepEqual(server.unusedOverrides(), []);
+  server.override(/\/two$/, () => html("two"));
+  assert.deepEqual(server.unusedOverrides(), ["/\\/two$/"]);
+});
+
+test("the body helpers set the content types ArcGIS Server uses", () => {
+  assert.deepEqual(html("<p>Hi</p>"), { status: 200, contentType: "text/html; charset=utf-8", body: "<p>Hi</p>" });
+  assert.deepEqual(json({ a: 1 }), { status: 200, contentType: "application/json; charset=utf-8", body: "{\"a\":1}" });
+  const pjson = json({ a: 1 }, "pjson");
+  assert.equal(pjson.contentType, "text/plain; charset=utf-8");
+  assert.equal(pjson.body, "{\n  \"a\": 1\n}");
+  assert.equal(json({ _hidden: 1, shown: 2 }).body, "{\"shown\":2}");
+});
+
+test("arcgisError is an HTTP 200 with an error object", () => {
+  const response = arcgisError("Unable to complete operation.");
+  assert.equal(response.status, 200);
+  assert.equal(response.contentType, "application/json; charset=utf-8");
+  assert.deepEqual(JSON.parse(response.body), { error: { code: 400, message: "Unable to complete operation.", details: [] } });
+  assert.equal(arcgisError("Oops", "pjson").contentType, "text/plain; charset=utf-8");
 });
 
 test("form posts are read like query strings", () => {

@@ -1,26 +1,34 @@
 // Playwright fixtures for testing the extension against a fake ArcGIS Server.
 //
-// Each test gets a fresh Chromium profile with the extension loaded. All http(s) traffic goes
-// through Playwright routing. https://arcgis.test is answered by tests/fixtures/fake-arcgis.js,
-// and every other host is blocked.
+// Each test gets a fresh Chromium profile with the extension loaded. Playwright routing sees every
+// request from tab pages, from extension pages opened as tabs, from content scripts and from the
+// service worker. https://arcgis.test is answered by tests/fixtures/fake-arcgis.js, and every other
+// http(s) host is blocked. The real toolbar popup's own requests are not routed, because it has no
+// Playwright Page. They fail at DNS for a .test host and appear in no list. Test popup logic with
+// openPopupTab, which opens the popup page as a tab.
 //
-// A test fails if it does any of these, unless it declares that it expects to:
-// - requests another host
-// - makes a request the fake server can't answer
-// - logs a console error
-// - throws
-// - opens a dialog
+// A test fails if any of these is left over when it ends:
+// - a request to another host
+// - a request the fake server has no fixture for
+// - a request the fake server can't interpret, or an override that returned no status
+// - an override that never matched a request
+// - a dialog
+// - a console error or an uncaught exception
 //
-// The violations are recorded on the `harness` fixture. A test that provokes one on purpose asserts
-// that the right list caught it, then calls harness.forgive().
+// A test allows a console error by adding a pattern to expectedErrors. A test that provokes any other
+// violation on purpose asserts that the right list caught it, then calls harness.forgive().
+//
+// Two gaps remain. Errors the service worker raises while it starts, before the hooks go in, aren't
+// caught. Neither are errors the real popup raises during its initial load, before popupView's
+// waitForOpen() installs the relay.
 import { test as base, chromium, expect } from "@playwright/test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createFakeArcGIS, FAKE_ORIGIN, REST_ROOT } from "../fixtures/fake-arcgis.js";
+import { arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, REST_ROOT } from "../fixtures/fake-arcgis.js";
 
-export { expect, FAKE_ORIGIN, REST_ROOT };
+export { arcgisError, expect, FAKE_ORIGIN, html, json, REST_ROOT };
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -54,7 +62,7 @@ export const test = base.extend({
   },
 
   // The violations the context fixture records, checked when the test ends. forgive() clears them,
-  // and the fake server's problems, in place, for a test that provokes one on purpose.
+  // the fake server's problems and its unused overrides, in place, for a test that provokes one on purpose.
   harness: async ({ fakeServer }, use) => {
     const harness = {
       offHost: [],
@@ -65,6 +73,7 @@ export const test = base.extend({
         for (const list of [harness.offHost, harness.unmatched, harness.dialogs, harness.errors, fakeServer.problems]) {
           list.length = 0;
         }
+        fakeServer.markOverridesUsed();
       }
     };
     await use(harness);
@@ -106,12 +115,18 @@ export const test = base.extend({
         await route.abort("blockedbyclient");
         return;
       }
-      const response = fakeServer.respond(request);
-      if (response) {
-        await route.fulfill(response);
-      } else {
+      // An override may answer slowly, or never. A hanging handler is harmless: closing the context
+      // ends it, and the harness spec's hanging-response test keeps that true.
+      const response = await fakeServer.respond(request);
+      if (response === null) {
         harness.unmatched.push(`${request.method()} ${request.url()}`);
         await route.fulfill({ status: 404, contentType: "text/plain", body: "No fixture for this URL" });
+      } else if (typeof response?.status !== "number") {
+        const { pathname, search } = new URL(request.url());
+        fakeServer.problems.push(`override for ${pathname}${search} returned no status`);
+        await route.fulfill({ status: 500, contentType: "text/plain", body: "The override returned no status" });
+      } else {
+        await route.fulfill(response);
       }
     });
 
@@ -133,6 +148,7 @@ export const test = base.extend({
     expect(harness.offHost, "requests to hosts other than the fake ArcGIS Server").toEqual([]);
     expect(harness.unmatched, "requests the fake ArcGIS Server has no fixture for").toEqual([]);
     expect(fakeServer.problems, "requests the fake ArcGIS Server could not interpret").toEqual([]);
+    expect(fakeServer.unusedOverrides(), "overrides that never matched a request").toEqual([]);
     expect(harness.dialogs, "dialogs").toEqual([]);
     expect(unexpectedErrors, "console errors and uncaught exceptions").toEqual([]);
   },
