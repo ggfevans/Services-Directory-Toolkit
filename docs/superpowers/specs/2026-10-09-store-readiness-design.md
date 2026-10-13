@@ -104,7 +104,7 @@ Automatic requests are those the extension sends without a user action. They are
 - **Destination:** only the page's own origin and its `/rest/services` root. Links to other servers get no automatic requests.
 - **Cancellation:** pending requests are cancelled on `pagehide`.
 - **Server pushback:** an HTTP 429 or 503 stops automatic work on that page and shows a notice.
-- **Token:** a `token` from the page URL is forwarded only to that same origin and REST root.
+- **Token:** a `token` from the page URL goes only to the page's origin and REST root. It travels in a form POST body, and a request that carries it never follows a redirect.
 
 ### 4.4 Security rules
 
@@ -309,12 +309,22 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - parses JSON, with a retry that maps bare `NaN` values outside strings to `null`
   - times out
   - sends no `X-Requested-With` or `Content-type` on GET
+  - keeps the default credentials (cookies, HTTP authentication and TLS client certificates), which servers behind SSO proxies or using IWA or PKI need on every request (TOK-5)
+  - puts a token in a form-encoded POST body, where Chrome's console errors and server logs don't record it (TOK-4)
+  - sends a request that carries a token with `redirect: "manual"`, and reports a redirect as an error (TOK-1)
   - always resolves to `{data}` or `{error}`
 - **Request limiter:** enforces the section 4.3 budget.
-- **URL builder:** carries the `token` from the page URL to the same origin and REST root only.
+- **URL builder:**
+  - takes the token as an argument and doesn't read `location`, so a later feature can supply a token from another source
+  - attaches the token only to URLs inside the token scope: the origin plus the path up to and including the first whole-segment `/rest/services`, read from the parsed `URL.pathname` (TOK-2)
+  - compares the host and the instance path in lower case, except an ArcGIS Online org ID, which is case-sensitive
+  - resolves `%2e%2e` segments before the check, scopes `/restricted/rest/services` to `/restricted`, and leaves `/admin`, `/tokens` and `/manager` outside the scope
+  - strips `token`, `f` and the fragment from a link's href before the link filters in `inject.js` and `mapImages.js` test it (TOK-3)
 
 **`SDT` page classifier:**
 - It returns root, folder, service, layer, query, find, gpTask, jsonView or other.
+- From the page URL it reads only `location.pathname`, because content-script patterns also match the query string (TOK-6). A page whose pathname isn't a Services Directory path, such as `https://host/evil.html?x=/rest/services/`, classifies as `other`.
+- A page can still rewrite its path with `history.replaceState` before the scripts load. The extension's requests from that page go only to the page's origin, and section 3 treats the check as a correctness filter.
 - It relies on markers common to 10.9, 11.x, 12.x (12.1 is current) and ArcGIS Online. Check the 12.1 Services Directory markup before choosing the markers, and add a 12.x fixture variant if it differs.
 - On `jsonView` and `other` the scripts do nothing and show no spinner.
 
@@ -328,9 +338,14 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Acceptance:**
 - The INJ-1 and PRT-1 (JSON view) `test.fail()` cases pass.
-- Unit tests cover `fetchJson`, the URL builder, the token scope and the classifier.
+- Unit tests cover `fetchJson`, the URL builder, the token scope and the classifier, including:
+  - instance paths that differ only in case (one scope) and ArcGIS Online org IDs that differ only in case (two scopes)
+  - `%2e%2e` segments and a `/restricted/rest/services` path
+  - a Services Directory path that appears only in the query string
 - Browser tests show:
   - no automatic requests to another origin
+  - no token reaches another origin through a 307 redirect
+  - a page opened with `?token=` gets metadata for links that carry the token
   - no spinner on JSON views
   - no `ajax` copies left in the code (checked by lint or grep)
 
@@ -629,7 +644,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Resolution:** Fix; Won't fix (with reason); Moot (made irrelevant by a decision); Partly invalid (the review overstated part of it).
 
-**ID prefixes:** ADV findings came from the adversarial review of the draft design. OWN items were added by the owner. Duplicates are cross-referenced.
+**ID prefixes:** ADV findings came from the adversarial review of the draft design. TOK findings came from the adversarial review of the token design on 2026-10-13. OWN items were added by the owner. Duplicates are cross-referenced.
 
 ### inject.js and inject.css
 
@@ -791,6 +806,17 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | ADV-9 | M | Service-worker errors invisible to tests; dialogs dismissed silently | 1 | Fix |
 | ADV-10 | L | Extension elements looked up by id can be clobbered by the page | 6 | Fix |
 | ADV-11 | L | The gear doubles as the loading spinner; no design covered it | 3 | Fix |
+
+### Added by the token design review
+
+| ID | Sev | Summary | Phase | Resolution |
+|---|---|---|---|---|
+| TOK-1 | M | A redirect re-sends a forwarded `token` to another origin in the query string, a 307's POST body or an `X-Esri-Authorization` header; Chrome strips only `Authorization` | 2 | Fix (`redirect: "manual"` on requests that carry a token) |
+| TOK-2 | M | The same-REST-root check is fooled by case, `/rest` elsewhere in the path, encoded dot segments and link fragments | 2 | Fix (scope from `URL.pathname` up to a whole-segment `/rest/services`; host and instance lower-cased; ArcGIS Online org ID kept as is) |
+| TOK-3 | M | Links that carry `token` or `f` skip the link filters, so a page opened with a token gets no metadata or previews | 2, 5, 6 | Fix (a helper strips `token`, `f` and the fragment before the filters match) |
+| TOK-4 | L | A query-string token reaches Chrome's console errors and server logs | 2 | Fix (token sent in a form POST body) |
+| TOK-5 | M | Omitting credentials would break servers behind SSO proxies, IWA or PKI | 2 | Fix (`fetchJson` keeps the default credentials) |
+| TOK-6 | M | Content-script patterns also match the query string, and a page can rewrite its URL before the scripts load | 2 | Fix (classifier reads only `location.pathname`) |
 
 ### Added by the owner
 
