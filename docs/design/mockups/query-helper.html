@@ -1,0 +1,218 @@
+<!doctype html>
+<!--
+  Mockup: a layer query page of an invented server with the docked Query Helper (Phase 7).
+  The panel takes a column the page gives up (html.sdt-docked adds padding), so it covers none
+  of the form and can never hide a focused field (WCAG 2.2 SC 2.4.11). Everything inside an
+  element with class "sdt" is what the extension would add.
+  State shown: the Where box is the insertion target, OWNER_NAME is selected and its values
+  have loaded, Statistics are unavailable because the target isn't Output Statistics.
+-->
+<html lang="en" class="sdt-docked">
+<head>
+<meta charset="utf-8">
+<title>Query: Parcels (ID: 0) (mockup)</title>
+<link rel="stylesheet" href="host-standin.css">
+<link rel="stylesheet" href="sdt.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-insert" viewBox="0 0 24 24"><path d="M19 5v7a3 3 0 0 1-3 3H6"/><path d="M10 11l-4 4 4 4"/></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right"><a href="#login">Login</a></td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+<a href="#home">Home</a>
+  &gt; <a href="#services">services</a>
+  &gt; <a href="#parcels">Parcels (MapServer)</a>
+  &gt; <a href="#layer">Parcels</a>
+  &gt; <a href="#query">query</a>
+</td>
+<td align="right"><a href="#help">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="#json">JSON</a></td></tr>
+</table>
+<h2>Query: Parcels (ID: 0)</h2>
+<div class="rbody">
+<form name="sdform" action="#query">
+<table class="formTable">
+<tr valign="top">
+<td><label for="where">Where:</label></td>
+<td><input type="text" id="where" name="where" value="LAND_USE = 'R' AND OWNER_NAME = " size="75"/></td>
+</tr>
+<tr valign="top">
+<td><label for="text">Text:</label></td>
+<td><input type="text" id="text" name="text" value="" size="75"/></td>
+</tr>
+<tr valign="top">
+<td><label for="objectIds">Object IDs:</label></td>
+<td><input type="text" id="objectIds" name="objectIds" value="" size="75"/></td>
+</tr>
+<tr valign="top">
+<td><label for="outFields">Out Fields:</label></td>
+<td><input type="text" id="outFields" name="outFields" value="" size="75"/></td>
+</tr>
+<tr>
+<td>Return Geometry:</td>
+<td>
+  <label><input type="radio" name="returnGeometry" value="true" checked /> True &nbsp;</label>
+  <label><input type="radio" name="returnGeometry" value="false" /> False</label>
+</td>
+</tr>
+<tr>
+<td>Return IDs Only:</td>
+<td>
+  <label><input type="radio" name="returnIdsOnly" value="true" /> True &nbsp;</label>
+  <label><input type="radio" name="returnIdsOnly" value="false" checked /> False</label>
+</td>
+</tr>
+<tr>
+<td>Return Count Only:</td>
+<td>
+  <label><input type="radio" name="returnCountOnly" value="true" /> True &nbsp;</label>
+  <label><input type="radio" name="returnCountOnly" value="false" checked /> False</label>
+</td>
+</tr>
+<tr valign="top">
+<td><label for="orderByFields">Order By Fields:</label></td>
+<td><input type="text" id="orderByFields" name="orderByFields" value="" size="75"/></td>
+</tr>
+<tr valign="top">
+<td><label for="groupByFieldsForStatistics">Group By Fields (For Statistics):</label></td>
+<td><input type="text" id="groupByFieldsForStatistics" name="groupByFieldsForStatistics" value="" size="75"/></td>
+</tr>
+<tr valign="top">
+<td><label for="outStatistics">Output Statistics:</label></td>
+<td><textarea id="outStatistics" name="outStatistics" rows="5" cols="55"></textarea></td>
+</tr>
+<tr>
+<td>Return Distinct Values:</td>
+<td>
+  <label><input type="radio" name="returnDistinctValues" value="true" /> True &nbsp;</label>
+  <label><input type="radio" name="returnDistinctValues" value="false" checked /> False</label>
+</td>
+</tr>
+<tr>
+<td><label for="f">Format:</label></td>
+<td><select id="f" name="f"><option value="html">HTML</option><option value="pjson">JSON</option></select></td>
+</tr>
+<tr>
+<td colspan="2" align="left">
+<input type="submit" value="Query (GET)" />
+<input type="submit" value="Query (POST)" />
+</td>
+</tr>
+</table>
+</form>
+</div>
+
+<!-- Extension: the docked Query Helper. -->
+<aside class="sdt sdt-panel sdt-panel--docked" aria-labelledby="qh-title">
+  <div class="sdt-panel__head">
+    <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+    <h2 class="sdt-panel__title" id="qh-title">Query Helper</h2>
+    <button class="sdt-button sdt-button--quiet" type="button" aria-expanded="true" aria-controls="qh-body">Hide<span class="sdt-visually-hidden"> Query Helper</span><svg class="sdt-icon" aria-hidden="true"><use href="#i-chev-r"/></svg></button>
+  </div>
+  <div class="sdt-panel__body" id="qh-body">
+    <div class="sdt-panel__section sdt-target">
+      <span>Inserting into <b>where</b></span>
+      <button class="sdt-button sdt-button--quiet" type="button">Clear where</button>
+    </div>
+
+    <div class="sdt-panel__section sdt-field">
+      <label for="qh-fields">Fields</label>
+      <select class="sdt-listbox" id="qh-fields" size="6" aria-describedby="qh-fields-hint">
+        <option>OBJECTID</option>
+        <option>PARCEL_ID</option>
+        <option selected>OWNER_NAME</option>
+        <option>LAND_USE</option>
+        <option>ACRES</option>
+      </select>
+      <p class="sdt-hint" id="qh-fields-hint">Owner, string. Press Enter or double-click to insert the name.</p>
+      <div class="sdt-buttons"><button class="sdt-button" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-insert"/></svg>Insert field</button></div>
+    </div>
+
+    <div class="sdt-panel__section sdt-field">
+      <label for="qh-values">Values of OWNER_NAME</label>
+      <select class="sdt-listbox" id="qh-values" size="4" aria-describedby="qh-values-hint">
+        <option selected>'A. Example'</option>
+        <option>'B. Sample'</option>
+        <option>''</option>
+        <option>NULL</option>
+      </select>
+      <p class="sdt-hint" id="qh-values-hint">4 distinct values. Inserted as SQL, quoted for a string field.</p>
+      <div class="sdt-buttons"><button class="sdt-button" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-insert"/></svg>Insert value</button></div>
+    </div>
+
+    <section class="sdt-panel__section" aria-labelledby="qh-ops">
+      <h3 id="qh-ops">Operators</h3>
+      <div class="sdt-buttons sdt-buttons--grid">
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert =">=</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert &lt;&gt;">&lt;&gt;</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert &gt;">&gt;</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert &gt;=">&gt;=</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert &lt;">&lt;</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert &lt;=">&lt;=</button>
+        <button class="sdt-button sdt-button--sql" type="button">LIKE</button>
+        <button class="sdt-button sdt-button--sql" type="button">IN</button>
+        <button class="sdt-button sdt-button--sql" type="button">IS</button>
+        <button class="sdt-button sdt-button--sql" type="button">NOT</button>
+        <button class="sdt-button sdt-button--sql" type="button">NULL</button>
+        <button class="sdt-button sdt-button--sql" type="button">AND</button>
+        <button class="sdt-button sdt-button--sql" type="button">OR</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert parentheses">( )</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert quotes">' '</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert percent wildcard">%</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert underscore wildcard">_</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert comma">,</button>
+        <button class="sdt-button sdt-button--sql" type="button" aria-label="Insert asterisk">*</button>
+      </div>
+    </section>
+
+    <section class="sdt-panel__section" aria-labelledby="qh-stats">
+      <h3 id="qh-stats">Statistics</h3>
+      <p class="sdt-hint" id="qh-stats-hint">Choose the Output Statistics box to add a statistic.</p>
+      <div class="sdt-buttons">
+        <button class="sdt-button sdt-button--sql" type="button" disabled aria-describedby="qh-stats-hint">count</button>
+        <button class="sdt-button sdt-button--sql" type="button" disabled aria-describedby="qh-stats-hint">sum</button>
+        <button class="sdt-button sdt-button--sql" type="button" disabled aria-describedby="qh-stats-hint">min</button>
+        <button class="sdt-button sdt-button--sql" type="button" disabled aria-describedby="qh-stats-hint">max</button>
+        <button class="sdt-button sdt-button--sql" type="button" disabled aria-describedby="qh-stats-hint">avg</button>
+        <button class="sdt-button sdt-button--sql" type="button" disabled aria-describedby="qh-stats-hint">stddev</button>
+        <button class="sdt-button sdt-button--sql" type="button" disabled aria-describedby="qh-stats-hint">var</button>
+      </div>
+    </section>
+
+    <section class="sdt-panel__section" aria-labelledby="qh-quick">
+      <h3 id="qh-quick">Quick queries</h3>
+      <p class="sdt-hint" id="qh-run-hint">These fill the form and run it with GET. Change this in All settings.</p>
+      <div class="sdt-buttons" style="margin: 0.25rem 0 0.5rem">
+        <button class="sdt-button" type="button" aria-describedby="qh-run-hint"><svg class="sdt-icon" aria-hidden="true"><use href="#i-play"/></svg>Select all</button>
+        <button class="sdt-button" type="button" aria-describedby="qh-run-hint"><svg class="sdt-icon" aria-hidden="true"><use href="#i-play"/></svg>All but geometry</button>
+        <button class="sdt-button" type="button" aria-describedby="qh-run-hint"><svg class="sdt-icon" aria-hidden="true"><use href="#i-play"/></svg>Count only</button>
+      </div>
+      <p class="sdt-hint">This one fills the form only.</p>
+      <div class="sdt-buttons" style="margin-top: 0.25rem">
+        <button class="sdt-button" type="button">Distinct values of OWNER_NAME</button>
+      </div>
+    </section>
+
+    <section class="sdt-panel__section" aria-labelledby="qh-default">
+      <h3 id="qh-default">Default where clause</h3>
+      <div class="sdt-buttons"><button class="sdt-button" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-insert"/></svg>Insert default where clause</button></div>
+    </section>
+  </div>
+</aside>
+</body>
+</html>

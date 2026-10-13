@@ -1,0 +1,85 @@
+<!doctype html>
+<!--
+  Mockup: a print task's execute page on an invented server (Phase 8). Choice-list parameters
+  get a select that takes over the page's label; "Other..." shows the original box. The saved
+  web map goes in only from the "Insert saved web map" button. Everything inside an element
+  with class "sdt" is what the extension would add.
+-->
+<html lang="en">
+<head>
+<title>Execute Task: Export Web Map Task (mockup)</title>
+<meta charset="utf-8">
+<link rel="stylesheet" href="host-standin.css">
+<link rel="stylesheet" href="sdt.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-insert" viewBox="0 0 24 24"><path d="M19 5v7a3 3 0 0 1-3 3H6"/><path d="M10 11l-4 4 4 4"/></symbol>
+</svg>
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right"><a href="#link">Login</a></td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+<a href="#link">Home</a>
+  &gt; <a href="#link">services</a>
+  &gt; <a href="#link">PrintingTools (GPServer)</a>
+  &gt; <a href="#link">Export Web Map Task</a>
+  &gt; <a href="#link">execute</a>
+</td>
+<td align="right"><a href="#link">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="#link">JSON</a></td></tr>
+</table>
+<h2>Execute Task: Export Web Map Task</h2>
+<div class="rbody">
+<form name="sdform" action="#execute">
+<table class="formTable">
+<tr valign="top">
+<td><label for="Web_Map_as_JSON">Web Map as JSON:</label></td>
+<td><textarea id="Web_Map_as_JSON" name="Web_Map_as_JSON" rows="5" cols="55" aria-describedby="wm-hint"></textarea>
+<div class="sdt sdt-annot" style="display:flex; margin: 4px 0 8px;"><button class="sdt-button" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-insert"/></svg>Insert saved web map</button><span id="wm-hint">1.2 KB, saved in the toolkit's settings on this computer.</span></div></td>
+</tr>
+<tr valign="top">
+<td><label for="Format-choice">Format:</label></td>
+<td><select class="sdt sdt-select sdt-select--compact" id="Format-choice"><option>PDF</option><option selected>PNG32</option><option>JPG</option><option>Other...</option></select>
+<textarea id="Format" name="Format" rows="5" cols="55" hidden>PNG32</textarea></td>
+</tr>
+<tr valign="top">
+<td><label for="Layout_Template-choice">Layout Template:</label></td>
+<td><select class="sdt sdt-select sdt-select--compact" id="Layout_Template-choice"><option value="">(none)</option><option>A4 Landscape</option><option>A4 Portrait</option><option>MAP_ONLY</option><option selected>Other...</option></select>
+<div style="margin-top: 4px"><label class="sdt sdt-visually-hidden" for="Layout_Template">Layout Template, other value</label><textarea id="Layout_Template" name="Layout_Template" rows="2" cols="55">Letter Landscape Custom</textarea></div></td>
+</tr>
+<tr><td colspan="2"><b>Options:</b></td></tr>
+<tr valign="top">
+<td><label for="env:outSR">Output Spatial Reference:</label></td>
+<td><input type="text" id="env:outSR" name="env:outSR" value="" size="75"/></td>
+</tr>
+<tr>
+<td>ReturnZ:</td>
+<td>
+  <label><input type="radio" name="returnZ" value="true" /> True &nbsp;</label>
+  <label><input type="radio" name="returnZ" value="false" checked="true" /> False</label>
+</td>
+</tr>
+<tr>
+<td><label for="f">Format:</label></td>
+<td><select id="f" name="f"><option value="html">HTML</option><option value="pjson">JSON</option></select></td>
+</tr>
+<tr>
+<td colspan="2" align="left">
+<input type="submit" value="Execute Task (GET)" />
+<input type="submit" onclick="this.form.method = 'post';" value="Execute Task (POST)" />
+</td>
+</tr>
+</table>
+</form>
+</div>
+</body>
+</html>

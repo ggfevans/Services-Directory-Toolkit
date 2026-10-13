@@ -1,0 +1,110 @@
+<!doctype html>
+<!--
+  Mockup: the services root of an invented server, with the proposed status bar, spatial
+  reference badges, details disclosures and the map preview pop-up (issue #6).
+  Everything inside an element with class "sdt" is what the extension would add. The rest is
+  the host page, shaped like the fake server's root page (tests/fixtures/pages.js).
+  Rows show different states on purpose: loaded, open, loading, failed, WKT only.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Folder: / (mockup)</title>
+<link rel="stylesheet" href="host-standin.css">
+<link rel="stylesheet" href="sdt.css">
+<style>
+  /* Mockup only: pins the pop-up where the placement code would put it. */
+  .mock-anchor { position: relative; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></symbol>
+  <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.3v.1"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right"><a href="#login">Login</a></td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+<a href="#home">Home</a>
+  &gt; <a href="#services">services</a>
+</td>
+<td align="right"><a href="#help">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="#json">JSON</a></td></tr>
+</table>
+<h2>Folder: /</h2>
+
+<!-- Extension: page status bar, in the flow under the heading. -->
+<div class="sdt sdt-statusbar">
+  <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+  <p class="sdt-status" role="status"><span class="sdt-spinner" aria-hidden="true"></span>Loading details: 6 of 8 services, 1 failed</p>
+</div>
+
+<div class="rbody">
+<b>Current Version: </b>11.3<br/><br/>
+<b>Folders: </b>
+<ul>
+<li><a href="#transport">Transport</a></li>
+<li><a href="#utilities">Utilities</a></li>
+</ul>
+<b>Services: </b>
+<ul>
+<li class="mock-anchor"><a href="#parcels-map">Parcels</a> (MapServer)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#sr-3857"><span class="sdt-visually-hidden">Spatial reference </span>3857</a><span class="sdt-badge">Dynamic</span></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">2 layers, max 1,000 records</span></summary></details>
+
+  <!-- Extension: map preview pop-up, opened by hover or focus on the link above. -->
+  <div class="sdt sdt-popover" style="left: 500px; top: -118px;">
+    <div class="sdt-popover__head">Parcels <span class="sdt-badge">MapServer</span><span class="sdt-muted">300 × 200 px</span></div>
+    <figure class="sdt-popover__media"><img src="preview-parcels.svg" width="300" height="200" alt="Map preview of Parcels"></figure>
+    <p class="sdt-popover__foot"><kbd class="sdt-kbd">Esc</kbd> closes. Move the pointer onto the preview to keep it open.</p>
+  </div>
+</li>
+<li><a href="#parcels-feature">Parcels</a> (FeatureServer)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#sr-3857"><span class="sdt-visually-hidden">Spatial reference </span>3857</a></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">2 layers, max 1,000 records</span></summary></details>
+</li>
+<li><a href="#elevation">Elevation</a> (ImageServer)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr0" href="#sr-4326"><span class="sdt-visually-hidden">Spatial reference </span>4326</a></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">1 band, F32 pixels</span></summary></details>
+</li>
+<li><a href="#basemap">Basemap</a> (MapServer)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr2" href="#sr-3857"><span class="sdt-visually-hidden">Spatial reference </span>3857</a><span class="sdt-badge">Tiled</span></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">4 layers, max 2,000 records</span></summary></details>
+</li>
+<li><a href="#hydrants">Hydrants</a> (FeatureServer)<span class="sdt sdt-annot"><span class="sdt-status" data-tone="error"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>Details unavailable: HTTP 502</span><button class="sdt-button sdt-button--quiet" type="button">Retry<span class="sdt-visually-hidden"> details for Hydrants</span></button></span></li>
+<li><a href="#survey">Survey Points</a> (MapServer)<span class="sdt sdt-annot"><span class="sdt-status"><span class="sdt-spinner" aria-hidden="true"></span>Loading details</span></span></li>
+<li><a href="#flood">Flood Zones</a> (MapServer)<span class="sdt sdt-annot"><span class="sdt-badge sdt-badge--sr" title="PROJCS[&quot;Example_Local_Grid&quot;,GEOGCS[&quot;GCS_Example&quot;,DATUM[&quot;D_Example&quot;]]]"><span class="sdt-visually-hidden">Spatial reference </span>WKT PROJCS["Example_Local_Gr…</span><span class="sdt-badge">Dynamic</span></span><details class="sdt sdt-details sdt-details--inline"><summary>Details <span class="sdt-details__meta">1 layer, max 1,000 records</span></summary></details>
+</li>
+<li><a href="#zoning">Zoning</a> (MapServer)<span class="sdt sdt-annot"><a class="sdt-badge sdt-badge--sr sdt-badge--sr1" href="#sr-26910"><span class="sdt-visually-hidden">Spatial reference </span>26910</a><span class="sdt-badge">Dynamic</span></span><details class="sdt sdt-details sdt-details--inline" open><summary>Details <span class="sdt-details__meta">3 layers, max 1,000 records</span></summary>
+    <div class="sdt-details__body">
+      <p class="sdt-details__group">Service</p>
+      <dl class="sdt-dl">
+        <dt>Description</dt><dd>Zoning districts and overlays for an invented county.</dd>
+        <dt>Copyright</dt><dd>© Example County GIS</dd>
+        <dt>Layers and tables</dt><dd>3 layers, 0 tables</dd>
+        <dt>Capabilities</dt><dd>Map, Query, Data</dd>
+        <dt>Max record count</dt><dd class="sdt-mono">1000</dd>
+        <dt>Query formats</dt><dd>JSON, geoJSON, PBF</dd>
+        <dt>Units</dt><dd>Meters</dd>
+        <dt>Document title</dt><dd>Zoning</dd>
+        <dt>Keywords</dt><dd>zoning, overlays, land use</dd>
+      </dl>
+      <p class="sdt-details__group">Extent</p>
+      <dl class="sdt-dl">
+        <dt>Initial</dt><dd class="sdt-mono">497000, 5035000, 541000, 5062000</dd>
+        <dt>Full</dt><dd class="sdt-mono">497000, 5035000, 541000, 5062000</dd>
+        <dt>Spatial reference</dt><dd><span class="sdt-mono">26910</span></dd>
+      </dl>
+      <p class="sdt-details__group">Also true</p>
+      <p style="margin:0">Supports dynamic layers, Supports statistics, Supports advanced queries, Export tiles allowed</p>
+    </div>
+  </details>
+</li>
+</ul>
+</div>
+</body>
+</html>
