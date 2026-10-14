@@ -1,6 +1,6 @@
 # Contributing
 
-Requires Node 22.13 or later (24 recommended; see `.nvmrc`). Run `npm install`, then `npx playwright install --no-shell chromium` once for the browser tests.
+Requires Node 22 (22.13 or later) or Node 24 or later, and `.nvmrc` pins 24. Run `npm install`, then `npx playwright install --no-shell chromium` once for the browser tests.
 
 - `npm run lint` checks the code with ESLint. Warnings fail.
 - `npm test` runs the unit tests, then the browser tests. The browser tests load the extension into headless Chromium against a fake ArcGIS Server, so they need no network. Set `HEADED=1` to watch them.

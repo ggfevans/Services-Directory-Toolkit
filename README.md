@@ -24,7 +24,7 @@ Sometimes you need more than one page shows. Collecting data from several map se
 
 ## Compatibility
 
-Services Directory Toolkit supports ArcGIS Online and every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, as listed in Esri's [ArcGIS Enterprise life cycle](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle).
+Services Directory Toolkit supports ArcGIS Online and every ArcGIS Enterprise and ArcGIS Server version on Windows and Linux that Esri hasn't retired, as listed in Esri's [ArcGIS Enterprise life cycle](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle).
 
 Unsupported means the extension may still work on a retired version, but a bug that happens only there won't be fixed.
 
