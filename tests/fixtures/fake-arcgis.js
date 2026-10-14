@@ -7,7 +7,7 @@
 // body, wins over the agstoken cookie the login page sets, and an empty token parameter makes a
 // request anonymous. Both follow a probe of ArcGIS Server 10.9.1 (token support spec, section 4).
 import { catalog as defaultCatalog, SERVER_TOKENS, users } from "./catalog.js";
-import { createPages, loginPage, otherPage, REST_PATH, tokensPage } from "./pages.js";
+import { createPages, loginPage, messagePage, otherPage, REST_PATH, tokensPage } from "./pages.js";
 
 export { SERVER_TOKENS };
 
@@ -19,6 +19,19 @@ const ENTERPRISE_PAGES = createPages();
 const FAVICON = { status: 204, contentType: "image/x-icon", body: "" };
 const STYLESHEET = { status: 200, contentType: "text/css; charset=utf-8", body: "body { font-family: sans-serif; }\n" };
 const INVALID_TOKEN = { code: 498, message: "Invalid Token" };
+const TOKEN_REQUIRED = { code: 499, message: "Token Required" };
+const FORBIDDEN = { code: 403, message: "You do not have permissions to access this resource or perform this operation." };
+
+/** Why user (a username, or null) can't use service: TOKEN_REQUIRED, FORBIDDEN, or null when they can. */
+const refusal = (service, user) => {
+  if (!service._secured) {
+    return null;
+  }
+  if (!user) {
+    return TOKEN_REQUIRED;
+  }
+  return service._allowed && !service._allowed.includes(user) ? FORBIDDEN : null;
+};
 
 export const html = (body) => ({ status: 200, contentType: "text/html; charset=utf-8", body });
 
@@ -96,12 +109,15 @@ const serviceJson = (catalog, service) => ({
   ...(service.tasks ? { tasks: service.tasks.map((task) => task.name) } : {})
 });
 
-const folder = (catalog, parts, format, pages) => {
+// Lists the services the user may use. ArcGIS Server leaves the others out.
+const folder = (catalog, parts, format, user, pages) => {
   const name = parts[0] || "";
   if (parts.length > 1 || (name && !catalog.folders.includes(name))) {
     return null;
   }
-  const services = catalog.services.filter((s) => (name ? s.name.startsWith(`${name}/`) : !s.name.includes("/")));
+  const services = catalog.services
+    .filter((s) => (name ? s.name.startsWith(`${name}/`) : !s.name.includes("/")))
+    .filter((s) => refusal(s, user) === null);
   const folders = name ? [] : catalog.folders;
   if (format === "html") {
     return html(pages.folderPage({ folder: name, folders, services, version: catalog.currentVersion }));
@@ -225,10 +241,20 @@ const route = (catalog, url, params, cookies, problems) => {
   const parts = pathname.slice(REST_PATH.length).split("/").filter(Boolean).map(decodeURIComponent);
   const typeIndex = parts.findIndex((part) => SERVICE_TYPES.includes(part));
   if (typeIndex === -1) {
-    return folder(catalog, parts, format, ENTERPRISE_PAGES);
+    return folder(catalog, parts, format, who.user, ENTERPRISE_PAGES);
   }
   const service = catalog.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
-  return service ? serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, problems, ENTERPRISE_PAGES) : null;
+  if (!service) {
+    return null;
+  }
+  const refused = refusal(service, who.user);
+  if (refused) {
+    if (format !== "html") {
+      return arcgisError(refused.message, format, refused.code);
+    }
+    return refused === TOKEN_REQUIRED ? loginRedirect(url) : { status: 403, contentType: "text/html; charset=utf-8", body: messagePage(refused.message) };
+  }
+  return serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, problems, ENTERPRISE_PAGES);
 };
 
 /**

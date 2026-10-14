@@ -89,6 +89,39 @@ const roads = {
   ]
 };
 
+const valves = {
+  ...layerDefaults,
+  id: 0,
+  name: "Valves",
+  geometryType: "esriGeometryPoint",
+  displayField: "VALVE_ID",
+  fields: [
+    { name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID", domain: null },
+    { name: "SHAPE", type: "esriFieldTypeGeometry", alias: "Shape", domain: null },
+    { name: "VALVE_ID", type: "esriFieldTypeString", alias: "Valve ID", length: 12, domain: null }
+  ],
+  _rows: [
+    { OBJECTID: 1, SHAPE: true, VALVE_ID: "V-001" },
+    { OBJECTID: 2, SHAPE: true, VALVE_ID: "V-002" }
+  ]
+};
+
+const mains = {
+  ...layerDefaults,
+  id: 0,
+  name: "Mains",
+  geometryType: "esriGeometryPolyline",
+  displayField: "MAIN_ID",
+  fields: [
+    { name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID", domain: null },
+    { name: "SHAPE", type: "esriFieldTypeGeometry", alias: "Shape", domain: null },
+    { name: "MAIN_ID", type: "esriFieldTypeString", alias: "Main ID", length: 12, domain: null }
+  ],
+  _rows: [
+    { OBJECTID: 1, SHAPE: true, MAIN_ID: "M-001" }
+  ]
+};
+
 const exportWebMapTask = {
   name: "Export Web Map Task",
   json: {
@@ -218,6 +251,49 @@ export const catalog = {
         executionType: "esriExecutionTypeSynchronous",
         resultMapServerName: "",
         maximumRecords: 1000
+      }
+    },
+    {
+      // Secured: anonymous listings leave it out, and anonymous requests get 499.
+      name: "Utilities/Valves",
+      type: "MapServer",
+      _secured: true,
+      layers: [valves],
+      info: {
+        serviceDescription: "Water valves for an invented utility. Signed-in users only.",
+        mapName: "Valves",
+        description: "",
+        copyrightText: "",
+        spatialReference: WEB_MERCATOR,
+        singleFusedMapCache: false,
+        initialExtent: EXTENT,
+        fullExtent: EXTENT,
+        units: "esriMeters",
+        documentInfo: documentInfo("Valves", "valves"),
+        capabilities: "Map,Query",
+        supportedQueryFormats: "JSON",
+        maxRecordCount: 1000
+      }
+    },
+    {
+      // Secured, and only jsmith may use it: other signed-in users get 403.
+      name: "Utilities/Mains",
+      type: "FeatureServer",
+      _secured: true,
+      _allowed: ["jsmith"],
+      layers: [mains],
+      info: {
+        serviceDescription: "Water mains for an invented utility. Administrators only.",
+        description: "",
+        copyrightText: "",
+        hasVersionedData: false,
+        maxRecordCount: 1000,
+        supportedQueryFormats: "JSON",
+        capabilities: "Query",
+        spatialReference: WEB_MERCATOR,
+        initialExtent: EXTENT,
+        fullExtent: EXTENT,
+        units: "esriMeters"
       }
     }
   ]

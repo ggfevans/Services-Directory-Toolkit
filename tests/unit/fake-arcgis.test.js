@@ -286,3 +286,40 @@ test("calls keeps the query string, the form body and the cookies apart", () => 
 test("arcgisError takes a code", () => {
   assert.deepEqual(JSON.parse(arcgisError("Token Required", "json", 499).body), { error: { code: 499, message: "Token Required", details: [] } });
 });
+
+test("anonymous listings leave secured services out, as ArcGIS Server does", () => {
+  const server = createFakeArcGIS();
+  assert.deepEqual(getJson(server, "/arcgis/rest/services/Utilities?f=json").services, [{ name: "Utilities/PrintingTools", type: "GPServer" }]);
+  const page = get(server, "/arcgis/rest/services/Utilities").body;
+  assert.equal(page.includes("Valves") || page.includes("Mains"), false);
+});
+
+test("a signed-in user sees the secured services they may use", () => {
+  const server = createFakeArcGIS();
+  const names = (username) => respondJson(server, "/arcgis/rest/services/Utilities?f=json", { cookie: signedIn(username) }).services.map((s) => s.name);
+  assert.deepEqual(names("jsmith"), ["Utilities/PrintingTools", "Utilities/Valves", "Utilities/Mains"]);
+  assert.deepEqual(names("viewer1"), ["Utilities/PrintingTools", "Utilities/Valves"]);
+});
+
+test("a secured service needs a token: 499 for JSON, the login page for HTML", () => {
+  const server = createFakeArcGIS();
+  assert.deepEqual(getJson(server, "/arcgis/rest/services/Utilities/Valves/MapServer?f=json"), { error: { code: 499, message: "Token Required", details: [] } });
+  assert.equal(getJson(server, "/arcgis/rest/services/Utilities/Valves/MapServer/0?f=json").error.code, 499);
+  const page = get(server, "/arcgis/rest/services/Utilities/Valves/MapServer");
+  assert.equal(page.status, 302);
+  assert.equal(page.headers.location, "https://arcgis.test/arcgis/rest/login?redirect=%2Farcgis%2Frest%2Fservices%2FUtilities%2FValves%2FMapServer");
+});
+
+test("a user without access to a secured service gets 403", () => {
+  const server = createFakeArcGIS();
+  const mains = (username, f) => server.respond(request(`/arcgis/rest/services/Utilities/Mains/FeatureServer${f ? `?f=${f}` : ""}`, { cookie: signedIn(username) }));
+  assert.equal(JSON.parse(mains("viewer1", "json").body).error.code, 403);
+  assert.equal(mains("viewer1").status, 403);
+  assert.equal(JSON.parse(mains("jsmith", "json").body).serviceDescription, "Water mains for an invented utility. Administrators only.");
+});
+
+test("a token in a form body opens a secured layer's queries", () => {
+  const body = `where=1%3D1&returnCountOnly=true&f=json&token=${SERVER_TOKENS.jsmith}`;
+  const count = respondJson(createFakeArcGIS(), "/arcgis/rest/services/Utilities/Valves/MapServer/0/query", { method: "POST", body });
+  assert.deepEqual(count, { count: 2 });
+});
