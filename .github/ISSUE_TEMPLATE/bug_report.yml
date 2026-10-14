@@ -1,0 +1,72 @@
+name: Bug report
+description: Report something in the extension that doesn't work.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security vulnerabilities:** don't report them here, because issues are public. Follow [SECURITY.md](https://github.com/ggfevans/Services-Directory-Toolkit/blob/main/SECURITY.md) to report one privately.
+
+        Check that your ArcGIS version is in the [supported versions](https://github.com/ggfevans/Services-Directory-Toolkit#compatibility). A bug that happens only on a retired version won't be fixed.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Include any error the page showed, or that `chrome://extensions` lists under the extension's Errors button.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a map service page, such as `.../rest/services/Example/MapServer`.
+        2. Wait for the layer details to load.
+        3. One layer shows no "Number of features".
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      description: Shown on the extension's card at `chrome://extensions`.
+      placeholder: 2.0.0
+    validations:
+      required: true
+  - type: input
+    id: chrome-version
+    attributes:
+      label: Chrome version
+      description: Shown at `chrome://version`. If you use another Chromium browser, such as Edge, give its name and version.
+      placeholder: "154.0.0.0"
+    validations:
+      required: true
+  - type: input
+    id: arcgis-version
+    attributes:
+      label: ArcGIS version
+      description: Shown as "Current Version" on the Services Directory root page, the page at `.../rest/services`. For services hosted in ArcGIS Online, enter "ArcGIS Online".
+      placeholder: "11.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: page-kind
+    attributes:
+      label: Where it happens
+      description: The kind of Services Directory page, or the part of the extension, where you see the bug.
+      options:
+        - Root
+        - Folder
+        - Service
+        - Layer
+        - Query
+        - Find
+        - Print or geoprocessing task
+        - Toolbar popup
+        - Options page
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: page-url
+    attributes:
+      label: Page URL
+      description: Optional. Leave it out if the server isn't public.
