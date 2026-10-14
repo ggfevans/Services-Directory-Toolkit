@@ -36,11 +36,7 @@ Sometimes you need more than one page shows. Collecting data from several map se
 
 ## Compatibility
 
-Services Directory Toolkit supports every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, and ArcGIS Online. Esri's [life cycle for ArcGIS Enterprise on Windows and Linux](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle) decides which versions count:
-
-- Versions in General Availability, Extended Support or Mature Support are supported.
-- Retired versions aren't.
-- A version stops being supported on the date Esri retires it.
+Services Directory Toolkit supports ArcGIS Online, and every version of ArcGIS Enterprise and ArcGIS Server on Windows and Linux that Esri hasn't retired. Esri's [ArcGIS Enterprise life cycle](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle) sets the dates: a version counts while it's in General Availability, Extended Support or Mature Support, and stops counting on the date Esri retires it. ArcGIS Enterprise on Kubernetes has a separate life cycle and isn't covered.
 
 On 13 October 2026 the supported versions are:
 
@@ -53,13 +49,13 @@ On 13 October 2026 the supported versions are:
 | 11.3 (long-term support) | Extended Support | 1 June 2030 |
 | 11.2 | Extended Support | 1 December 2026 |
 | 11.1 (long-term support) | Extended Support | 1 May 2029 |
-| 10.9.1 (long-term support) | Mature Support | 1 December 2027 |
+| 10.9.1 (long-term support), shown as 10.91 in the Services Directory | Mature Support | 1 December 2027 |
 
-Esri has retired 11.0, 10.9, 10.8.1 and every earlier version. ArcGIS Online has no version to track, because Esri updates it for everyone at once. The list leaves out ArcGIS Enterprise on Kubernetes, which has its own life cycle.
+Esri has retired 11.0, 10.9, 10.8.1 and every earlier version. ArcGIS Online needs no row in the table, because Esri updates it for everyone at once.
 
 Unsupported means the extension may still work on a retired version, but a bug that happens only there won't be fixed.
 
-The extension needs Chrome 120 or later, or another Chromium browser such as Microsoft Edge.
+The extension needs Chrome 120 or later, or another browser based on Chromium 120 or later, such as Microsoft Edge.
 
 ## Install
 
