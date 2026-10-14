@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, whereMatcher } from "../fixtures/fake-arcgis.js";
+import { createPages, loginPage, messagePage, tokensPage } from "../fixtures/pages.js";
 
 // A stand-in for a Playwright Request.
 const request = (path, { method = "GET", body } = {}) => ({
@@ -187,4 +188,33 @@ test("form posts are read like query strings", () => {
 test("whereMatcher returns null for clauses it does not support", () => {
   assert.equal(whereMatcher("ACRES > 1"), null);
   assert.equal(whereMatcher(" 1 = 1 ")({}), true);
+});
+
+test("createPages builds pages for another site, with its own roots and link query", () => {
+  const pages = createPages({
+    restPath: "/Org1/arcgis/rest/services",
+    crumbPath: "/Org1/ArcGIS/rest/services",
+    loginHref: null,
+    linkQuery: "token=abc"
+  });
+  const root = pages.folderPage({ folder: "", folders: [], services: [{ name: "Parcels", type: "FeatureServer" }], version: 12.1 });
+  assert.ok(root.includes("<a href=\"/Org1/arcgis/rest/services/Parcels/FeatureServer?token=abc\">Parcels</a>"));
+  assert.ok(root.includes("<a href=\"/Org1/ArcGIS/rest/services?token=abc\">Home</a>"));
+  assert.ok(root.includes("<a href=\"?f=pjson&amp;token=abc\" target=\"_blank\">JSON</a>"));
+  assert.equal(root.includes(">Login<"), false);
+});
+
+test("the default site's pages link as before", () => {
+  const root = createPages().folderPage({ folder: "", folders: ["Transport"], services: [{ name: "Parcels", type: "MapServer" }], version: 11.3 });
+  assert.ok(root.includes("<a href=\"/arcgis/rest/login\">Login</a>"));
+  assert.ok(root.includes("<a href=\"/arcgis/rest/services/Transport\">Transport</a>"));
+  assert.ok(root.includes("<a href=\"/arcgis/rest/services/Parcels/MapServer\">Parcels</a>"));
+  assert.ok(root.includes("<a href=\"?f=pjson\" target=\"_blank\">JSON</a>"));
+});
+
+test("the login, token and message pages", () => {
+  assert.match(loginPage(), /<form name="loginForm" method="post" action="\/arcgis\/rest\/login">/);
+  assert.match(tokensPage(), /<form name="tokenForm" method="post" action="\/arcgis\/tokens\/generateToken">/);
+  assert.match(messagePage("Token Required"), /<p>Token Required<\/p>/);
+  assert.match(messagePage("<b>"), /<p>&lt;b&gt;<\/p>/);
 });

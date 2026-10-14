@@ -1,46 +1,14 @@
 // HTML pages shaped like the ArcGIS Server 10.9 and 11.x Services Directory. The structure is what
 // the extension's content scripts read; the content is invented. That structure covers the table
 // classes, the td.breadcrumbs links, the "<b>Label:</b>" lists, and the form names and controls.
+//
+// createPages() builds the pages for one site. Its defaults describe the Enterprise-style server at
+// https://arcgis.test, and the named page exports below are those defaults. fake-arcgis.js also
+// builds an ArcGIS Online-style site, which has no Login link and copies a page's token into its links.
 
 export const REST_PATH = "/arcgis/rest/services";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
-
-// Breadcrumb links: Home > services > each [text, path below REST_PATH] pair.
-const crumbs = (...items) => [["Home", ""], ["services", ""], ...items]
-  .map(([text, path]) => `<a href="${REST_PATH}${esc(path)}">${esc(text)}</a>`)
-  .join("\n  &gt; ");
-
-const shell = ({ title, breadcrumbs, body }) => `<html lang="en">
-<head>
-<title>${esc(title)}</title>
-<link href="/arcgis/rest/static/main.css" rel="stylesheet" type="text/css"/>
-</head>
-<body>
-<table width="100%" class="userTable">
-<tr>
-<td class="titlecell">ArcGIS REST Services Directory</td>
-<td align="right"><a href="/arcgis/rest/login">Login</a></td>
-</tr>
-</table>
-<table width="100%" class="navTable">
-<tr valign="top">
-<td class="breadcrumbs">
-${breadcrumbs}
-</td>
-<td align="right"><a href="${REST_PATH}?f=help" target="_blank">API Reference</a></td>
-</tr>
-</table>
-<table>
-<tr><td class="apiref"><a href="?f=pjson" target="_blank">JSON</a></td></tr>
-</table>
-<h2>${esc(title)}</h2>
-<div class="rbody">
-${body}
-</div>
-</body>
-</html>
-`;
 
 const servicePath = (service) => `/${service.name}/${service.type}`;
 const serviceCrumb = (service) => [`${service.name.split("/").pop()} (${service.type})`, servicePath(service)];
@@ -79,46 +47,94 @@ const submitRow = (verb) => `<tr>
 </td>
 </tr>`;
 
-export const folderPage = ({ folder, folders, services, version }) => shell({
-  title: `Folder: /${folder}`,
-  breadcrumbs: folder ? crumbs([folder, `/${folder}`]) : crumbs(),
-  body: `<b>Current Version: </b>${version}<br/><br/>
+/**
+ * Builds the page functions for one site.
+ * - restPath: the REST root the pages link to
+ * - crumbPath: the REST root the breadcrumbs link to. ArcGIS Online writes /<org>/ArcGIS/rest/services
+ *   there, in a different case from its other links.
+ * - loginHref: the Login link, or null for a site without one
+ * - linkQuery: a query string such as "token=abc" added to every link. ArcGIS Online copies the token
+ *   of a page opened with ?token= into its links this way.
+ */
+export const createPages = ({ restPath = REST_PATH, crumbPath = restPath, loginHref = "/arcgis/rest/login", linkQuery = "" } = {}) => {
+  const href = (target) => esc(linkQuery ? `${target}${target.includes("?") ? "&" : "?"}${linkQuery}` : target);
+
+  // Breadcrumb links: Home > services > each [text, path below the REST root] pair.
+  const crumbs = (...items) => [["Home", ""], ["services", ""], ...items]
+    .map(([text, path]) => `<a href="${href(`${crumbPath}${path}`)}">${esc(text)}</a>`)
+    .join("\n  &gt; ");
+
+  const shell = ({ title, breadcrumbs, body }) => `<html lang="en">
+<head>
+<title>${esc(title)}</title>
+<link href="/arcgis/rest/static/main.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right">${loginHref ? `<a href="${esc(loginHref)}">Login</a>` : ""}</td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+${breadcrumbs}
+</td>
+<td align="right"><a href="${restPath}?f=help" target="_blank">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="${href("?f=pjson")}" target="_blank">JSON</a></td></tr>
+</table>
+<h2>${esc(title)}</h2>
+<div class="rbody">
+${body}
+</div>
+</body>
+</html>
+`;
+
+  const folderPage = ({ folder, folders, services, version }) => shell({
+    title: `Folder: /${folder}`,
+    breadcrumbs: folder ? crumbs([folder, `/${folder}`]) : crumbs(),
+    body: `<b>Current Version: </b>${version}<br/><br/>
 ${folders.length ? `<b>Folders: </b>
 <ul>
-${folders.map((name) => `<li><a href="${REST_PATH}/${name}">${esc(name)}</a></li>`).join("\n")}
+${folders.map((name) => `<li><a href="${href(`${restPath}/${name}`)}">${esc(name)}</a></li>`).join("\n")}
 </ul>` : ""}
 <b>Services: </b>
 <ul>
-${services.map((s) => `<li><a href="${REST_PATH}${servicePath(s)}">${esc(s.name.split("/").pop())}</a> (${s.type})</li>`).join("\n")}
+${services.map((s) => `<li><a href="${href(`${restPath}${servicePath(s)}`)}">${esc(s.name.split("/").pop())}</a> (${s.type})</li>`).join("\n")}
 </ul>`
-});
+  });
 
-export const servicePage = (service) => {
-  const base = `${REST_PATH}${servicePath(service)}`;
-  const layers = service.layers || [];
-  return shell({
-    title: `${service.name} (${service.type})`,
-    breadcrumbs: crumbs(serviceCrumb(service)),
-    body: `<b>Service Description: </b> ${esc(service.info.serviceDescription)}<br/><br/>
-${layers.length ? `<a href="${base}/layers">All Layers and Tables</a><br/><br/>
+  const servicePage = (service) => {
+    const base = `${restPath}${servicePath(service)}`;
+    const layers = service.layers || [];
+    return shell({
+      title: `${service.name} (${service.type})`,
+      breadcrumbs: crumbs(serviceCrumb(service)),
+      body: `<b>Service Description: </b> ${esc(service.info.serviceDescription)}<br/><br/>
+${layers.length ? `<a href="${href(`${base}/layers`)}">All Layers and Tables</a><br/><br/>
 <b>Layers: </b>
 <ul>
-${layers.map((layer) => `<li><a href="${base}/${layer.id}">${esc(layer.name)}</a> (${layer.id})</li>`).join("\n")}
+${layers.map((layer) => `<li><a href="${href(`${base}/${layer.id}`)}">${esc(layer.name)}</a> (${layer.id})</li>`).join("\n")}
 </ul>` : ""}
 ${service.tasks ? `<b>Tasks: </b>
 <ul>
-${service.tasks.map((task) => `<li><a href="${base}/${encodeURIComponent(task.name)}">${esc(task.name)}</a></li>`).join("\n")}
+${service.tasks.map((task) => `<li><a href="${href(`${base}/${encodeURIComponent(task.name)}`)}">${esc(task.name)}</a></li>`).join("\n")}
 </ul>` : ""}
 <b>Copyright Text: </b> ${esc(service.info.copyrightText)}<br/><br/>`
-  });
-};
+    });
+  };
 
-export const layerPage = (service, layer) => {
-  const base = `${REST_PATH}${servicePath(service)}/${layer.id}`;
-  return shell({
-    title: `Layer: ${layer.name} (ID: ${layer.id})`,
-    breadcrumbs: crumbs(serviceCrumb(service), [layer.name, `${servicePath(service)}/${layer.id}`]),
-    body: `<b>Name:</b> ${esc(layer.name)}<br/><br/>
+  const layerPage = (service, layer) => {
+    const base = `${restPath}${servicePath(service)}/${layer.id}`;
+    return shell({
+      title: `Layer: ${layer.name} (ID: ${layer.id})`,
+      breadcrumbs: crumbs(serviceCrumb(service), [layer.name, `${servicePath(service)}/${layer.id}`]),
+      body: `<b>Name:</b> ${esc(layer.name)}<br/><br/>
 <b>Display Field:</b> ${esc(layer.displayField)}<br/><br/>
 <b>Type: </b> ${esc(layer.type)}<br/><br/>
 <b>Geometry Type:</b> ${esc(layer.geometryType)}<br/><br/>
@@ -131,14 +147,14 @@ type: ${field.type}, alias: ${esc(field.alias)}${field.length ? `, length: ${fie
 )
 </i></li>`).join("\n")}
 </ul>
-<b>Supported Operations: </b> <a href="${base}/query">Query</a>`
-  });
-};
+<b>Supported Operations: </b> <a href="${href(`${base}/query`)}">Query</a>`
+    });
+  };
 
-export const queryPage = (service, layer, params) => shell({
-  title: `Query: ${layer.name} (ID: ${layer.id})`,
-  breadcrumbs: crumbs(serviceCrumb(service), [layer.name, `${servicePath(service)}/${layer.id}`], ["query", `${servicePath(service)}/${layer.id}/query`]),
-  body: `<form name="sdform" action="${REST_PATH}${servicePath(service)}/${layer.id}/query">
+  const queryPage = (service, layer, params) => shell({
+    title: `Query: ${layer.name} (ID: ${layer.id})`,
+    breadcrumbs: crumbs(serviceCrumb(service), [layer.name, `${servicePath(service)}/${layer.id}`], ["query", `${servicePath(service)}/${layer.id}/query`]),
+    body: `<form name="sdform" action="${restPath}${servicePath(service)}/${layer.id}/query">
 <table class="formTable">
 ${textRow("where", "Where", params)}
 ${textRow("text", "Text", params)}
@@ -155,12 +171,12 @@ ${formatRow}
 ${submitRow("Query")}
 </table>
 </form>`
-});
+  });
 
-export const findPage = (service, params) => shell({
-  title: `Find: ${service.name} (${service.type})`,
-  breadcrumbs: crumbs(serviceCrumb(service), ["find", `${servicePath(service)}/find`]),
-  body: `<form name="sdform" action="${REST_PATH}${servicePath(service)}/find">
+  const findPage = (service, params) => shell({
+    title: `Find: ${service.name} (${service.type})`,
+    breadcrumbs: crumbs(serviceCrumb(service), ["find", `${servicePath(service)}/find`]),
+    body: `<form name="sdform" action="${restPath}${servicePath(service)}/find">
 <table class="formTable">
 ${textRow("searchText", "Search Text", params)}
 ${radioRow("contains", "Contains", params, "true")}
@@ -173,12 +189,12 @@ ${formatRow}
 ${submitRow("Find")}
 </table>
 </form>`
-});
+  });
 
-export const executePage = (service, task, params) => shell({
-  title: `Execute Task: ${task.name}`,
-  breadcrumbs: crumbs(serviceCrumb(service), [task.name, `${servicePath(service)}/${encodeURIComponent(task.name)}`], ["execute", `${servicePath(service)}/${encodeURIComponent(task.name)}/execute`]),
-  body: `<form name="sdform" action="${REST_PATH}${servicePath(service)}/${encodeURIComponent(task.name)}/execute">
+  const executePage = (service, task, params) => shell({
+    title: `Execute Task: ${task.name}`,
+    breadcrumbs: crumbs(serviceCrumb(service), [task.name, `${servicePath(service)}/${encodeURIComponent(task.name)}`], ["execute", `${servicePath(service)}/${encodeURIComponent(task.name)}/execute`]),
+    body: `<form name="sdform" action="${restPath}${servicePath(service)}/${encodeURIComponent(task.name)}/execute">
 <table class="formTable">
 ${task.json.parameters
   .filter((parameter) => parameter.direction === "esriGPParameterDirectionInput")
@@ -191,10 +207,50 @@ ${formatRow}
 ${submitRow("Execute Task")}
 </table>
 </form>`
-});
+  });
+
+  return { folderPage, servicePage, layerPage, queryPage, findPage, executePage };
+};
+
+export const { folderPage, servicePage, layerPage, queryPage, findPage, executePage } = createPages();
 
 export const otherPage = () => `<html lang="en">
 <head><title>Not a Services Directory page</title></head>
 <body><p>An ordinary page on the same host. It is not a Services Directory page.</p></body>
+</html>
+`;
+
+// The login form ArcGIS Server redirects anonymous requests for a secured page to.
+export const loginPage = () => `<html lang="en">
+<head><title>ArcGIS Server Login</title></head>
+<body>
+<h2>Login</h2>
+<form name="loginForm" method="post" action="/arcgis/rest/login">
+<input type="text" name="username"/>
+<input type="password" name="password"/>
+<input type="submit" value="Login"/>
+</form>
+</body>
+</html>
+`;
+
+// The token page that rest/info names as tokenServicesUrl.
+export const tokensPage = () => `<html lang="en">
+<head><title>Generate Token</title></head>
+<body>
+<h2>Generate Token</h2>
+<form name="tokenForm" method="post" action="/arcgis/tokens/generateToken">
+<input type="text" name="username"/>
+<input type="password" name="password"/>
+<input type="submit" value="Generate Token"/>
+</form>
+</body>
+</html>
+`;
+
+// A page that says one thing, such as the error a server shows in place of a secured page.
+export const messagePage = (text) => `<html lang="en">
+<head><title>${esc(text)}</title></head>
+<body><p>${esc(text)}</p></body>
 </html>
 `;
