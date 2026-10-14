@@ -1,13 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, whereMatcher } from "../fixtures/fake-arcgis.js";
+import { arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, SERVER_TOKENS, whereMatcher } from "../fixtures/fake-arcgis.js";
 import { createPages, loginPage, messagePage, tokensPage } from "../fixtures/pages.js";
 
-// A stand-in for a Playwright Request.
-const request = (path, { method = "GET", body } = {}) => ({
-  url: () => `${FAKE_ORIGIN}${path}`,
+// A stand-in for a Playwright Request. headers() returns what allHeaders() would, cookies included.
+const request = (path, { method = "GET", body, cookie, origin = FAKE_ORIGIN, headers = {} } = {}) => ({
+  url: () => `${origin}${path}`,
   method: () => method,
-  headers: () => (body === undefined ? {} : { "content-type": "application/x-www-form-urlencoded" }),
+  headers: () => ({
+    ...(body === undefined ? {} : { "content-type": "application/x-www-form-urlencoded" }),
+    ...(cookie === undefined ? {} : { cookie }),
+    ...headers
+  }),
   postData: () => body ?? null
 });
 
@@ -217,4 +221,68 @@ test("the login, token and message pages", () => {
   assert.match(tokensPage(), /<form name="tokenForm" method="post" action="\/arcgis\/tokens\/generateToken">/);
   assert.match(messagePage("Token Required"), /<p>Token Required<\/p>/);
   assert.match(messagePage("<b>"), /<p>&lt;b&gt;<\/p>/);
+});
+
+const signedIn = (username) => `agstoken=${SERVER_TOKENS[username]}`;
+const respondJson = (server, path, options) => JSON.parse(server.respond(request(path, options)).body);
+
+test("rest/info reports token security and the token page, and ignores tokens", () => {
+  const info = getJson(createFakeArcGIS(), "/arcgis/rest/info?f=json&token=bogus");
+  assert.equal(info.currentVersion, 11.3);
+  assert.deepEqual(info.authInfo, { isTokenBasedSecurity: true, tokenServicesUrl: "https://arcgis.test/arcgis/tokens/", shortLivedTokenValidity: 60 });
+});
+
+test("rest/self names the signed-in user, or no one", () => {
+  const server = createFakeArcGIS();
+  assert.deepEqual(respondJson(server, "/arcgis/rest/self?f=json"), { user: {} });
+  assert.deepEqual(respondJson(server, "/arcgis/rest/self?f=json", { cookie: signedIn("jsmith") }), {
+    user: { username: "jsmith", roles: ["Administrators"], privilege: "ADMINISTER" }
+  });
+});
+
+test("a token parameter wins over the cookie, and an empty one makes the request anonymous", () => {
+  const server = createFakeArcGIS();
+  const cookie = signedIn("jsmith");
+  assert.equal(respondJson(server, `/arcgis/rest/self?f=json&token=${SERVER_TOKENS.viewer1}`, { cookie }).user.username, "viewer1");
+  assert.equal(respondJson(server, "/arcgis/rest/self", { method: "POST", body: `f=json&token=${SERVER_TOKENS.viewer1}`, cookie }).user.username, "viewer1");
+  assert.deepEqual(respondJson(server, "/arcgis/rest/self?f=json&token=", { cookie }), { user: {} });
+});
+
+test("an unknown cookie counts as signed out", () => {
+  assert.deepEqual(respondJson(createFakeArcGIS(), "/arcgis/rest/self?f=json", { cookie: "agstoken=stale" }), { user: {} });
+});
+
+test("a bad token gets 498 on JSON requests and the login page on HTML ones", () => {
+  const server = createFakeArcGIS();
+  assert.deepEqual(getJson(server, "/arcgis/rest/services?f=json&token=bogus"), { error: { code: 498, message: "Invalid Token", details: [] } });
+  const page = get(server, "/arcgis/rest/services?token=bogus");
+  assert.equal(page.status, 302);
+  assert.equal(page.headers.location, "https://arcgis.test/arcgis/rest/login?redirect=%2Farcgis%2Frest%2Fservices%3Ftoken%3Dbogus");
+  assert.match(get(server, "/arcgis/rest/login?redirect=x").body, /name="loginForm"/);
+});
+
+test("the instance name matches in any case", () => {
+  const folder = getJson(createFakeArcGIS(), "/ArcGIS/rest/services/Transport?f=json");
+  assert.deepEqual(folder.services, [{ name: "Transport/Roads", type: "MapServer" }]);
+});
+
+test("the token page is served at tokenServicesUrl", () => {
+  assert.match(get(createFakeArcGIS(), "/arcgis/tokens/").body, /name="tokenForm"/);
+});
+
+test("calls keeps the query string, the form body and the cookies apart", () => {
+  const server = createFakeArcGIS();
+  server.respond(request("/arcgis/rest/self?f=json", { method: "POST", body: "token=t1", cookie: "agstoken=c1; other=x" }));
+  assert.deepEqual(server.calls, [{
+    method: "POST",
+    origin: "https://arcgis.test",
+    path: "/arcgis/rest/self",
+    query: { f: "json" },
+    body: { token: "t1" },
+    cookies: { agstoken: "c1", other: "x" }
+  }]);
+});
+
+test("arcgisError takes a code", () => {
+  assert.deepEqual(JSON.parse(arcgisError("Token Required", "json", 499).body), { error: { code: 499, message: "Token Required", details: [] } });
 });

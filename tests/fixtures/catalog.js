@@ -108,9 +108,22 @@ const exportWebMapTask = {
 
 const documentInfo = (title, keywords) => ({ Title: title, Author: "", Comments: "", Subject: "", Category: "", Keywords: keywords });
 
+// The invented server's users. onlineRole is the role ArcGIS Online's community/self reports.
+export const users = {
+  jsmith: { username: "jsmith", roles: ["Administrators"], privilege: "ADMINISTER", onlineRole: "org_admin" },
+  viewer1: { username: "viewer1", roles: ["Viewers"], privilege: "ACCESS", onlineRole: "org_user" }
+};
+
+// The tokens the Enterprise-style server at https://arcgis.test accepts, by username. Real ArcGIS
+// tokens use only [A-Za-z0-9._-], and so do these.
+export const SERVER_TOKENS = { jsmith: "sdt-server.jsmith-0001", viewer1: "sdt-server.viewer1-0001" };
+
+const byToken = (tokens) => Object.fromEntries(Object.entries(tokens).map(([username, token]) => [token, username]));
+
 export const catalog = {
   currentVersion: 11.3,
   folders: ["Transport", "Utilities"],
+  _tokens: byToken(SERVER_TOKENS),
   services: [
     {
       name: "Parcels",

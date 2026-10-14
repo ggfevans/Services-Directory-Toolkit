@@ -2,13 +2,23 @@
 // every request for https://arcgis.test through respond(), which answers from catalog.js and
 // pages.js, or returns null when no fixture matches. A test can also add overrides, whose handlers
 // may be async, so a test can serve a slow response or one that never arrives.
-import { catalog as defaultCatalog } from "./catalog.js";
-import { executePage, findPage, folderPage, layerPage, otherPage, queryPage, REST_PATH, servicePage } from "./pages.js";
+//
+// The server signs users in as ArcGIS Server does. A token parameter, in the query string or a form
+// body, wins over the agstoken cookie the login page sets, and an empty token parameter makes a
+// request anonymous. Both follow a probe of ArcGIS Server 10.9.1 (token support spec, section 4).
+import { catalog as defaultCatalog, SERVER_TOKENS, users } from "./catalog.js";
+import { createPages, loginPage, otherPage, REST_PATH, tokensPage } from "./pages.js";
+
+export { SERVER_TOKENS };
 
 export const FAKE_ORIGIN = "https://arcgis.test";
 export const REST_ROOT = `${FAKE_ORIGIN}${REST_PATH}`;
 
 const SERVICE_TYPES = ["MapServer", "FeatureServer", "ImageServer", "GPServer"];
+const ENTERPRISE_PAGES = createPages();
+const FAVICON = { status: 204, contentType: "image/x-icon", body: "" };
+const STYLESHEET = { status: 200, contentType: "text/css; charset=utf-8", body: "body { font-family: sans-serif; }\n" };
+const INVALID_TOKEN = { code: 498, message: "Invalid Token" };
 
 export const html = (body) => ({ status: 200, contentType: "text/html; charset=utf-8", body });
 
@@ -21,7 +31,7 @@ export const json = (data, format) => ({
 });
 
 // ArcGIS Server reports most request errors as HTTP 200 with an error object.
-export const arcgisError = (message, format) => json({ error: { code: 400, message, details: [] } }, format);
+export const arcgisError = (message, format, code = 400) => json({ error: { code, message, details: [] } }, format);
 
 /** Evaluates the where clauses the extension sends. Returns null for anything else. */
 export const whereMatcher = (where) => {
@@ -86,7 +96,7 @@ const serviceJson = (catalog, service) => ({
   ...(service.tasks ? { tasks: service.tasks.map((task) => task.name) } : {})
 });
 
-const folder = (catalog, parts, format) => {
+const folder = (catalog, parts, format, pages) => {
   const name = parts[0] || "";
   if (parts.length > 1 || (name && !catalog.folders.includes(name))) {
     return null;
@@ -94,24 +104,24 @@ const folder = (catalog, parts, format) => {
   const services = catalog.services.filter((s) => (name ? s.name.startsWith(`${name}/`) : !s.name.includes("/")));
   const folders = name ? [] : catalog.folders;
   if (format === "html") {
-    return html(folderPage({ folder: name, folders, services, version: catalog.currentVersion }));
+    return html(pages.folderPage({ folder: name, folders, services, version: catalog.currentVersion }));
   }
   return json({ currentVersion: catalog.currentVersion, folders, services: services.map((s) => ({ name: s.name, type: s.type })) }, format);
 };
 
-const serviceResource = (catalog, service, rest, params, format, problems) => {
+const serviceResource = (catalog, service, rest, params, format, problems, pages) => {
   const [first, second, ...extra] = rest;
   if (extra.length) {
     return null;
   }
   if (first === undefined) {
-    return format === "html" ? html(servicePage(service)) : json(serviceJson(catalog, service), format);
+    return format === "html" ? html(pages.servicePage(service)) : json(serviceJson(catalog, service), format);
   }
   if (first === "layers" && second === undefined && service.layers) {
     return json({ layers: service.layers, tables: [] }, format);
   }
   if (first === "find" && second === undefined && service.type === "MapServer") {
-    return format === "html" ? html(findPage(service, params)) : json({ results: [] }, format);
+    return format === "html" ? html(pages.findPage(service, params)) : json({ results: [] }, format);
   }
   const task = (service.tasks || []).find((t) => t.name === first);
   if (task) {
@@ -119,7 +129,7 @@ const serviceResource = (catalog, service, rest, params, format, problems) => {
       return format === "html" ? null : json(task.json, format);
     }
     if (second === "execute") {
-      return format === "html" ? html(executePage(service, task, params)) : json({ results: [], messages: [] }, format);
+      return format === "html" ? html(pages.executePage(service, task, params)) : json({ results: [], messages: [] }, format);
     }
     return null;
   }
@@ -128,25 +138,86 @@ const serviceResource = (catalog, service, rest, params, format, problems) => {
     return null;
   }
   if (second === undefined) {
-    return format === "html" ? html(layerPage(service, layer)) : json(layer, format);
+    return format === "html" ? html(pages.layerPage(service, layer)) : json(layer, format);
   }
   if (second === "query") {
-    return format === "html" ? html(queryPage(service, layer, params)) : queryLayer(layer, params, format, problems);
+    return format === "html" ? html(pages.queryPage(service, layer, params)) : queryLayer(layer, params, format, problems);
   }
   return null;
 };
 
-const route = (catalog, url, params, problems) => {
-  const { pathname } = url;
+/** Parses a Cookie request header into an object. */
+const parseCookies = (header = "") => Object.fromEntries(header
+  .split(";")
+  .map((pair) => pair.trim())
+  .filter(Boolean)
+  .map((pair) => {
+    const at = pair.indexOf("=");
+    return at === -1 ? [pair, ""] : [pair.slice(0, at), pair.slice(at + 1)];
+  }));
+
+/**
+ * Who a request runs as: { user } with a username, or with null when anonymous, or { invalid: true }
+ * for a token the site doesn't know. tokens maps each token the site accepts to a username.
+ */
+const identify = (tokens, params, cookies) => {
+  if (params.has("token")) {
+    const token = params.get("token");
+    if (token === "") {
+      return { user: null };
+    }
+    return Object.hasOwn(tokens, token) ? { user: tokens[token] } : { invalid: true };
+  }
+  const cookie = cookies.agstoken;
+  return { user: cookie && Object.hasOwn(tokens, cookie) ? tokens[cookie] : null };
+};
+
+const loginRedirect = (url) => ({
+  status: 302,
+  headers: { location: `${url.origin}/arcgis/rest/login?redirect=${encodeURIComponent(`${url.pathname}${url.search}`)}` },
+  contentType: "text/html; charset=utf-8",
+  body: ""
+});
+
+const serverInfo = (catalog) => ({
+  currentVersion: catalog.currentVersion,
+  authInfo: { isTokenBasedSecurity: true, tokenServicesUrl: `${FAKE_ORIGIN}/arcgis/tokens/`, shortLivedTokenValidity: 60 }
+});
+
+const serverSelf = (username) => {
+  const { roles, privilege } = users[username];
+  return { username, roles, privilege };
+};
+
+const route = (catalog, url, params, cookies, problems) => {
+  // ArcGIS Server matches the instance name in any case, so /ArcGIS/rest/services works too.
+  const pathname = url.pathname.replace(/^\/arcgis(?=\/|$)/i, "/arcgis");
   const format = params.get("f") || "html";
   if (pathname === "/favicon.ico") {
-    return { status: 204, contentType: "image/x-icon", body: "" };
+    return FAVICON;
   }
   if (pathname === "/arcgis/rest/static/main.css") {
-    return { status: 200, contentType: "text/css; charset=utf-8", body: "body { font-family: sans-serif; }\n" };
+    return STYLESHEET;
   }
   if (pathname === "/other/page") {
     return html(otherPage());
+  }
+  if (pathname === "/arcgis/rest/login") {
+    return html(loginPage());
+  }
+  if (pathname === "/arcgis/tokens" || pathname === "/arcgis/tokens/") {
+    return html(tokensPage());
+  }
+  // rest/info ignores tokens, so it answers even when the token is bad.
+  if (pathname === "/arcgis/rest/info") {
+    return json(serverInfo(catalog), format);
+  }
+  const who = identify(catalog._tokens, params, cookies);
+  if (who.invalid) {
+    return format === "html" ? loginRedirect(url) : arcgisError(INVALID_TOKEN.message, format, INVALID_TOKEN.code);
+  }
+  if (pathname === "/arcgis/rest/self") {
+    return json({ user: who.user ? serverSelf(who.user) : {} }, format);
   }
   if (pathname !== REST_PATH && !pathname.startsWith(`${REST_PATH}/`)) {
     return null;
@@ -154,23 +225,25 @@ const route = (catalog, url, params, problems) => {
   const parts = pathname.slice(REST_PATH.length).split("/").filter(Boolean).map(decodeURIComponent);
   const typeIndex = parts.findIndex((part) => SERVICE_TYPES.includes(part));
   if (typeIndex === -1) {
-    return folder(catalog, parts, format);
+    return folder(catalog, parts, format, ENTERPRISE_PAGES);
   }
   const service = catalog.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
-  return service ? serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, problems) : null;
+  return service ? serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, problems, ENTERPRISE_PAGES) : null;
 };
 
 /**
- * Creates a fake server. respond(request) takes a Playwright Request and returns options for
- * route.fulfill(), or null when nothing matches. An override's handler may be async, and then
+ * Creates a fake server. respond(request, headers) takes a Playwright Request and returns options
+ * for route.fulfill(), or null when nothing matches. An override's handler may be async, and then
  * respond() returns its Promise.
  */
 export const createFakeArcGIS = (catalog = defaultCatalog) => {
   const overrides = [];
   const requests = [];
+  const calls = [];
   const problems = [];
   return {
     requests,
+    calls,
     problems,
     /**
      * Answers requests whose path and query (as sent, still encoded) match pattern with
@@ -193,19 +266,34 @@ export const createFakeArcGIS = (catalog = defaultCatalog) => {
         override.used = true;
       });
     },
-    respond(request) {
+    /**
+     * headers is every request header, cookies included. Playwright's request.headers() leaves
+     * cookies out, so the harness passes await request.allHeaders().
+     */
+    respond(request, headers = request.headers()) {
       const url = new URL(request.url());
-      const params = new URLSearchParams(url.search);
-      if (request.method() === "POST" && /x-www-form-urlencoded/.test(request.headers()["content-type"] || "")) {
-        new URLSearchParams(request.postData() || "").forEach((value, key) => params.set(key, value));
-      }
+      const query = new URLSearchParams(url.search);
+      const body = request.method() === "POST" && /x-www-form-urlencoded/.test(headers["content-type"] || "")
+        ? new URLSearchParams(request.postData() || "")
+        : new URLSearchParams();
+      const params = new URLSearchParams(query);
+      body.forEach((value, key) => params.set(key, value));
+      const cookies = parseCookies(headers.cookie);
       requests.push(`${request.method()} ${url.pathname}${url.search}`);
+      calls.push({
+        method: request.method(),
+        origin: url.origin,
+        path: url.pathname,
+        query: Object.fromEntries(query),
+        body: Object.fromEntries(body),
+        cookies
+      });
       const override = overrides.find(({ pattern }) => pattern.test(`${url.pathname}${url.search}`));
       if (override) {
         override.used = true;
         return override.handler(url, params);
       }
-      return route(catalog, url, params, problems);
+      return route(catalog, url, params, cookies, problems);
     }
   };
 };
