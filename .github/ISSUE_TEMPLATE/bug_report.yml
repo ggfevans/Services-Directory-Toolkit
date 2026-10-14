@@ -7,12 +7,14 @@ body:
       value: |
         **Security vulnerabilities:** don't report them here, because issues are public. Follow [SECURITY.md](https://github.com/ggfevans/Services-Directory-Toolkit/blob/main/SECURITY.md) to report one privately.
 
+        Remove any `token=` parameter from URLs before you paste them into this form.
+
         Check that your ArcGIS version is in the [supported versions](https://github.com/ggfevans/Services-Directory-Toolkit#compatibility). A bug that happens only on a retired version won't be fixed.
   - type: textarea
     id: what-happened
     attributes:
       label: What happened
-      description: What you did, what you expected, and what happened instead. Include any error the page showed, or that `chrome://extensions` lists under the extension's Errors button.
+      description: What you did, what you expected, and what happened instead. Include any error the page showed. To see the extension's own errors, turn on Developer mode at `chrome://extensions`, repeat the steps, then click Errors on the extension's card.
     validations:
       required: true
   - type: textarea
@@ -27,7 +29,7 @@ body:
     id: extension-version
     attributes:
       label: Extension version
-      description: Shown on the extension's card at `chrome://extensions`.
+      description: Open `chrome://extensions`, click Details on Services Directory Toolkit, and copy the Version.
       placeholder: 2.0.0
     validations:
       required: true
@@ -43,7 +45,7 @@ body:
     id: arcgis-version
     attributes:
       label: ArcGIS version
-      description: Shown as "Current Version" on the Services Directory root page, the page at `.../rest/services`. For services hosted in ArcGIS Online, enter "ArcGIS Online".
+      description: If the services are on `services.arcgis.com` or another host ending in `.arcgis.com`, enter "ArcGIS Online". Otherwise copy "Current Version" from the Services Directory root page, the page at `.../rest/services`. That page shows 10.9.1 as 10.91.
       placeholder: "11.5"
     validations:
       required: true
@@ -69,4 +71,4 @@ body:
     id: page-url
     attributes:
       label: Page URL
-      description: Optional. Leave it out if the server isn't public.
+      description: Optional. Leave it out if the server isn't public, and remove any `token=` parameter.
