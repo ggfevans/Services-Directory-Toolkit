@@ -24,6 +24,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
+import { redirectModeFor, runHeadless, sameOrigin, sameOriginHeaders } from "./lib/probe-safety.js";
 
 // This file is an ES module, so it loads the JSON it records with createRequire.
 const requireHere = createRequire(import.meta.url);
@@ -112,6 +113,7 @@ async function gate(label) {
  * GET or POST to an ArcGIS endpoint from Node.
  * opts: { method, params (object -> form/query), referer, token, tokenMode
  *         ("body"|"query"|"none"), redirect }
+ * A request that carries a token or a password never follows a redirect (probe-safety.js).
  * Returns { ok, status, json, error:{code,message}, textSnippet, location }.
  */
 async function arc(url, opts = {}) {
@@ -121,8 +123,9 @@ async function arc(url, opts = {}) {
     referer,
     token,
     tokenMode = "none",
-    redirect = "follow",
+    redirect: requestedRedirect,
   } = opts;
+  const redirect = redirectModeFor({ token, params, redirect: requestedRedirect });
   await gate(url);
 
   const headers = {};
@@ -293,7 +296,7 @@ async function waitForEnter(promptText) {
   }
 
   // --- Browser: login, cookie attrs, signed-in fetches -------------------
-  const browser = await chromium.launch({ channel: "chromium", headless: !HEADED });
+  const browser = await chromium.launch({ channel: "chromium", headless: runHeadless({ headed: HEADED, manual: MANUAL }) });
   let agstoken = null; // held in memory only; never logged
 
   try {
@@ -491,6 +494,9 @@ async function waitForEnter(promptText) {
         "q7_generateToken",
         "federated/AGOL: tokenServicesUrl points at the portal; standalone generateToken not applicable",
       );
+    } else if (!sameOrigin(tokenServicesUrl, BASE)) {
+      // The server chooses tokenServicesUrl, so the password goes only to PROBE_BASE's own origin.
+      skip("q7_generateToken", "tokenServicesUrl is not on PROBE_BASE's origin; the probe sends a password only there");
     } else {
       try {
         const genUrl = tokenServicesUrl.replace(/\/+$/, "") + "/generateToken";
@@ -593,8 +599,9 @@ async function waitForEnter(promptText) {
         skip("q8_authHeaderNav", "no token available for the auth header");
       } else {
         // Valid header token
+        // The header goes only to PROBE_BASE's origin, and never through a redirect (probe-safety.js).
         const ctx2 = await browser.newContext();
-        await ctx2.setExtraHTTPHeaders({ "X-Esri-Authorization": `Bearer ${hdrToken}` });
+        await ctx2.route("**/*", sameOriginHeaders(BASE, { "x-esri-authorization": `Bearer ${hdrToken}` }));
         const p2 = await ctx2.newPage();
         await gate("auth-header root listing");
         const rootResp = await p2.goto(`${BASE}/rest/services`, { waitUntil: "domcontentloaded" }).catch(() => null);
@@ -609,7 +616,7 @@ async function waitForEnter(promptText) {
 
         // Invalid header token (navigate so the header is sent, then read the body)
         const ctx3 = await browser.newContext();
-        await ctx3.setExtraHTTPHeaders({ "X-Esri-Authorization": "Bearer bogus" });
+        await ctx3.route("**/*", sameOriginHeaders(BASE, { "x-esri-authorization": "Bearer bogus" }));
         const p3 = await ctx3.newPage();
         await gate("auth-header(invalid) secured json");
         const invResp = await p3.goto(`${BASE}${securedPathFrag}?f=json`, { waitUntil: "domcontentloaded" }).catch(() => null);
