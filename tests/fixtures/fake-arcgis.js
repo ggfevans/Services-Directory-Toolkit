@@ -1,18 +1,34 @@
-// A fake ArcGIS Server for the browser tests. The Playwright fixture (tests/e2e/fixtures.js) routes
-// every request for https://arcgis.test through respond(), which answers from catalog.js and
-// pages.js, or returns null when no fixture matches. A test can also add overrides, whose handlers
-// may be async, so a test can serve a slow response or one that never arrives.
+// A fake ArcGIS Server for the browser tests, with stand-ins for ArcGIS Online. The Playwright
+// fixture (tests/e2e/fixtures.js) routes every request for the origins in FAKE_ORIGINS through
+// respond(), which answers from catalog.js and pages.js, or returns null when no fixture matches.
+// A test can also add overrides, whose handlers may be async, so a test can serve a slow response
+// or one that never arrives.
 //
-// The server signs users in as ArcGIS Server does. A token parameter, in the query string or a form
-// body, wins over the agstoken cookie the login page sets, and an empty token parameter makes a
-// request anonymous. Both follow a probe of ArcGIS Server 10.9.1 (token support spec, section 4).
-import { catalog as defaultCatalog, SERVER_TOKENS, users } from "./catalog.js";
+// - FAKE_ORIGIN (https://arcgis.test) is an Enterprise-style ArcGIS Server. A token parameter, in
+//   the query string or a form body, wins over the agstoken cookie its login page sets, and an empty
+//   token parameter makes a request anonymous. Both follow a probe of ArcGIS Server 10.9.1 (token
+//   support spec, section 4). Anonymous listings leave secured services out.
+// - ONLINE_ORIGIN is an ArcGIS Online hosted-services host. Its listings include secured services,
+//   it has no sign-in of its own, and a page opened with ?token= copies the token into its links.
+// - PORTAL_ORIGIN answers ArcGIS Online's community/self, the one request the toolkit sends outside
+//   a token's scope.
+import { catalog as defaultCatalog, ONLINE_ORG, ONLINE_TOKENS, onlineCatalog as defaultOnlineCatalog, SERVER_TOKENS, users } from "./catalog.js";
 import { createPages, loginPage, messagePage, otherPage, REST_PATH, tokensPage } from "./pages.js";
 
-export { SERVER_TOKENS };
+export { ONLINE_ORG, ONLINE_TOKENS, SERVER_TOKENS };
 
 export const FAKE_ORIGIN = "https://arcgis.test";
 export const REST_ROOT = `${FAKE_ORIGIN}${REST_PATH}`;
+export const ONLINE_ORIGIN = "https://services9.arcgis.com";
+export const ONLINE_REST_PATH = `/${ONLINE_ORG}/arcgis/rest/services`;
+export const ONLINE_REST_ROOT = `${ONLINE_ORIGIN}${ONLINE_REST_PATH}`;
+export const PORTAL_ORIGIN = "https://www.arcgis.com";
+
+// The origins the harness routes to this fake server. A request to any other host fails the test.
+export const FAKE_ORIGINS = [FAKE_ORIGIN, ONLINE_ORIGIN, PORTAL_ORIGIN];
+
+// ArcGIS Online writes its breadcrumbs with /ArcGIS/ and its other links with /arcgis/.
+const ONLINE_SITE = { restPath: ONLINE_REST_PATH, crumbPath: `/${ONLINE_ORG}/ArcGIS/rest/services`, loginHref: null };
 
 const SERVICE_TYPES = ["MapServer", "FeatureServer", "ImageServer", "GPServer"];
 const ENTERPRISE_PAGES = createPages();
@@ -109,15 +125,16 @@ const serviceJson = (catalog, service) => ({
   ...(service.tasks ? { tasks: service.tasks.map((task) => task.name) } : {})
 });
 
-// Lists the services the user may use. ArcGIS Server leaves the others out.
-const folder = (catalog, parts, format, user, pages) => {
+// Lists the services the user may use. ArcGIS Server leaves the others out; ArcGIS Online, with
+// listSecured, lists them all.
+const folder = (catalog, parts, format, user, pages, listSecured = false) => {
   const name = parts[0] || "";
   if (parts.length > 1 || (name && !catalog.folders.includes(name))) {
     return null;
   }
   const services = catalog.services
     .filter((s) => (name ? s.name.startsWith(`${name}/`) : !s.name.includes("/")))
-    .filter((s) => refusal(s, user) === null);
+    .filter((s) => listSecured || refusal(s, user) === null);
   const folders = name ? [] : catalog.folders;
   if (format === "html") {
     return html(pages.folderPage({ folder: name, folders, services, version: catalog.currentVersion }));
@@ -257,12 +274,85 @@ const route = (catalog, url, params, cookies, problems) => {
   return serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, problems, ENTERPRISE_PAGES);
 };
 
+const onlineInfo = (online) => ({
+  currentVersion: online.currentVersion,
+  owningSystemUrl: PORTAL_ORIGIN,
+  owningTenant: ONLINE_ORG,
+  authInfo: { isTokenBasedSecurity: true, tokenServicesUrl: `${PORTAL_ORIGIN}/sharing/rest/generateToken` }
+});
+
+const onlineRoute = (online, url, params, problems) => {
+  if (url.pathname === "/favicon.ico") {
+    return FAVICON;
+  }
+  if (url.pathname === "/arcgis/rest/static/main.css") {
+    return STYLESHEET;
+  }
+  const [org, instance, rest, ...tail] = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  const format = params.get("f") || "html";
+  if (org !== ONLINE_ORG) {
+    // The org ID is case-sensitive: in another case it is an invalid URL.
+    return org?.toLowerCase() === ONLINE_ORG.toLowerCase() ? arcgisError("Invalid URL", format) : null;
+  }
+  if (instance?.toLowerCase() !== "arcgis" || rest !== "rest") {
+    return null;
+  }
+  if (tail.length === 1 && tail[0] === "info") {
+    return json(onlineInfo(online), format);
+  }
+  // Hosted services have no sign-in of their own, so a cookie counts for nothing here.
+  const who = identify(online._tokens, params, {});
+  if (who.invalid) {
+    return format === "html" ? html(messagePage("Invalid token")) : arcgisError("Invalid token", format);
+  }
+  if (tail.length === 1 && tail[0] === "self") {
+    return arcgisError("Unable to get user info.", format);
+  }
+  if (tail[0] !== "services") {
+    return null;
+  }
+  const token = params.get("token");
+  const pages = createPages(token ? { ...ONLINE_SITE, linkQuery: `token=${encodeURIComponent(token)}` } : ONLINE_SITE);
+  const parts = tail.slice(1);
+  const typeIndex = parts.findIndex((part) => SERVICE_TYPES.includes(part));
+  if (typeIndex === -1) {
+    return folder(online, parts, format, who.user, pages, true);
+  }
+  const service = online.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
+  if (!service) {
+    return null;
+  }
+  const refused = refusal(service, who.user);
+  if (refused) {
+    return format === "html" ? html(messagePage(refused.message)) : arcgisError(refused.message, format, refused.code);
+  }
+  return serviceResource(online, service, parts.slice(typeIndex + 1), params, format, problems, pages);
+};
+
+const portalRoute = (online, url, params, headers) => {
+  if (url.pathname !== "/sharing/rest/community/self") {
+    return null;
+  }
+  const token = params.get("token");
+  let response;
+  if (!token) {
+    response = json({ error: { code: 400, messageCode: "COM_0019", message: "You must be signed in to see this resource.", details: [] } });
+  } else if (!Object.hasOwn(online._tokens, token)) {
+    response = arcgisError("Invalid token.", "json", 498);
+  } else {
+    const username = online._tokens[token];
+    response = json({ username, role: users[username].onlineRole, orgId: ONLINE_ORG });
+  }
+  // The toolkit's content scripts call this from another origin, so it answers with CORS.
+  return { ...response, headers: { "access-control-allow-origin": headers.origin || "*" } };
+};
+
 /**
  * Creates a fake server. respond(request, headers) takes a Playwright Request and returns options
  * for route.fulfill(), or null when nothing matches. An override's handler may be async, and then
  * respond() returns its Promise.
  */
-export const createFakeArcGIS = (catalog = defaultCatalog) => {
+export const createFakeArcGIS = (catalog = defaultCatalog, online = defaultOnlineCatalog) => {
   const overrides = [];
   const requests = [];
   const calls = [];
@@ -305,7 +395,8 @@ export const createFakeArcGIS = (catalog = defaultCatalog) => {
       const params = new URLSearchParams(query);
       body.forEach((value, key) => params.set(key, value));
       const cookies = parseCookies(headers.cookie);
-      requests.push(`${request.method()} ${url.pathname}${url.search}`);
+      const where = url.origin === FAKE_ORIGIN ? "" : url.origin;
+      requests.push(`${request.method()} ${where}${url.pathname}${url.search}`);
       calls.push({
         method: request.method(),
         origin: url.origin,
@@ -319,7 +410,16 @@ export const createFakeArcGIS = (catalog = defaultCatalog) => {
         override.used = true;
         return override.handler(url, params);
       }
-      return route(catalog, url, params, cookies, problems);
+      if (url.origin === FAKE_ORIGIN) {
+        return route(catalog, url, params, cookies, problems);
+      }
+      if (url.origin === ONLINE_ORIGIN) {
+        return onlineRoute(online, url, params, problems);
+      }
+      if (url.origin === PORTAL_ORIGIN) {
+        return portalRoute(online, url, params, headers);
+      }
+      return null;
     }
   };
 };

@@ -153,6 +153,27 @@ export const SERVER_TOKENS = { jsmith: "sdt-server.jsmith-0001", viewer1: "sdt-s
 
 const byToken = (tokens) => Object.fromEntries(Object.entries(tokens).map(([username, token]) => [token, username]));
 
+const parcelsFeatureServer = {
+  name: "Parcels",
+  type: "FeatureServer",
+  layers: [parcels, addresses],
+  info: {
+    serviceDescription: "Editable parcel boundaries for an invented county.",
+    description: "",
+    copyrightText: "Example County GIS",
+    hasVersionedData: false,
+    supportsDisconnectedEditing: false,
+    maxRecordCount: 1000,
+    supportedQueryFormats: "JSON",
+    capabilities: "Query",
+    spatialReference: WEB_MERCATOR,
+    initialExtent: EXTENT,
+    fullExtent: EXTENT,
+    allowGeometryUpdates: true,
+    units: "esriMeters"
+  }
+};
+
 export const catalog = {
   currentVersion: 11.3,
   folders: ["Transport", "Utilities"],
@@ -180,26 +201,7 @@ export const catalog = {
         maxImageWidth: 4096
       }
     },
-    {
-      name: "Parcels",
-      type: "FeatureServer",
-      layers: [parcels, addresses],
-      info: {
-        serviceDescription: "Editable parcel boundaries for an invented county.",
-        description: "",
-        copyrightText: "Example County GIS",
-        hasVersionedData: false,
-        supportsDisconnectedEditing: false,
-        maxRecordCount: 1000,
-        supportedQueryFormats: "JSON",
-        capabilities: "Query",
-        spatialReference: WEB_MERCATOR,
-        initialExtent: EXTENT,
-        fullExtent: EXTENT,
-        allowGeometryUpdates: true,
-        units: "esriMeters"
-      }
-    },
+    parcelsFeatureServer,
     {
       name: "Elevation",
       type: "ImageServer",
@@ -288,6 +290,59 @@ export const catalog = {
         copyrightText: "",
         hasVersionedData: false,
         maxRecordCount: 1000,
+        supportedQueryFormats: "JSON",
+        capabilities: "Query",
+        spatialReference: WEB_MERCATOR,
+        initialExtent: EXTENT,
+        fullExtent: EXTENT,
+        units: "esriMeters"
+      }
+    }
+  ]
+};
+
+// The ArcGIS Online stand-in: one org's hosted services. Unlike ArcGIS Server, its listing includes
+// secured services, and the host has no sign-in of its own.
+export const ONLINE_ORG = "Fk3Org9xQ";
+
+// The tokens ArcGIS Online accepts, by username. They don't work on https://arcgis.test.
+export const ONLINE_TOKENS = { jsmith: "sdt-online.jsmith-0001" };
+
+const hydrants = {
+  ...layerDefaults,
+  id: 0,
+  name: "Hydrants",
+  geometryType: "esriGeometryPoint",
+  displayField: "HYDRANT_ID",
+  fields: [
+    { name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID", domain: null },
+    { name: "SHAPE", type: "esriFieldTypeGeometry", alias: "Shape", domain: null },
+    { name: "HYDRANT_ID", type: "esriFieldTypeString", alias: "Hydrant ID", length: 12, domain: null }
+  ],
+  _rows: [
+    { OBJECTID: 1, SHAPE: true, HYDRANT_ID: "H-001" },
+    { OBJECTID: 2, SHAPE: true, HYDRANT_ID: "H-002" },
+    { OBJECTID: 3, SHAPE: null, HYDRANT_ID: "H-003" }
+  ]
+};
+
+export const onlineCatalog = {
+  currentVersion: 12.1,
+  folders: [],
+  _tokens: byToken(ONLINE_TOKENS),
+  services: [
+    parcelsFeatureServer,
+    {
+      name: "Hydrants",
+      type: "FeatureServer",
+      _secured: true,
+      layers: [hydrants],
+      info: {
+        serviceDescription: "Fire hydrants for an invented city. Org members only.",
+        description: "",
+        copyrightText: "",
+        hasVersionedData: false,
+        maxRecordCount: 2000,
         supportedQueryFormats: "JSON",
         capabilities: "Query",
         spatialReference: WEB_MERCATOR,

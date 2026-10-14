@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, SERVER_TOKENS, whereMatcher } from "../fixtures/fake-arcgis.js";
+import {
+  arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, ONLINE_ORG, ONLINE_ORIGIN, ONLINE_REST_PATH, ONLINE_TOKENS,
+  PORTAL_ORIGIN, SERVER_TOKENS, whereMatcher
+} from "../fixtures/fake-arcgis.js";
 import { createPages, loginPage, messagePage, tokensPage } from "../fixtures/pages.js";
 
 // A stand-in for a Playwright Request. headers() returns what allHeaders() would, cookies included.
@@ -322,4 +325,64 @@ test("a token in a form body opens a secured layer's queries", () => {
   const body = `where=1%3D1&returnCountOnly=true&f=json&token=${SERVER_TOKENS.jsmith}`;
   const count = respondJson(createFakeArcGIS(), "/arcgis/rest/services/Utilities/Valves/MapServer/0/query", { method: "POST", body });
   assert.deepEqual(count, { count: 2 });
+});
+
+const online = (server, path, options = {}) => server.respond(request(path, { ...options, origin: ONLINE_ORIGIN }));
+const onlineJson = (server, path, options) => JSON.parse(online(server, path, options).body);
+
+test("the ArcGIS Online stand-in lists secured services and refuses them without a token", () => {
+  const server = createFakeArcGIS();
+  assert.deepEqual(onlineJson(server, `${ONLINE_REST_PATH}?f=json`).services, [{ name: "Parcels", type: "FeatureServer" }, { name: "Hydrants", type: "FeatureServer" }]);
+  assert.deepEqual(onlineJson(server, `${ONLINE_REST_PATH}/Hydrants/FeatureServer?f=json`), { error: { code: 499, message: "Token Required", details: [] } });
+  assert.equal(onlineJson(server, `${ONLINE_REST_PATH}/Hydrants/FeatureServer?f=json&token=${ONLINE_TOKENS.jsmith}`).layers[0].name, "Hydrants");
+});
+
+test("ArcGIS Online answers a bad token with 400, and takes no server token or cookie", () => {
+  const server = createFakeArcGIS();
+  const invalid = { error: { code: 400, message: "Invalid token", details: [] } };
+  assert.deepEqual(onlineJson(server, `${ONLINE_REST_PATH}?f=json&token=bogus`), invalid);
+  assert.deepEqual(onlineJson(server, `${ONLINE_REST_PATH}?f=json&token=${SERVER_TOKENS.jsmith}`), invalid);
+  const withCookie = onlineJson(server, `${ONLINE_REST_PATH}/Hydrants/FeatureServer?f=json`, { cookie: `agstoken=${ONLINE_TOKENS.jsmith}` });
+  assert.equal(withCookie.error.code, 499);
+});
+
+test("ArcGIS Online's rest/info names its portal, and rest/self can't say who you are", () => {
+  const server = createFakeArcGIS();
+  const info = onlineJson(server, `/${ONLINE_ORG}/arcgis/rest/info?f=json`);
+  assert.equal(info.owningSystemUrl, PORTAL_ORIGIN);
+  assert.equal(info.owningTenant, ONLINE_ORG);
+  assert.equal(info.authInfo.tokenServicesUrl, `${PORTAL_ORIGIN}/sharing/rest/generateToken`);
+  assert.deepEqual(onlineJson(server, `/${ONLINE_ORG}/arcgis/rest/self?f=json`), { error: { code: 400, message: "Unable to get user info.", details: [] } });
+});
+
+test("an ArcGIS Online page opened with ?token= copies the token into its links", () => {
+  const token = ONLINE_TOKENS.jsmith;
+  const page = online(createFakeArcGIS(), `${ONLINE_REST_PATH}?token=${token}`).body;
+  assert.ok(page.includes(`<a href="${ONLINE_REST_PATH}/Hydrants/FeatureServer?token=${token}">Hydrants</a>`));
+  assert.ok(page.includes(`<a href="/${ONLINE_ORG}/ArcGIS/rest/services?token=${token}">Home</a>`));
+  assert.ok(page.includes(`<a href="?f=pjson&amp;token=${token}" target="_blank">JSON</a>`));
+  assert.equal(page.includes(">Login<"), false);
+});
+
+test("the org ID is case-sensitive and the instance name isn't", () => {
+  const server = createFakeArcGIS();
+  assert.deepEqual(onlineJson(server, `/${ONLINE_ORG.toLowerCase()}/arcgis/rest/services?f=json`), { error: { code: 400, message: "Invalid URL", details: [] } });
+  assert.equal(onlineJson(server, `/${ONLINE_ORG}/ArcGIS/rest/services?f=json`).services.length, 2);
+});
+
+test("community/self names the user of an ArcGIS Online token, with CORS", () => {
+  const server = createFakeArcGIS();
+  const self = (body) => server.respond(request("/sharing/rest/community/self", { method: "POST", body, origin: PORTAL_ORIGIN, headers: { origin: ONLINE_ORIGIN } }));
+  const known = self(`f=json&token=${ONLINE_TOKENS.jsmith}`);
+  assert.deepEqual(JSON.parse(known.body), { username: "jsmith", role: "org_admin", orgId: ONLINE_ORG });
+  assert.equal(known.headers["access-control-allow-origin"], ONLINE_ORIGIN);
+  assert.equal(JSON.parse(self("f=json&token=bogus").body).error.code, 498);
+  assert.equal(JSON.parse(self("f=json").body).error.messageCode, "COM_0019");
+});
+
+test("requests to the stand-ins are logged with their origin", () => {
+  const server = createFakeArcGIS();
+  online(server, `${ONLINE_REST_PATH}?f=json`);
+  get(server, "/arcgis/rest/services?f=json");
+  assert.deepEqual(server.requests, [`GET ${ONLINE_ORIGIN}${ONLINE_REST_PATH}?f=json`, "GET /arcgis/rest/services?f=json"]);
 });
