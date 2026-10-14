@@ -45,9 +45,9 @@ On 13 October 2026 the supported versions are:
 | 12.1 (current release, long-term support) | General Availability | not yet set |
 | 12.0 | Extended Support | 1 December 2026 |
 | 11.5 (long-term support) | General Availability | 1 June 2031 |
-| 11.4 | Extended Support | 1 December 2027 |
+| 11.4 | Mature Support | 1 December 2027 |
 | 11.3 (long-term support) | Extended Support | 1 June 2030 |
-| 11.2 | Extended Support | 1 December 2026 |
+| 11.2 | Mature Support | 1 December 2026 |
 | 11.1 (long-term support) | Extended Support | 1 May 2029 |
 | 10.9.1 (long-term support), shown as 10.91 in the Services Directory | Mature Support | 1 December 2027 |
 

@@ -28,7 +28,7 @@ The PR description also lists two possible follow-ups, a `.github/ISSUE_TEMPLATE
 
 ## Global Constraints
 
-- **Version data comes from Esri's page on the day you write it.** Check https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle before Task 1. WebFetch gets a 403 from it, so fetch it with curl and a browser user agent into the scratch directory `/tmp/docs-arcgis-versions/`, and don't commit the response. On 13 October 2026 every row of the issue's table matched Esri's page.
+- **Version data comes from Esri's page on the day you write it.** Check https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle before Task 1. WebFetch gets a 403 from it, so fetch it with curl and a browser user agent into the scratch directory `/tmp/docs-arcgis-versions/`, and don't commit the response. On 13 October 2026, read by column, Esri's page differed from the issue's table on two rows: 11.4 and 11.2 are in Mature Support, not Extended Support.
 - **"As of" date:** the date you checked Esri's page, written as "13 October 2026" (day month year, no ordinal).
 - **Scope of the version list:** Esri's life cycle for ArcGIS Enterprise on Windows and Linux. ArcGIS Enterprise on Kubernetes is out of scope (spec section 1 and the Phase 9 checklist).
 - **Scratch files:** keep them in `/tmp/docs-arcgis-versions/`. Other jobs share `/tmp`.
@@ -47,7 +47,7 @@ The PR description also lists two possible follow-ups, a `.github/ISSUE_TEMPLATE
 
 The five problems most likely to reach a user despite the checks below:
 
-1. **A wrong row in the version table.** A phase or retirement date that disagrees with Esri's page on the "as of" date misleads anyone choosing whether to report a bug. Task 1 Step 1 checks each row against the fetched page.
+1. **A wrong row in the version table.** A phase or retirement date that disagrees with Esri's page on the "as of" date misleads anyone choosing whether to report a bug. Task 1 Step 1 reads the fetched page by column, and Task 1 Step 4 checks every row's phase and retirement date against that reading.
 2. **A vulnerability reported in a public issue.** The form's first element points to SECURITY.md and to private reporting. Task 2 Step 3 checks that the link is absolute and that it comes first.
 3. **A broken link in the form.** A relative link resolves against `/issues/new` and 404s. Task 2 Step 3 rejects any link that doesn't start with `https://`.
 4. **ArcGIS Online users with no version to give.** The ArcGIS version field is free text and its description says to enter "ArcGIS Online". Task 2 Step 3 checks the description.
@@ -65,24 +65,133 @@ The five problems most likely to reach a user despite the checks below:
 
 - [ ] **Step 1: Re-check Esri's life cycle page**
 
+Read the page's version table by column. Each `<td>` is one column (Version, Release Date, General Availability, Extended Support, Mature, Retirement), so an empty cell stays empty. Short-term releases have no Extended Support: they go from General Availability straight to Mature. Stripping the tags and dropping blank lines loses that empty cell and shifts their Mature range into the Extended Support column.
+
 ```bash
-mkdir -p /tmp/docs-arcgis-versions/esri-lc && cd /tmp/docs-arcgis-versions/esri-lc
+mkdir -p /tmp/docs-arcgis-versions/esri-lc
 curl -sSL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36" \
-  -o page.html https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle
-python3 -I -c '
-import re, html, sys
-s = open(sys.argv[1], encoding="utf-8").read()
-s = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", s, flags=re.S)
-lines = [l.strip() for l in html.unescape(re.sub(r"<[^>]+>", "\n", s)).split("\n") if l.strip()]
-print("\n".join(lines))
-for m in re.finditer(r"(\d+\.\d+(?:\.\d+)?) on Windows and Linux is a(.{0,400}?)support release", s, re.S):
-    print(m.group(1), re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(2))).strip())
-' page.html | sed -n '30,180p'
+  -o /tmp/docs-arcgis-versions/esri-lc/page.html https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle
+python3 -I - /tmp/docs-arcgis-versions/esri-lc/page.html 2026-10-13 <<'EOF'
+"""Reads the version table on Esri's ArcGIS Enterprise life cycle page by column.
+
+Usage: python3 -I esri-lifecycle.py page.html YYYY-MM-DD
+
+Each <td> is one column, so an empty cell (short-term releases have no Extended Support) stays
+empty. Prints every column and the phase on the given date.
+"""
+
+import datetime
+import re
+import sys
+from html.parser import HTMLParser
+
+COLUMNS = [
+    "Version",
+    "Release Date",
+    "General Availability",
+    "Extended Support",
+    "Mature",
+    "Retirement",
+]
+PHASES = ["General Availability", "Extended Support", "Mature Support"]
+
+
+class Rows(HTMLParser):
+    """Collects every table row as a list of cells: {"text", "label"}."""
+
+    def __init__(self):
+        super().__init__()
+        self.rows, self.row, self.cell, self.in_label = [], None, None, False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self.row = []
+        elif tag in ("td", "th") and self.row is not None:
+            self.cell = {"text": "", "label": ""}
+        elif (
+            tag == "label"
+            and self.cell is not None
+            and ("class", "version-trigger") in attrs
+        ):
+            self.in_label = True
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self.cell is not None:
+            self.row.append(self.cell)
+            self.cell = None
+        elif tag == "tr" and self.row is not None:
+            self.rows.append(self.row)
+            self.row = None
+        elif tag == "label":
+            self.in_label = False
+
+    def handle_data(self, data):
+        if self.cell is not None:
+            self.cell["text"] += data
+            if self.in_label:
+                self.cell["label"] += data
+
+
+def dates(text):
+    """Parses every date in a cell, such as "Nov 07, 2024—Apr 30, 2026" or "June 01, 2031"."""
+    found = re.findall(r"([A-Z][a-z]+) (\d{1,2}), (\d{4})", text)
+    return [
+        datetime.datetime.strptime(f"{m[:3]} {d} {y}", "%b %d %Y").date()
+        for m, d, y in found
+    ]
+
+
+page, as_of = sys.argv[1], datetime.date.fromisoformat(sys.argv[2])
+parser = Rows()
+parser.feed(open(page, encoding="utf-8").read())
+squash = lambda s: " ".join(s.split())
+start = next(
+    i for i, r in enumerate(parser.rows) if [squash(c["text"]) for c in r] == COLUMNS
+)
+print(" | ".join(COLUMNS + ["Term", f"Phase on {as_of}"]))
+for row in parser.rows[start + 1 :]:
+    if len(row) != len(COLUMNS):
+        break
+    cells = [squash(c["text"]) for c in row]
+    version = squash(row[0]["label"]) or cells[0]
+    term = re.search(r"(long|short)-term", cells[0])
+    phase = (
+        "Retired"
+        if any(d <= as_of for d in dates(cells[5]))
+        else "not in a dated phase"
+    )
+    for name, cell in zip(PHASES, cells[2:5]):
+        span = dates(cell)
+        if len(span) == 2 and span[0] <= as_of <= span[1]:
+            phase = name
+        elif len(span) == 1 and span[0] <= as_of and "Next LTS Release" in cell:
+            phase = name + " (ends at the next LTS release)"
+    shown = [version, cells[1]] + [c or "(empty)" for c in cells[2:]]
+    print(" | ".join(shown + [term.group(0) if term else "-", phase]))
+EOF
 ```
 
-Expected: for each version, a release date, then date ranges for General Availability, Extended Support and (for long-term support releases) Mature Support, then a retirement date. The last lines map each version to "long-term" or "short-term". 12.1 has no label line; its dates ("Next LTS Release + 3 Years") follow the long-term pattern, and Esri's 12.1 announcement calls it long-term support.
+Pass the "as of" date as the second argument. Expected on 13 October 2026:
 
-Compare with the table in Step 2. For each version, the phase is the range that contains the "as of" date. If anything differs, use Esri's value and note the difference for the PR description.
+```
+Version | Release Date | General Availability | Extended Support | Mature | Retirement | Term | Phase on 2026-10-13
+12.1 | May 21, 2026 | May 21, 2026—Next LTS Release | Next LTS Release—3 Years | (empty) | Next LTS Release + 3 Years | - | General Availability (ends at the next LTS release)
+12.0 | November 18, 2025 | Nov 18, 2025—May 20, 2026 | May 21, 2026—Nov 30, 2026 | (empty) | December 1, 2026 | short-term | Extended Support
+11.5 | May 22, 2025 | May 22, 2025—May 31, 2027 | Jun 01, 2027—May 31, 2029 | Jun 01, 2029—May 31, 2031 | June 01, 2031 | long-term | General Availability
+11.4 | November 07, 2024 | Nov 07, 2024—Apr 30, 2026 | (empty) | May 01, 2026—Nov 30, 2027 | December 01, 2027 | short-term | Mature Support
+11.3 | May 23, 2024 | May 23, 2024—May 31, 2026 | Jun 01, 2026—May 31, 2028 | Jun 01, 2028—May 31, 2030 | June 01, 2030 | long-term | Extended Support
+11.2 | November 09, 2023 | Nov 09, 2023—May 31, 2025 | (empty) | Jun 01, 2025—Nov 30, 2026 | December 01, 2026 | short-term | Mature Support
+11.1 | April 20, 2023 | Apr 20, 2023—Apr 30, 2025 | May 01, 2025—Apr 30, 2027 | May 01, 2027—Apr 30, 2029 | May 01, 2029 | long-term | Extended Support
+11.0 | July 22, 2022 | Jul 22, 2022—Jan 31, 2024 | (empty) | Feb 01, 2024—Jul 31, 2025 | August 01, 2025 | short-term | Retired
+10.9.1 | November 18, 2021 | Nov 18, 2021—Nov 30, 2023 | Dec 01, 2023—Nov 30, 2025 | Dec 01, 2025—Nov 30, 2027 | December 01, 2027 | long-term | Mature Support
+10.9 | May 06, 2021 | May 06, 2021—Oct 31, 2022 | (empty) | Nov 01, 2022—May 31, 2024 | June 01, 2024 | short-term | Retired
+10.8.1 | July 28, 2020 | Jul 28, 2020—Jul 31, 2022 | Aug 01, 2022—Jul 31, 2024 | Aug 01, 2024—Jul 31, 2026 | August 01, 2026 | short-term | Retired
+10.8 | February 20, 2020 | Feb 20, 2020—Aug 31, 2021 | (empty) | Sep 01, 2021—Feb 28, 2023 | March 01, 2023 | short-term | Retired
+```
+
+12.1 has no term on the page. Its dates ("Next LTS Release + 3 Years") follow the long-term pattern, and Esri's 12.1 announcement calls it long-term support.
+
+Compare the last column with the table in Step 2, row by row. If anything differs, use Esri's value and note the difference for the PR description.
 
 - [ ] **Step 2: Insert the Compatibility section**
 
@@ -100,9 +209,9 @@ On 13 October 2026 the supported versions are:
 | 12.1 (current release, long-term support) | General Availability | not yet set |
 | 12.0 | Extended Support | 1 December 2026 |
 | 11.5 (long-term support) | General Availability | 1 June 2031 |
-| 11.4 | Extended Support | 1 December 2027 |
+| 11.4 | Mature Support | 1 December 2027 |
 | 11.3 (long-term support) | Extended Support | 1 June 2030 |
-| 11.2 | Extended Support | 1 December 2026 |
+| 11.2 | Mature Support | 1 December 2026 |
 | 11.1 (long-term support) | Extended Support | 1 May 2029 |
 | 10.9.1 (long-term support), shown as 10.91 in the Services Directory | Mature Support | 1 December 2027 |
 
@@ -143,7 +252,25 @@ node -e '
 const html = require("fs").readFileSync("/tmp/docs-arcgis-versions/readme.html", "utf8");
 const section = html.slice(html.indexOf(">Compatibility<"), html.indexOf(">Install<"));
 const rows = (section.match(/<tr>/g) || []).length;
+// Version, phase and retirement date in each body row, read by column from the rendered table.
+const table = [...section.matchAll(/<tr>(.*?)<\/tr>/gs)].slice(1)
+  .map((row) => [...row[1].matchAll(/<td>(.*?)<\/td>/gs)].map((cell) => cell[1].trim()));
+// The life cycle page on 13 October 2026, read by column with the script in Task 1 Step 1.
+const ESRI = [
+  ["12.1", "General Availability", "not yet set"],
+  ["12.0", "Extended Support", "1 December 2026"],
+  ["11.5", "General Availability", "1 June 2031"],
+  ["11.4", "Mature Support", "1 December 2027"],
+  ["11.3", "Extended Support", "1 June 2030"],
+  ["11.2", "Mature Support", "1 December 2026"],
+  ["11.1", "Extended Support", "1 May 2029"],
+  ["10.9.1", "Mature Support", "1 December 2027"]
+];
 const checks = {
+  "phase and retirement date of every row match Esri": table.length === ESRI.length
+    && ESRI.every(([version, phase, retires], i) => table[i][0].startsWith(version + " ") || table[i][0] === version
+      ? table[i][1] === phase && table[i][2] === retires
+      : false),
   "heading present": html.includes(">Compatibility<"),
   "one table with a header and 8 rows": (section.match(/<table[ >]/g) || []).length === 1 && rows === 9,
   "life cycle link": section.includes("href=\"https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle\""),
@@ -162,7 +289,7 @@ process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
 '
 ```
 
-Expected: twelve `ok` lines and exit code 0.
+Expected: thirteen `ok` lines and exit code 0.
 
 - [ ] **Step 5: Commit**
 
