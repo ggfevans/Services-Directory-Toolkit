@@ -91,11 +91,7 @@ In `README.md`, insert this between the last "Features" bullet ("Preview map ima
 ```markdown
 ## Compatibility
 
-Services Directory Toolkit supports every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, and ArcGIS Online. Esri's [life cycle for ArcGIS Enterprise on Windows and Linux](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle) decides which versions count:
-
-- Versions in General Availability, Extended Support or Mature Support are supported.
-- Retired versions aren't.
-- A version stops being supported on the date Esri retires it.
+Services Directory Toolkit supports ArcGIS Online, and every version of ArcGIS Enterprise and ArcGIS Server on Windows and Linux that Esri hasn't retired. Esri's [ArcGIS Enterprise life cycle](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle) sets the dates: a version counts while it's in General Availability, Extended Support or Mature Support, and stops counting on the date Esri retires it. ArcGIS Enterprise on Kubernetes has a separate life cycle and isn't covered.
 
 On 13 October 2026 the supported versions are:
 
@@ -108,13 +104,13 @@ On 13 October 2026 the supported versions are:
 | 11.3 (long-term support) | Extended Support | 1 June 2030 |
 | 11.2 | Extended Support | 1 December 2026 |
 | 11.1 (long-term support) | Extended Support | 1 May 2029 |
-| 10.9.1 (long-term support) | Mature Support | 1 December 2027 |
+| 10.9.1 (long-term support), shown as 10.91 in the Services Directory | Mature Support | 1 December 2027 |
 
-Esri has retired 11.0, 10.9, 10.8.1 and every earlier version. ArcGIS Online has no version to track, because Esri updates it for everyone at once. The list leaves out ArcGIS Enterprise on Kubernetes, which has its own life cycle.
+Esri has retired 11.0, 10.9, 10.8.1 and every earlier version. ArcGIS Online needs no row in the table, because Esri updates it for everyone at once.
 
 Unsupported means the extension may still work on a retired version, but a bug that happens only there won't be fixed.
 
-The extension needs Chrome 120 or later, or another Chromium browser such as Microsoft Edge.
+The extension needs Chrome 120 or later, or another browser based on Chromium 120 or later, such as Microsoft Edge.
 ```
 
 Replace the first sentence of "Install":
@@ -155,6 +151,10 @@ const checks = {
   "ArcGIS Online": section.includes("ArcGIS Online"),
   "Windows and Linux, not Kubernetes": section.includes("on Windows and Linux") && section.includes("Kubernetes"),
   "Chrome 120": section.includes("Chrome 120 or later"),
+  "other browsers need Chromium 120": section.includes("Chromium 120 or later"),
+  "10.9.1 shown as 10.91": section.includes("10.91"),
+  "Kubernetes is not covered": section.includes("Kubernetes") && section.includes("isn\x27t covered"),
+  "no retired-version bullets": !section.includes("Retired versions aren"),
   "browser requirement said once": (html.match(/Chrome 120 or later/g) || []).length === 1
 };
 for (const [name, ok] of Object.entries(checks)) console.log(ok ? "ok  " : "FAIL", name);
@@ -162,7 +162,7 @@ process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
 '
 ```
 
-Expected: eight `ok` lines and exit code 0.
+Expected: twelve `ok` lines and exit code 0.
 
 - [ ] **Step 5: Commit**
 
@@ -208,12 +208,14 @@ body:
       value: |
         **Security vulnerabilities:** don't report them here, because issues are public. Follow [SECURITY.md](https://github.com/ggfevans/Services-Directory-Toolkit/blob/main/SECURITY.md) to report one privately.
 
+        Remove any `token=` parameter from URLs before you paste them into this form.
+
         Check that your ArcGIS version is in the [supported versions](https://github.com/ggfevans/Services-Directory-Toolkit#compatibility). A bug that happens only on a retired version won't be fixed.
   - type: textarea
     id: what-happened
     attributes:
       label: What happened
-      description: What you did, what you expected, and what happened instead. Include any error the page showed, or that `chrome://extensions` lists under the extension's Errors button.
+      description: What you did, what you expected, and what happened instead. Include any error the page showed. To see the extension's own errors, turn on Developer mode at `chrome://extensions`, repeat the steps, then click Errors on the extension's card.
     validations:
       required: true
   - type: textarea
@@ -228,7 +230,7 @@ body:
     id: extension-version
     attributes:
       label: Extension version
-      description: Shown on the extension's card at `chrome://extensions`.
+      description: Open `chrome://extensions`, click Details on Services Directory Toolkit, and copy the Version.
       placeholder: 2.0.0
     validations:
       required: true
@@ -244,7 +246,7 @@ body:
     id: arcgis-version
     attributes:
       label: ArcGIS version
-      description: Shown as "Current Version" on the Services Directory root page, the page at `.../rest/services`. For services hosted in ArcGIS Online, enter "ArcGIS Online".
+      description: If the services are on `services.arcgis.com` or another host ending in `.arcgis.com`, enter "ArcGIS Online". Otherwise copy "Current Version" from the Services Directory root page, the page at `.../rest/services`. That page shows 10.9.1 as 10.91.
       placeholder: "11.5"
     validations:
       required: true
@@ -270,10 +272,10 @@ body:
     id: page-url
     attributes:
       label: Page URL
-      description: Optional. Leave it out if the server isn't public.
+      description: Optional. Leave it out if the server isn't public, and remove any `token=` parameter.
 ```
 
-The version placeholders are quoted so YAML keeps them as strings: an unquoted `11.5` is a number.
+The Chrome and ArcGIS version placeholders are quoted so YAML keeps them as strings, because an unquoted `11.5` is a number. `2.0.0` has two dots, so YAML reads it as a string without quotes.
 
 - [ ] **Step 3: Validate the form**
 
@@ -289,29 +291,69 @@ Content check, which also catches what the schema allows but GitHub rejects or t
 
 ```bash
 uvx --with pyyaml==6.0.2 python -I -c '
-import re, sys, yaml
+import re
+import sys
+
+import yaml
+
 form = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
 body = form["body"]
 fields = {b["id"]: b for b in body if "id" in b}
 intro = body[0]["attributes"]["value"]
 links = re.findall(r"\]\(([^)]+)\)", intro)
 checks = {
-  "first element is the security notice": body[0]["type"] == "markdown" and "SECURITY.md" in intro and intro.index("SECURITY.md") < intro.index("supported versions"),
-  "every link is absolute": links and all(l.startswith("https://") for l in links),
-  "ids are unique": len(fields) == len([b for b in body if "id" in b]),
-  "labels are unique": len({b["attributes"]["label"] for b in body if "label" in b["attributes"]}) == len([b for b in body if "label" in b["attributes"]]),
-  "version fields are required": all(fields[i]["validations"]["required"] for i in ("extension-version", "chrome-version", "arcgis-version")),
-  "ArcGIS version names Current Version and ArcGIS Online": all(s in fields["arcgis-version"]["attributes"]["description"] for s in ("Current Version", "ArcGIS Online")),
-  "page kinds match the agreed list": fields["page-kind"]["attributes"]["options"] == ["Root", "Folder", "Service", "Layer", "Query", "Find", "Print or geoprocessing task", "Toolbar popup", "Options page", "Other"],
-  "placeholders are strings": all(isinstance(b["attributes"].get("placeholder", ""), str) for b in body),
-  "label is bug": form["labels"] == ["bug"],
+    "first element is the security notice": body[0]["type"] == "markdown"
+    and "SECURITY.md" in intro
+    and intro.index("SECURITY.md") < intro.index("supported versions"),
+    "every link is absolute": links and all(l.startswith("https://") for l in links),
+    "ids are unique": len(fields) == len([b for b in body if "id" in b]),
+    "labels are unique": len(
+        {b["attributes"]["label"] for b in body if "label" in b["attributes"]}
+    )
+    == len([b for b in body if "label" in b["attributes"]]),
+    "version fields are required": all(
+        fields[i]["validations"]["required"]
+        for i in ("extension-version", "chrome-version", "arcgis-version")
+    ),
+    "ArcGIS version names Current Version and ArcGIS Online": all(
+        s in fields["arcgis-version"]["attributes"]["description"]
+        for s in ("Current Version", "ArcGIS Online")
+    ),
+    "page kinds match the agreed list": fields["page-kind"]["attributes"]["options"]
+    == [
+        "Root",
+        "Folder",
+        "Service",
+        "Layer",
+        "Query",
+        "Find",
+        "Print or geoprocessing task",
+        "Toolbar popup",
+        "Options page",
+        "Other",
+    ],
+    "placeholders are strings": all(
+        isinstance(b["attributes"].get("placeholder", ""), str) for b in body
+    ),
+    "label is bug": form["labels"] == ["bug"],
+    "extension version says to use Details": "Details"
+    in fields["extension-version"]["attributes"]["description"],
+    "error hint says to turn on Developer mode first": "Developer mode"
+    in fields["what-happened"]["attributes"]["description"],
+    "ArcGIS version explains 10.91 and .arcgis.com": all(
+        s in fields["arcgis-version"]["attributes"]["description"]
+        for s in ("10.91", ".arcgis.com")
+    ),
+    "intro and Page URL warn about token=": "token=" in intro
+    and "token=" in fields["page-url"]["attributes"]["description"],
 }
-for name, ok in checks.items(): print("ok  " if ok else "FAIL", name)
+for name, ok in checks.items():
+    print("ok  " if ok else "FAIL", name)
 sys.exit(0 if all(checks.values()) else 1)
 ' .github/ISSUE_TEMPLATE/bug_report.yml
 ```
 
-Expected: nine `ok` lines and exit code 0.
+Expected: thirteen `ok` lines and exit code 0.
 
 - [ ] **Step 4: Run the writing-style self-check on the form's prose**
 
