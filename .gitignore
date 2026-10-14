@@ -44,3 +44,6 @@ dist
 test-results/
 playwright-report/
 blob-report/
+
+# Token probe output (scripts/probe-tokens.js)
+probe-output/
