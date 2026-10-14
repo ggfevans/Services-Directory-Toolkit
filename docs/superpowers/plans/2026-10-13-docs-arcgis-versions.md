@@ -1,6 +1,6 @@
 # Compatibility Docs and Bug Report Form Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task, in one session (the executor can't start subagents). Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Document which ArcGIS versions and browsers the extension supports, and add a bug report form that asks for those versions.
 
@@ -24,10 +24,14 @@ This plan covers two of issue #9's deliverables: the README Compatibility sectio
 - the 12.x fixture variant (spec Phase 2)
 - the release-checklist step that re-checks Esri's page (spec Phase 9)
 
+The PR description also lists two possible follow-ups, a `.github/ISSUE_TEMPLATE/config.yml` and a CI job that runs the form check. It also notes that 12.0 and 11.2 retire on 1 December 2026, when the table needs its first update.
+
 ## Global Constraints
 
-- **Version data comes from Esri's page on the day you write it.** Check https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle before Task 1. WebFetch gets a 403 from it, so fetch it with curl and a browser user agent into an empty directory under `/tmp`, and don't commit the response. On 13 October 2026 every row of the issue's table matched Esri's page.
+- **Version data comes from Esri's page on the day you write it.** Check https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle before Task 1. WebFetch gets a 403 from it, so fetch it with curl and a browser user agent into the scratch directory `/tmp/docs-arcgis-versions/`, and don't commit the response. On 13 October 2026 every row of the issue's table matched Esri's page.
 - **"As of" date:** the date you checked Esri's page, written as "13 October 2026" (day month year, no ordinal).
+- **Scope of the version list:** Esri's life cycle for ArcGIS Enterprise on Windows and Linux. ArcGIS Enterprise on Kubernetes is out of scope (spec section 1 and the Phase 9 checklist).
+- **Scratch files:** keep them in `/tmp/docs-arcgis-versions/`. Other jobs share `/tmp`.
 - **Browser requirement:** Chrome 120 or later, or another Chromium browser such as Microsoft Edge. This matches `minimum_chrome_version` "120" in `src/manifest.json`.
 - **Repository URL:** `https://github.com/ggfevans/Services-Directory-Toolkit`. Links in the issue form are absolute, because the form renders at `/issues/new`.
 - **Label:** the form applies the existing `bug` label. Don't create labels.
@@ -62,7 +66,7 @@ The five problems most likely to reach a user despite the checks below:
 - [ ] **Step 1: Re-check Esri's life cycle page**
 
 ```bash
-mkdir -p /tmp/esri-lc && cd /tmp/esri-lc
+mkdir -p /tmp/docs-arcgis-versions/esri-lc && cd /tmp/docs-arcgis-versions/esri-lc
 curl -sSL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36" \
   -o page.html https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle
 python3 -I -c '
@@ -87,7 +91,7 @@ In `README.md`, insert this between the last "Features" bullet ("Preview map ima
 ```markdown
 ## Compatibility
 
-Services Directory Toolkit supports every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, and ArcGIS Online. Esri's [ArcGIS Enterprise life cycle](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle) decides which versions count:
+Services Directory Toolkit supports every ArcGIS Enterprise and ArcGIS Server version that Esri hasn't retired, and ArcGIS Online. Esri's [life cycle for ArcGIS Enterprise on Windows and Linux](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle) decides which versions count:
 
 - Versions in General Availability, Extended Support or Mature Support are supported.
 - Retired versions aren't.
@@ -106,7 +110,7 @@ On 13 October 2026 the supported versions are:
 | 11.1 (long-term support) | Extended Support | 1 May 2029 |
 | 10.9.1 (long-term support) | Mature Support | 1 December 2027 |
 
-Esri has retired 11.0, 10.9, 10.8.1 and every earlier version. ArcGIS Online has no version to track, because Esri updates it for everyone at once.
+Esri has retired 11.0, 10.9, 10.8.1 and every earlier version. ArcGIS Online has no version to track, because Esri updates it for everyone at once. The list leaves out ArcGIS Enterprise on Kubernetes, which has its own life cycle.
 
 Unsupported means the extension may still work on a retired version, but a bug that happens only there won't be fixed.
 
@@ -138,9 +142,9 @@ Expected: no output. Judge any hit against anthropic-skills:my-writing-style, th
 - [ ] **Step 4: Render the README as GitHub does and check the table and link**
 
 ```bash
-gh api markdown -f mode=gfm -f context=ggfevans/Services-Directory-Toolkit -F text=@README.md > /tmp/readme.html
+gh api markdown -f mode=gfm -f context=ggfevans/Services-Directory-Toolkit -F text=@README.md > /tmp/docs-arcgis-versions/readme.html
 node -e '
-const html = require("fs").readFileSync("/tmp/readme.html", "utf8");
+const html = require("fs").readFileSync("/tmp/docs-arcgis-versions/readme.html", "utf8");
 const section = html.slice(html.indexOf(">Compatibility<"), html.indexOf(">Install<"));
 const rows = (section.match(/<tr>/g) || []).length;
 const checks = {
@@ -149,6 +153,7 @@ const checks = {
   "life cycle link": section.includes("href=\"https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle\""),
   "as-of date": section.includes("13 October 2026"),
   "ArcGIS Online": section.includes("ArcGIS Online"),
+  "Windows and Linux, not Kubernetes": section.includes("on Windows and Linux") && section.includes("Kubernetes"),
   "Chrome 120": section.includes("Chrome 120 or later"),
   "browser requirement said once": (html.match(/Chrome 120 or later/g) || []).length === 1
 };
@@ -157,7 +162,7 @@ process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
 '
 ```
 
-Expected: seven `ok` lines and exit code 0.
+Expected: eight `ok` lines and exit code 0.
 
 - [ ] **Step 5: Commit**
 
@@ -182,9 +187,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Check that validation catches a broken form**
 
 ```bash
-mkdir -p /tmp/ifcheck
-printf 'name: x\nbody:\n  - type: dropdown\n    attributes:\n      label: A\n' > /tmp/ifcheck/bad.yml
-uvx check-jsonschema@0.38.2 --builtin-schema vendor.github-issue-forms /tmp/ifcheck/bad.yml; echo "exit $?"
+mkdir -p /tmp/docs-arcgis-versions/ifcheck
+printf 'name: x\nbody:\n  - type: dropdown\n    attributes:\n      label: A\n' > /tmp/docs-arcgis-versions/ifcheck/bad.yml
+uvx check-jsonschema@0.38.2 --builtin-schema vendor.github-issue-forms /tmp/docs-arcgis-versions/ifcheck/bad.yml; echo "exit $?"
 ```
 
 Expected: `'options' is a required property`, `'description' is a required property`, and `exit 1`. This proves the schema check fails on a bad form before you rely on it passing on a good one.
@@ -216,9 +221,9 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Open the layer page of a map service.
-        2. Click Count features.
-        3. The count stays empty.
+        1. Open a map service page, such as `.../rest/services/Example/MapServer`.
+        2. Wait for the layer details to load.
+        3. One layer shows no "Number of features".
   - type: input
     id: extension-version
     attributes:
@@ -232,7 +237,7 @@ body:
     attributes:
       label: Chrome version
       description: Shown at `chrome://version`. If you use another Chromium browser, such as Edge, give its name and version.
-      placeholder: "141.0.7390.55"
+      placeholder: "154.0.0.0"
     validations:
       required: true
   - type: input
@@ -246,8 +251,8 @@ body:
   - type: dropdown
     id: page-kind
     attributes:
-      label: Kind of page
-      description: The Services Directory page where the bug happens.
+      label: Where it happens
+      description: The kind of Services Directory page, or the part of the extension, where you see the bug.
       options:
         - Root
         - Folder
@@ -255,7 +260,10 @@ body:
         - Layer
         - Query
         - Find
-        - Print
+        - Print or geoprocessing task
+        - Toolbar popup
+        - Options page
+        - Other
     validations:
       required: true
   - type: input
@@ -277,7 +285,7 @@ uvx check-jsonschema@0.38.2 --builtin-schema vendor.github-issue-forms .github/I
 
 Expected: `ok -- validation done` and `exit 0`.
 
-Content check, which also catches what the schema allows but GitHub rejects or the issue forbids (duplicate ids, relative links, a missing page kind):
+Content check, which also catches what the schema allows but GitHub rejects or the issue forbids (duplicate ids, relative links, a wrong list of page kinds):
 
 ```bash
 uvx --with pyyaml==6.0.2 python -I -c '
@@ -294,7 +302,7 @@ checks = {
   "labels are unique": len({b["attributes"]["label"] for b in body if "label" in b["attributes"]}) == len([b for b in body if "label" in b["attributes"]]),
   "version fields are required": all(fields[i]["validations"]["required"] for i in ("extension-version", "chrome-version", "arcgis-version")),
   "ArcGIS version names Current Version and ArcGIS Online": all(s in fields["arcgis-version"]["attributes"]["description"] for s in ("Current Version", "ArcGIS Online")),
-  "page kinds match the issue": fields["page-kind"]["attributes"]["options"] == ["Root", "Folder", "Service", "Layer", "Query", "Find", "Print"],
+  "page kinds match the agreed list": fields["page-kind"]["attributes"]["options"] == ["Root", "Folder", "Service", "Layer", "Query", "Find", "Print or geoprocessing task", "Toolbar popup", "Options page", "Other"],
   "placeholders are strings": all(isinstance(b["attributes"].get("placeholder", ""), str) for b in body),
   "label is bug": form["labels"] == ["bug"],
 }
@@ -317,7 +325,7 @@ Expected: no output.
 
 ```bash
 git add .github/ISSUE_TEMPLATE/bug_report.yml
-git commit -m "Add a bug report form that asks for the versions" -m "The form asks for the extension, Chrome and ArcGIS versions and the kind of page, and sends vulnerability reports to SECURITY.md. Part of #9.
+git commit -m "Add a bug report form that asks for the versions" -m "The form asks for the extension, Chrome and ArcGIS versions and where the bug happens, and sends vulnerability reports to SECURITY.md. Part of #9.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -361,4 +369,4 @@ Don't open a PR. A separate reviewer runs first.
 
 - [ ] **Step 5: Check GitHub's own reading of the form**
 
-GitHub validates issue forms only when it renders them. Open `https://github.com/ggfevans/Services-Directory-Toolkit/blob/docs-arcgis-versions/.github/ISSUE_TEMPLATE/bug_report.yml` and check that GitHub shows the form preview and no error banner. GitHub offers the form at `/issues/new/choose` only after it reaches `main`, so the reviewer repeats this check there after the merge.
+GitHub validates issue forms only when it renders them. Fetch `https://github.com/ggfevans/Services-Directory-Toolkit/blob/docs-arcgis-versions/.github/ISSUE_TEMPLATE/bug_report.yml` and check that GitHub shows the form preview and no error banner. If you can't fetch the page, say so in the report and skip this step. GitHub offers the form at `/issues/new/choose` only after it reaches `main`, so the reviewer repeats this check there after the merge.
