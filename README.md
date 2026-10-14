@@ -34,9 +34,32 @@ Sometimes you need more than one page shows. Collecting data from several map se
 - Shorten query page URLs that carry long lists of unneeded parameters.
 - Preview map images when hovering over service links.
 
+## Compatibility
+
+Services Directory Toolkit supports ArcGIS Online, and every version of ArcGIS Enterprise and ArcGIS Server on Windows and Linux that Esri hasn't retired. Esri's [ArcGIS Enterprise life cycle](https://support.esri.com/en-us/products/arcgis-enterprise/life-cycle) sets the dates: a version counts while it's in General Availability, Extended Support or Mature Support, and stops counting on the date Esri retires it. ArcGIS Enterprise on Kubernetes has a separate life cycle and isn't covered.
+
+On 13 October 2026 the supported versions are:
+
+| Version | Esri phase | Esri retires it |
+|---|---|---|
+| 12.1 (current release, long-term support) | General Availability | not yet set |
+| 12.0 | Extended Support | 1 December 2026 |
+| 11.5 (long-term support) | General Availability | 1 June 2031 |
+| 11.4 | Mature Support | 1 December 2027 |
+| 11.3 (long-term support) | Extended Support | 1 June 2030 |
+| 11.2 | Mature Support | 1 December 2026 |
+| 11.1 (long-term support) | Extended Support | 1 May 2029 |
+| 10.9.1 (long-term support), shown as 10.91 in the Services Directory | Mature Support | 1 December 2027 |
+
+Esri has retired 11.0, 10.9, 10.8.1 and every earlier version. ArcGIS Online needs no row in the table, because Esri updates it for everyone at once.
+
+Unsupported means the extension may still work on a retired version, but a bug that happens only there won't be fixed.
+
+The extension needs Chrome 120 or later, or another browser based on Chromium 120 or later, such as Microsoft Edge.
+
 ## Install
 
-Services Directory Toolkit runs in Chrome 120 or later and other Chromium browsers. To run it from source:
+To run Services Directory Toolkit from source:
 
 1. Clone this repository.
 2. Open `chrome://extensions` and turn on Developer mode.
