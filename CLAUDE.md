@@ -10,13 +10,13 @@ It is an independent continuation of Ken Doman's [Map Services Enhanced](https:/
 
 ## Working to the spec
 
-Section 4 of the spec is the definition of done for every phase. A change in behaviour starts with a failing test, and `README.md`, this file and `.coderabbit.yaml` must match the code when the phase ends. Each pull request lists the IDs it closes from the spec's findings register (Appendix A), and how it resolved each one. CodeRabbit reads this file as its code guidelines (`knowledge_base` in `.coderabbit.yaml`) when it reviews a pull request.
+Section 4 of the spec is the definition of done for every phase. A change in behaviour starts with a failing test, and `README.md`, `CONTRIBUTING.md`, this file and `.coderabbit.yaml` must match the code when the phase ends. Each pull request lists the IDs it closes from the spec's findings register (Appendix A), and how it resolved each one. CodeRabbit reads this file as its code guidelines (`knowledge_base` in `.coderabbit.yaml`) when it reviews a pull request.
 
 `docs/superpowers/plans/` holds the implementation plan for each piece of work. `docs/design/` holds the UI design review for issue #7, with its mockups and screenshot scripts, and the spec records the decisions it settled. The bug report form (`.github/ISSUE_TEMPLATE/bug_report.yml`) links to the README's `#compatibility` anchor, so keep that heading's name.
 
 ## Commands
 
-Requires Node 22.13+ or 24 (`.nvmrc` pins 24). Run `npm install` first, and `npx playwright install --no-shell chromium` once for the browser tests.
+Requires Node 22.13 or a later 22.x, or Node 24 or later (`engines` is `^22.13.0 || >=24`, and `.nvmrc` pins 24). Run `npm install` first, and `npx playwright install --no-shell chromium` once for the browser tests.
 
 - `npm run lint`: ESLint 10 (flat config in `eslint.config.js`) over the repo, with warnings treated as errors. Formatting rules come from `@stylistic` (2-space indent, double quotes, semicolons). Code under `src/` may not write HTML strings (`innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`).
 - `npm test`: `npm run test:unit` (`node --test` over `tests/unit/`), then `npm run test:e2e` (Playwright, in `tests/e2e/`). See [Browser tests](#browser-tests).
@@ -27,13 +27,13 @@ Requires Node 22.13+ or 24 (`.nvmrc` pins 24). Run `npm install` first, and `npx
 
 ## Browser tests
 
-Each test starts headless Chromium with the extension from `src/` (or `EXT_PATH`). Playwright's default headless shell can't load extensions, so the fixtures in `tests/e2e/fixtures.js` use `channel: "chromium"`; `CHROME_PATH` runs the suite in another Chromium build through `executablePath`. Set `HEADED=1` to watch.
+Each test starts Chromium, headless unless `HEADED=1`, with the extension from `src/` (or `EXT_PATH`). Playwright's default headless shell can't load extensions, so the fixtures in `tests/e2e/fixtures.js` use `channel: "chromium"`; `CHROME_PATH` runs the suite in another Chromium build through `executablePath`.
 
 `tests/fixtures/fake-arcgis.js` answers requests to `https://arcgis.test` from two files. `catalog.js` holds the services, layers and the rows that counts are computed from, and `pages.js` renders HTML shaped like the 10.9 and 11.x Services Directory. Catalog keys that start with `_` are fixture data the fake server never sends. `whereMatcher` lists the where clauses it can evaluate. A test can replace a response with `fakeServer.override(pattern, handler)`, and the handler may answer late or never. All of this data is synthetic. Don't commit responses captured from Esri's servers: their terms don't allow redistribution.
 
 A request to `https://arcgis.test` that has no fixture gets a 404 and fails the test. A test also fails on a request to another host, a request the fake server can't interpret (such as a where clause it doesn't support, or an override that returns no status), an override that never matched a request, a dialog, and any console error or uncaught exception. A test can allow a console error through `expectedErrors`, and clears the other violations with `harness.forgive()` after asserting that the right list caught them. The checks have two limits. Playwright doesn't route the network requests of the real toolbar popup, because it has no Page, so popup logic is tested through `openPopupTab`. And errors during service worker startup, or during the popup's initial load, happen before the error hooks are in and go unseen.
 
-The main CI job runs the suite against the unzipped build, with `EXT_PATH=dist`. The non-blocking Chrome 120 job runs it against `src/` and skips the `@cdp` tests, because Chrome 120's DevTools protocol has no `Extensions.triggerAction`. Chrome 120 is the manifest's `minimum_chrome_version`, which `tests/unit/manifest.test.js` pins. Chrome for Testing 120 crashes at startup on macOS 27 and can't run the job there. The README's Development section describes the manual Chrome 120 check before a release.
+The main CI job runs the suite against the unzipped build, with `EXT_PATH=dist`. The non-blocking Chrome 120 job runs it against `src/` and skips the `@cdp` tests, because Chrome 120's DevTools protocol has no `Extensions.triggerAction`. Chrome 120 is the manifest's `minimum_chrome_version`, which `tests/unit/manifest.test.js` pins. Chrome for Testing 120 crashes at startup on macOS 27, so the suite can't run on it locally there. `CONTRIBUTING.md` describes the manual Chrome 120 check before a release.
 
 `tests/e2e/known-bugs.spec.js` holds bugs from the findings register that reproduce today, as `knownBug()` cases that Playwright expects to fail. The change that fixes one turns its `knownBug()` into `test()`, unless the comment above the case says otherwise. `SHOW_KNOWN_BUGS=1` runs them as normal tests. Use it after renaming classes or changing the requests the extension sends, to check that each case still fails on its last assertion and not in its setup. Find elements by role or text where possible, because class names change during the store-readiness work.
 
