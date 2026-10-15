@@ -55,3 +55,18 @@ export const sameOriginHeaders = (base, extraHeaders) => async (route) => {
   const response = await route.fetch({ headers: { ...request.headers(), ...extraHeaders }, maxRedirects: 0 });
   await route.fulfill({ response });
 };
+
+/**
+ * A Playwright route handler for a page opened with ?token=. It aborts any request that carries a
+ * token parameter and isn't on base's origin, so a redirect that keeps the query string (to a portal
+ * login, or to http://) fails there instead of handing the token to another host. Other requests go
+ * out unchanged.
+ */
+export const urlTokenStaysHome = (base) => async (route) => {
+  const url = route.request().url();
+  if (!sameOrigin(url, base) && /[?&]token=/i.test(url)) {
+    await route.abort();
+    return;
+  }
+  await route.continue();
+};

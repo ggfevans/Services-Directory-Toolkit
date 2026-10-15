@@ -24,7 +24,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
-import { loginFormSafe, originOf, redirectModeFor, runHeadless, sameOrigin, sameOriginHeaders } from "./lib/probe-safety.js";
+import { loginFormSafe, originOf, redirectModeFor, runHeadless, sameOrigin, sameOriginHeaders, urlTokenStaysHome } from "./lib/probe-safety.js";
 
 // This file is an ES module, so it loads the JSON it records with createRequire.
 const requireHere = createRequire(import.meta.url);
@@ -668,6 +668,8 @@ function waitForEnter(promptText) {
         skip("q9_queryParamNav", "no token available for the ?token= URL");
       } else {
         const ctx4 = await browser.newContext();
+        // The token in the URL goes only to PROBE_BASE's origin. A redirect elsewhere that keeps it fails.
+        await ctx4.route("**/*", urlTokenStaysHome(BASE));
         const p4 = await ctx4.newPage();
         await gate("?token= root listing");
         const u = new URL(`${BASE}${listingPathFrag}`);

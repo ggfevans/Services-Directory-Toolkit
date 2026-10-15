@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { loginFormSafe, originOf, redirectModeFor, runHeadless, sameOrigin, sameOriginHeaders } from "../../scripts/lib/probe-safety.js";
+import { loginFormSafe, originOf, redirectModeFor, runHeadless, sameOrigin, sameOriginHeaders, urlTokenStaysHome } from "../../scripts/lib/probe-safety.js";
 
 const PROBE = new URL("../../scripts/probe-tokens.js", import.meta.url);
 
@@ -59,6 +59,9 @@ const fakeRoute = (url, headers = {}) => {
     },
     fulfill: async (options) => {
       calls.push(["fulfill", options]);
+    },
+    abort: async () => {
+      calls.push(["abort"]);
     }
   };
 };
@@ -76,6 +79,25 @@ test("the auth header goes only to the server under test, and never through a re
   assert.deepEqual(other.calls, [["continue", undefined]]);
 });
 
+test("a ?token= URL stays on the server under test, even through a redirect", async () => {
+  const handler = urlTokenStaysHome("https://gis.example.org/server");
+  const own = fakeRoute("https://gis.example.org/server/rest/services?token=t");
+  await handler(own);
+  assert.deepEqual(own.calls, [["continue", undefined]]);
+  // A federated server's redirect to its portal that keeps the query string
+  const portal = fakeRoute("https://portal.example.org/sharing/rest/oauth2/authorize?token=t&f=json");
+  await handler(portal);
+  assert.deepEqual(portal.calls, [["abort"]]);
+  // An http:// redirect on the same host is another origin
+  const http = fakeRoute("http://gis.example.org/server/rest/services?f=json&TOKEN=t");
+  await handler(http);
+  assert.deepEqual(http.calls, [["abort"]]);
+  // Requests to other origins without a token go out unchanged
+  const css = fakeRoute("https://js.arcgis.com/4.30/esri/themes/light/main.css");
+  await handler(css);
+  assert.deepEqual(css.calls, [["continue", undefined]]);
+});
+
 test("the probe applies these rules", () => {
   const source = readFileSync(PROBE, "utf8");
   assert.equal(source.includes("setExtraHTTPHeaders"), false);
@@ -86,4 +108,5 @@ test("the probe applies these rules", () => {
   assert.equal(source.match(/page\.fill\([^)]*PASS\)/g).length, 1, "the password is filled in one place, signIn");
   assert.match(source, /redirectModeFor\(\{ token, params, redirect: requestedRedirect \}\)/);
   assert.match(source, /sameOriginHeaders\(BASE, \{ "x-esri-authorization": `Bearer \$\{hdrToken\}` \}\)/);
+  assert.match(source, /await ctx4\.route\("\*\*\/\*", urlTokenStaysHome\(BASE\)\);\n\s+const p4 = await ctx4\.newPage\(\);/);
 });
