@@ -1827,7 +1827,7 @@ EOF
 **Interfaces:**
 - Produces: `node scripts/probe-tokens.js`, configured by `PROBE_BASE`, `PROBE_SECURED`, `PROBE_USER`, `PROBE_PASS`, `PROBE_MANUAL_LOGIN`, `PROBE_OUT` and `HEADED`. It exits with status 2 and a usage message when settings are missing, and writes `probe-output/<host>-<time>.json` and `.md` by default.
 
-The original probe was a file on the owner's machine, outside the repo. This task was carried out on the `token-groundwork` branch (#35), which commits the adapted script, so a clean checkout takes it from there (or from `main` once #35 has merged). That copy already has Step 4's edits, so skip that step and review the file instead.
+This task is done. It was carried out on the `token-groundwork` branch (pull request #35), which commits the adapted script; the source was a file on the owner's machine, outside the repo. This branch doesn't hold the script, and `main` gets it when #35 merges. Review the probe in #35, or on `main` after it merges, and don't rerun this task from a checkout of this branch. The steps below record how it was done.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1867,11 +1867,7 @@ Expected: FAIL. Node can't find `scripts/probe-tokens.js`, so the status is 1, n
 
 - [ ] **Step 3: Copy the probe in**
 
-```bash
-git show origin/token-groundwork:scripts/probe-tokens.js > scripts/probe-tokens.js
-```
-
-The first run of this task copied the owner's local `token-probe.mjs` here instead.
+The owner's local `token-probe.mjs`, from the brainstorming session, was copied to `scripts/probe-tokens.js`.
 
 - [ ] **Step 4: Adapt it to the repo**
 
