@@ -59,9 +59,12 @@ const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const OUT = process.env.PROBE_OUT || `probe-output/${host}-${stamp}`;
 mkdirSync(dirname(OUT), { recursive: true });
 
-// Secured service "leaf" name (first path segment under rest/services), used to
-// decide whether a listing exposes the secured service.
-const securedLeaf = SECURED.split("/")[0];
+// The secured service's name and type, such as "Folder/Service" and "MapServer", and the path of the
+// listing that should show it: its folder, or the root.
+const securedName = SECURED.split("/").slice(0, -1).join("/");
+const securedType = SECURED.split("/").pop();
+const securedFolder = securedName.includes("/") ? securedName.split("/")[0] : "";
+const listingPathFrag = securedFolder ? `/rest/services/${securedFolder}` : "/rest/services";
 const securedPathFrag = `/rest/services/${SECURED}`;
 
 // ---------------------------------------------------------------------------
@@ -178,16 +181,12 @@ async function arc(url, opts = {}) {
   };
 }
 
-/** Does a parsed listing JSON expose the secured leaf service? */
+/** Does a parsed listing JSON (of listingPathFrag) list the secured service? */
 function listingHasSecured(json) {
   if (!json) return null;
   const services = Array.isArray(json.services) ? json.services : [];
-  const folders = Array.isArray(json.folders) ? json.folders : [];
-  const inServices = services.some(
-    (s) => s && typeof s.name === "string" && s.name.split("/").pop() === securedLeaf,
-  );
-  const inFolders = folders.includes(securedLeaf);
-  return { inServices, inFolders, exposed: inServices || inFolders };
+  const exposed = services.some((s) => s && s.name === securedName && s.type === securedType);
+  return { exposed };
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +198,7 @@ const results = {
     base: BASE,
     host,
     securedPath: SECURED,
+    listingPath: listingPathFrag, // the listing checked for the secured service: its folder, or the root
     mode: MANUAL ? "manual-login" : "auto-login",
     startedAt: new Date().toISOString(),
     playwrightVersion: requireHere("playwright/package.json").version,
@@ -221,14 +221,16 @@ function skip(section, why) {
   results[section].skipped = why;
 }
 
-async function waitForEnter(promptText) {
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(promptText, () => {
-      rl.close();
-      resolve();
-    });
+/**
+ * Waits for Enter. Returns { pressed, close }: pressed resolves on Enter, and close() stops waiting, so
+ * an open prompt can't keep the process alive.
+ */
+function waitForEnter(promptText) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const pressed = new Promise((resolve) => {
+    rl.question(promptText, () => resolve());
   });
+  return { pressed, close: () => rl.close() };
 }
 
 // ---------------------------------------------------------------------------
@@ -262,10 +264,14 @@ async function waitForEnter(promptText) {
 
   // --- Q2: anonymous baseline --------------------------------------------
   try {
-    const rootJson = await arc(`${BASE}/rest/services`, { params: { f: "json" } });
+    const rootJson = await arc(`${BASE}${listingPathFrag}`, { params: { f: "json" } });
     const rootHtmlRes = await (async () => {
-      await gate(`${BASE}/rest/services (html)`);
-      const res = await fetch(`${BASE}/rest/services`);
+      await gate(`${BASE}${listingPathFrag} (html)`);
+      // Not followed, so a redirect to a login page is reported as one, not as the login page.
+      const res = await fetch(`${BASE}${listingPathFrag}`, { redirect: "manual" });
+      if (res.status !== 200) {
+        return { status: res.status, location: redact(res.headers.get("location")), hasSecuredLink: null };
+      }
       const text = await res.text();
       return { status: res.status, hasSecuredLink: text.includes(securedPathFrag) };
     })();
@@ -313,7 +319,7 @@ async function waitForEnter(promptText) {
           "\n[manual] Sign in by hand in the opened browser window.\n" +
             "         Waiting for an 'agstoken' cookie, or press Enter here to continue.\n",
         );
-        const enterPromise = waitForEnter("Press Enter when signed in (or to give up): ");
+        const enter = waitForEnter("Press Enter when signed in (or to give up): ");
         let found = false;
         const deadline = Date.now() + 5 * 60 * 1000;
         while (Date.now() < deadline && !found) {
@@ -322,9 +328,10 @@ async function waitForEnter(promptText) {
             found = true;
             break;
           }
-          const raced = await Promise.race([sleep(1500).then(() => "tick"), enterPromise.then(() => "enter")]);
+          const raced = await Promise.race([sleep(1500).then(() => "tick"), enter.pressed.then(() => "enter")]);
           if (raced === "enter") break;
         }
+        enter.close();
         results.q3_login.mode = "manual";
         results.q3_login.loggedIn = found;
       } else if (isFederated) {
@@ -334,12 +341,16 @@ async function waitForEnter(promptText) {
         // The standalone form may still be shown; try portal OAuth username/password.
         // Fill whatever username/password fields are present on the resulting page.
         await page.waitForTimeout(1000);
-        const filled = await page.evaluate(() => {
+        // The password goes only to PROBE_BASE's origin. A Login link that leads to a portal or an
+        // identity provider gets no password; sign in there with PROBE_MANUAL_LOGIN=1.
+        const loginOrigin = new URL(page.url()).origin;
+        const onServer = sameOrigin(page.url(), BASE);
+        const filled = !onServer ? { u: false, p: false } : await page.evaluate(() => {
           const u = document.querySelector("input[name=\"username\"], #username, input[type=\"text\"]");
           const p = document.querySelector("input[name=\"password\"], #password, input[type=\"password\"]");
           return { u: !!u, p: !!p };
         });
-        if (filled.u && filled.p) {
+        if (filled.u && filled.p && sameOrigin(page.url(), BASE)) {
           await page.fill("input[name=\"username\"], #username, input[type=\"text\"]", USER).catch(() => {});
           await page.fill("input[name=\"password\"], #password, input[type=\"password\"]", PASS).catch(() => {});
           await Promise.all([
@@ -350,6 +361,9 @@ async function waitForEnter(promptText) {
         }
         const cookies = await ctx.cookies();
         results.q3_login.mode = "federated-auto";
+        if (!onServer) {
+          results.q3_login.skipped = `the Login link led to ${loginOrigin}, which isn't PROBE_BASE's origin, so no password was sent. Use PROBE_MANUAL_LOGIN=1.`;
+        }
         results.q3_login.loggedIn = cookies.some((c) => c.name === "agstoken" && c.value);
       } else {
         // Standalone: the rest/login form (page JS RSA-encrypts the password).
@@ -416,13 +430,13 @@ async function waitForEnter(promptText) {
         };
         if (self.json?.error) noteError(self.json.error.code, self.json.error.message);
 
-        await gate("page root listing (signed in)");
-        const listing = await page.evaluate(async (base) => {
-          const r = await fetch(`${base}/rest/services?f=json`, { credentials: "include" });
+        await gate("page listing (signed in)");
+        const listing = await page.evaluate(async (listingUrl) => {
+          const r = await fetch(`${listingUrl}?f=json`, { credentials: "include" });
           const t = await r.text();
           try { return { status: r.status, json: JSON.parse(t) }; }
           catch { return { status: r.status, json: null }; }
-        }, BASE);
+        }, `${BASE}${listingPathFrag}`);
         results.q4_signedIn.rootListing = {
           status: listing.status,
           securedExposed: listingHasSecured(listing.json),
@@ -604,7 +618,7 @@ async function waitForEnter(promptText) {
         await ctx2.route("**/*", sameOriginHeaders(BASE, { "x-esri-authorization": `Bearer ${hdrToken}` }));
         const p2 = await ctx2.newPage();
         await gate("auth-header root listing");
-        const rootResp = await p2.goto(`${BASE}/rest/services`, { waitUntil: "domcontentloaded" }).catch(() => null);
+        const rootResp = await p2.goto(`${BASE}${listingPathFrag}`, { waitUntil: "domcontentloaded" }).catch(() => null);
         const rootSecuredListed = await p2.evaluate((frag) =>
           Array.from(document.querySelectorAll("a[href]")).some((a) => a.getAttribute("href").includes(frag)),
         securedPathFrag).catch(() => null);
@@ -656,7 +670,7 @@ async function waitForEnter(promptText) {
         const ctx4 = await browser.newContext();
         const p4 = await ctx4.newPage();
         await gate("?token= root listing");
-        const u = new URL(`${BASE}/rest/services`);
+        const u = new URL(`${BASE}${listingPathFrag}`);
         u.searchParams.set("token", urlToken);
         const resp = await p4.goto(u.toString(), { waitUntil: "domcontentloaded" }).catch(() => null);
         const info = await p4.evaluate((frag) => {

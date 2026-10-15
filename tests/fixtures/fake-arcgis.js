@@ -246,10 +246,12 @@ const route = (catalog, url, params, cookies, problems) => {
     return json(serverInfo(catalog), format);
   }
   const who = identify(catalog._tokens, params, cookies);
-  if (who.invalid) {
-    return format === "html" ? loginRedirect(url) : arcgisError(INVALID_TOKEN.message, format, INVALID_TOKEN.code);
-  }
+  // A bad token gets its error only on a path with a fixture, so the harness still sees the others as unmatched.
+  const invalid = format === "html" ? loginRedirect(url) : arcgisError(INVALID_TOKEN.message, format, INVALID_TOKEN.code);
   if (pathname === "/arcgis/rest/self") {
+    if (who.invalid) {
+      return invalid;
+    }
     return json({ user: who.user ? serverSelf(who.user) : {} }, format);
   }
   if (pathname !== REST_PATH && !pathname.startsWith(`${REST_PATH}/`)) {
@@ -258,11 +260,16 @@ const route = (catalog, url, params, cookies, problems) => {
   const parts = pathname.slice(REST_PATH.length).split("/").filter(Boolean).map(decodeURIComponent);
   const typeIndex = parts.findIndex((part) => SERVICE_TYPES.includes(part));
   if (typeIndex === -1) {
-    return folder(catalog, parts, format, who.user, ENTERPRISE_PAGES);
+    const listing = folder(catalog, parts, format, who.user, ENTERPRISE_PAGES);
+    return listing && who.invalid ? invalid : listing;
   }
   const service = catalog.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
   if (!service) {
     return null;
+  }
+  if (who.invalid) {
+    // A throwaway problems list: this call only checks that the path has a fixture.
+    return serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, [], ENTERPRISE_PAGES) ? invalid : null;
   }
   const refused = refusal(service, who.user);
   if (refused) {
@@ -302,11 +309,10 @@ const onlineRoute = (online, url, params, problems) => {
   }
   // Hosted services have no sign-in of their own, so a cookie counts for nothing here.
   const who = identify(online._tokens, params, {});
-  if (who.invalid) {
-    return format === "html" ? html(messagePage("Invalid token")) : arcgisError("Invalid token", format);
-  }
+  // As in route, a bad token gets its error only on a path with a fixture.
+  const invalid = format === "html" ? html(messagePage("Invalid token")) : arcgisError("Invalid token", format);
   if (tail.length === 1 && tail[0] === "self") {
-    return arcgisError("Unable to get user info.", format);
+    return who.invalid ? invalid : arcgisError("Unable to get user info.", format);
   }
   if (tail[0] !== "services") {
     return null;
@@ -316,11 +322,15 @@ const onlineRoute = (online, url, params, problems) => {
   const parts = tail.slice(1);
   const typeIndex = parts.findIndex((part) => SERVICE_TYPES.includes(part));
   if (typeIndex === -1) {
-    return folder(online, parts, format, who.user, pages, true);
+    const listing = folder(online, parts, format, who.user, pages, true);
+    return listing && who.invalid ? invalid : listing;
   }
   const service = online.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
   if (!service) {
     return null;
+  }
+  if (who.invalid) {
+    return serviceResource(online, service, parts.slice(typeIndex + 1), params, format, [], pages) ? invalid : null;
   }
   const refused = refusal(service, who.user);
   if (refused) {

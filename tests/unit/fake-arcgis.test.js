@@ -261,6 +261,9 @@ test("a bad token gets 498 on JSON requests and the login page on HTML ones", ()
   const page = get(server, "/arcgis/rest/services?token=bogus");
   assert.equal(page.status, 302);
   assert.equal(page.headers.location, "https://arcgis.test/arcgis/rest/login?redirect=%2Farcgis%2Frest%2Fservices%3Ftoken%3Dbogus");
+  // A path without a fixture stays unmatched, so the harness can report it.
+  assert.equal(get(server, "/arcgis/rest/services/NoSuchFolder?f=json&token=bogus"), null);
+  assert.equal(get(server, "/arcgis/rest/services/Transport/Roads/MapServer/99?f=json&token=bogus"), null);
   assert.match(get(server, "/arcgis/rest/login?redirect=x").body, /name="loginForm"/);
 });
 
@@ -342,6 +345,7 @@ test("ArcGIS Online answers a bad token with 400, and takes no server token or c
   const invalid = { error: { code: 400, message: "Invalid token", details: [] } };
   assert.deepEqual(onlineJson(server, `${ONLINE_REST_PATH}?f=json&token=bogus`), invalid);
   assert.deepEqual(onlineJson(server, `${ONLINE_REST_PATH}?f=json&token=${SERVER_TOKENS.jsmith}`), invalid);
+  assert.equal(online(server, `${ONLINE_REST_PATH}/NoSuchService/FeatureServer?f=json&token=bogus`), null);
   const withCookie = onlineJson(server, `${ONLINE_REST_PATH}/Hydrants/FeatureServer?f=json`, { cookie: `agstoken=${ONLINE_TOKENS.jsmith}` });
   assert.equal(withCookie.error.code, 499);
 });

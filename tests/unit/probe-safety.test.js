@@ -65,6 +65,7 @@ test("the probe applies these rules", () => {
   assert.equal(source.includes("setExtraHTTPHeaders"), false);
   assert.match(source, /headless: runHeadless\(\{ headed: HEADED, manual: MANUAL \}\)/);
   assert.match(source, /!sameOrigin\(tokenServicesUrl, BASE\)/);
+  assert.match(source, /filled\.u && filled\.p && sameOrigin\(page\.url\(\), BASE\)/);
   assert.match(source, /redirectModeFor\(\{ token, params, redirect: requestedRedirect \}\)/);
   assert.match(source, /sameOriginHeaders\(BASE, \{ "x-esri-authorization": `Bearer \$\{hdrToken\}` \}\)/);
 });

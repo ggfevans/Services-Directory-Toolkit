@@ -81,7 +81,7 @@ export const createPages = ({ restPath = REST_PATH, crumbPath = restPath, loginH
 <td class="breadcrumbs">
 ${breadcrumbs}
 </td>
-<td align="right"><a href="${restPath}?f=help" target="_blank">API Reference</a></td>
+<td align="right"><a href="${href(`${restPath}?f=help`)}" target="_blank">API Reference</a></td>
 </tr>
 </table>
 <table>
