@@ -26,11 +26,13 @@ test("a console call whose first argument is not a string literal is an error in
   assert.deepEqual(await ruleIds("console.log(\"from: \" + location.href);\n"), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("console.error(`from ${location.href}`);\n"), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("console[\"info\"](new Error(\"x\"));\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("window.console.log(location.href);\n"), ["no-restricted-syntax"]);
 });
 
 test("a console call that starts with a string literal is allowed", async () => {
   assert.deepEqual(await ruleIds("console.warn(\"could not parse %s\", location.href);\n"), []);
   assert.deepEqual(await ruleIds("console.log();\n"), []);
+  assert.deepEqual(await ruleIds("window.console.log(\"from %s\", location.href);\n"), []);
 });
 
 test("the console rule does not apply outside src/", async () => {

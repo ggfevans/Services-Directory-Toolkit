@@ -9,7 +9,8 @@ const NO_HTML_STRINGS = "Build DOM nodes with loadElement and text nodes; don't 
 // The console reads %s, %c, %o and the like in its first argument as a format string. A URL or
 // server text there would be read as one, so that argument must be a string literal.
 const CONSOLE_FORMAT = "Start console calls with a string literal and pass values as later arguments.";
-const CONSOLE_FORMAT_SELECTOR = "CallExpression[callee.object.name='console'][arguments.length>0]:not([arguments.0.value=type(string)])";
+// Covers console.log(...) and window.console.log(...) (or self., globalThis.).
+const CONSOLE_FORMAT_SELECTOR = "CallExpression:matches([callee.object.name='console'], [callee.object.property.name='console'])[arguments.length>0]:not([arguments.0.value=type(string)])";
 
 export default [
   {
