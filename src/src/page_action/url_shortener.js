@@ -9,7 +9,10 @@
    * @returns {string}
    */
   const shortenUrl = (url) => {
-    const defaultParams = {
+    // f=html is the default on every page. The rest are defaults of the query operation only:
+    // identify, for example, defaults geometryType to esriGeometryPoint.
+    const isQuery = /\/query\/?$/i.test(new URL(url).pathname);
+    const defaultParams = isQuery ? {
       f: "html",
       returnExtentsOnly: "false",
       returnIdsOnly: "false",
@@ -21,6 +24,8 @@
       returnM: "false",
       returnDistinctValues: "false",
       returnGeometry: "true"
+    } : {
+      f: "html"
     };
     // replace empty query parameter values
     while (/(\?|&)\w+=(&|$)/g.test(url)) {

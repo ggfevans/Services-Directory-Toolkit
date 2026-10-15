@@ -218,7 +218,7 @@ HttpOnly cookies are seeded with `context.addCookies`, so no login fixture is ne
 | Release | Contents | Starts when |
 |---|---|---|
 | 2.0.0, Phase 2 | TOK-1 to TOK-6 (#30) | The store-readiness plan reaches Phase 2 |
-| Tokens v1 | Sections 5.4 to 5.8, search through the content script, the tests in section 6, the probe script | 2.0.0 has shipped and E4 and E12 have run |
+| Tokens v1 | Sections 5.4 to 5.8, search through the content script, the tests in section 6, the probe script | 2.0.0 has shipped, E12 has run, and E4 has run on 11.x and 12.x with state C's wording updated to match its result |
 | Tokens v2 | Pasted tokens and Read my sign-in (section 8) | E1, E2, E3, E6, E9, E10 and E11 have run |
 | Tokens v3 | ArcGIS Online sign-in through OAuth | Its own design |
 

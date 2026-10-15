@@ -18,7 +18,25 @@ test("assigning innerHTML or outerHTML in extension code is an error", async () 
 });
 
 test("reading innerHTML is allowed", async () => {
-  assert.deepEqual(await ruleIds("console.log(document.body.innerHTML);\n"), []);
+  assert.deepEqual(await ruleIds("console.log(\"%s\", document.body.innerHTML);\n"), []);
+});
+
+test("a console call whose first argument is not a string literal is an error in extension code", async () => {
+  assert.deepEqual(await ruleIds("console.warn(location.href, 1);\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("console.log(\"from: \" + location.href);\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("console.error(`from ${location.href}`);\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("console[\"info\"](new Error(\"x\"));\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("window.console.log(location.href);\n"), ["no-restricted-syntax"]);
+});
+
+test("a console call that starts with a string literal is allowed", async () => {
+  assert.deepEqual(await ruleIds("console.warn(\"could not parse %s\", location.href);\n"), []);
+  assert.deepEqual(await ruleIds("console.log();\n"), []);
+  assert.deepEqual(await ruleIds("window.console.log(\"from %s\", location.href);\n"), []);
+});
+
+test("the console rule does not apply outside src/", async () => {
+  assert.deepEqual(await ruleIds("console.log(location.href);\n", "tests/e2e/example.js"), []);
 });
 
 test("insertAdjacentHTML and document.write are errors in extension code", async () => {
