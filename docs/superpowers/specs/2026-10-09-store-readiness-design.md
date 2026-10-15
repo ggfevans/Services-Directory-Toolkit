@@ -116,7 +116,7 @@ Automatic requests are those the extension sends without a user action. They are
 
 ### 4.5 Documentation and register
 
-- `README.md`, `CLAUDE.md` and `.coderabbit.yaml` match the code at the end of each phase.
+- `README.md`, `CONTRIBUTING.md`, `CLAUDE.md` and `.coderabbit.yaml` match the code at the end of each phase.
 - Each pull request lists the finding IDs it closes and how each was resolved.
 
 ## 5. Shared code mechanism
@@ -597,7 +597,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Fill in the Privacy tab.
 - Write test instructions for the reviewer, with public sample URLs.
 - Add a `CHANGELOG.md`.
-- Re-check Esri's life cycle page for ArcGIS Enterprise on Windows and Linux, update the README's supported-version table and drop retired versions (#9). Kubernetes stays out of scope.
+- Re-check Esri's life cycle page for ArcGIS Enterprise on Windows and Linux, and stop testing versions Esri has retired (#9). Kubernetes stays out of scope.
 - Add a `version` npm script that keeps `package.json` and `src/manifest.json` in step.
 - Add a tag-triggered release workflow that attaches the zip to a GitHub release.
 - Run the live check against the exact zip before upload.
