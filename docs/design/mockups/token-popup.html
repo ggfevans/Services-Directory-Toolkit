@@ -1,0 +1,160 @@
+<!doctype html>
+<!--
+  Mockup: token support v1 (docs/superpowers/specs/2026-10-13-token-support-design.md, section 5).
+  Four popup states and the page status bar's token states. Only the Token section is new; the
+  popup's Search and Settings sections are unchanged from popup.html.
+  A Signed in through the Services Directory. v1 can't read the HttpOnly agstoken cookie.
+  B ArcGIS Online hosted page opened with ?token=, copying as curl.exe
+  C Not signed in
+  D After "What's public here?"
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Token support v1 (mockup)</title>
+<link rel="stylesheet" href="host-standin.css">
+<link rel="stylesheet" href="sdt.css">
+<style>
+  /* Mockup only: lays the frames out side by side. */
+  body { margin: 0; padding: 16px; background: var(--sdt-bg-subtle); font-family: var(--sdt-font-sans); }
+  .mock-grid { display: grid; grid-template-columns: repeat(3, 23.75rem); gap: 16px; align-items: start; }
+  .mock-frame { border: 1px solid var(--sdt-border-strong); border-radius: var(--sdt-radius-m); overflow: hidden; box-shadow: var(--sdt-shadow-pop); margin-bottom: 16px; }
+  .mock-caption { margin: 0 0 6px; font: 12px var(--sdt-font-sans); color: var(--sdt-fg-muted); }
+  .mock-stub { padding: 10px 20px; border-top: 1px solid var(--sdt-border); color: var(--sdt-fg-muted); font-size: var(--sdt-text-s); }
+  .mock-host { border: 1px solid var(--sdt-border-strong); border-radius: var(--sdt-radius-m); overflow: hidden; background: #fff; font-family: Verdana, Geneva, Tahoma, sans-serif; font-size: 13px; padding: 10px 0 2px; }
+  .mock-host .sdt-statusbar { margin-bottom: 8px; }
+  .mock-preview { margin: 0; padding: 6px 8px; border: 1px solid var(--sdt-border); border-radius: var(--sdt-radius-s); background: var(--sdt-bg-subtle); color: var(--sdt-fg-muted); font: var(--sdt-text-xs) var(--sdt-font-mono); overflow-wrap: anywhere; }
+  .mock-select { flex: 1; padding: 4px 6px; border: 1px solid var(--sdt-border-strong); border-radius: var(--sdt-radius-s); background: var(--sdt-bg); color: var(--sdt-fg); font: inherit; }
+  .mock-sub { margin: -4px 0 0; color: var(--sdt-fg-muted); font-size: var(--sdt-text-xs); }
+  .mock-list { margin: 2px 0 6px; padding-left: 18px; font: var(--sdt-text-xs) var(--sdt-font-mono); }
+  .mock-list-title { margin: 4px 0 0; font-size: var(--sdt-text-s); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.3v.1"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path d="M12 7.7v.1"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1.2-4 4-5.8 7.5-5.8s6.3 1.8 7.5 5.8"/></symbol>
+  <symbol id="i-glyph" viewBox="0 0 16 16"><rect class="sdt-glyph__bg" width="16" height="16" rx="4"/><path class="sdt-glyph__mark" d="M5 3.5v9M5 6h4.5M5 10.5h4.5"/><circle class="sdt-glyph__dot" cx="11.2" cy="6" r="1.4"/><circle class="sdt-glyph__dot" cx="11.2" cy="10.5" r="1.4"/></symbol>
+</svg>
+<main class="mock-grid">
+
+<div>
+  <!-- A -->
+  <p class="mock-caption">A. Signed in through the Services Directory</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">gis.example.org/server/rest/services/Utilities</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="a-tok">
+      <h2 id="a-tok">Token</h2>
+      <p class="sdt-status" data-tone="ok"><svg class="sdt-icon" aria-hidden="true"><use href="#i-check"/></svg><span>Signed in as <b class="sdt-mono">jsmith</b> (Administrator)</span></p>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-info"/></svg><span>This server keeps its sign-in cookie from extensions, so the toolkit can't copy it. To copy it by hand, open DevTools, Application, Cookies, <span class="sdt-mono">agstoken</span>.</span></p>
+      <div class="sdt-row">
+        <a class="sdt-button sdt-button--primary" href="#tokens">Get a token<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a>
+        <button class="sdt-button" type="button">What's public here?</button>
+      </div>
+      <div class="sdt-row"><a class="sdt-button sdt-button--quiet" href="#logout">Sign out of this server<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a></div>
+    </section>
+    <div class="mock-stub">Search this server and Settings, as in popup.html</div>
+  </div>
+
+  <!-- C -->
+  <p class="mock-caption">C. Not signed in</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">gis.example.org/server/rest/services</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="c-tok">
+      <h2 id="c-tok">Token</h2>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-info"/></svg>Not signed in. This server uses tokens, and anonymous users don't see its secured services.</p>
+      <div class="sdt-row">
+        <a class="sdt-button sdt-button--primary" href="#login">Sign in to this server<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a>
+        <a class="sdt-button" href="#tokens">Get a token<svg class="sdt-icon" aria-hidden="true"><use href="#i-external"/></svg></a>
+      </div>
+    </section>
+    <div class="mock-stub">Search this server and Settings, as in popup.html</div>
+  </div>
+</div>
+
+<div>
+  <!-- B -->
+  <p class="mock-caption">B. ArcGIS Online hosted page opened with ?token=</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">services3.arcgis.com/Ab12Cd/arcgis/rest/services/Parcels/FeatureServer</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="b-tok">
+      <h2 id="b-tok">Token</h2>
+      <p class="sdt-status" data-tone="ok"><svg class="sdt-icon" aria-hidden="true"><use href="#i-check"/></svg><span>Using the token in the page URL, as <b class="sdt-mono">jsmith_myorg</b></span></p>
+      <p class="mock-sub">Identity from ArcGIS Online (<span class="sdt-mono">www.arcgis.com</span>). Otherwise sent only to <span class="sdt-mono">services3.arcgis.com/Ab12Cd/arcgis</span>.</p>
+      <div class="sdt-field">
+        <label for="b-fmt">Copy as</label>
+        <div class="sdt-row">
+          <select class="mock-select" id="b-fmt"><option>Token</option><option>URL with token</option><option>curl (macOS, Linux)</option><option selected>curl.exe (Windows)</option><option>Header</option></select>
+          <button class="sdt-button sdt-button--primary" type="button"><svg class="sdt-icon" aria-hidden="true"><use href="#i-copy"/></svg>Copy</button>
+        </div>
+        <p class="mock-preview">curl.exe "https://services3.arcgis.com/Ab12Cd/arcgis/rest/services/Parcels/FeatureServer" -d f=json --data-urlencode "token=…a9Kq" -e "https://services3.arcgis.com/Ab12Cd/arcgis/rest/services/Parcels/FeatureServer"</p>
+        <p class="sdt-hint">Token ending a9Kq, for jsmith_myorg. "URL with token" is the only format that puts the token in a URL.</p>
+      </div>
+      <div class="sdt-row"><button class="sdt-button" type="button">What's public here?</button></div>
+    </section>
+    <div class="mock-stub">Search this server and Settings, as in popup.html</div>
+  </div>
+</div>
+
+<div>
+  <!-- D -->
+  <p class="mock-caption">D. After "What's public here?"</p>
+  <div class="mock-frame sdt sdt-popup">
+    <header class="sdt-popup__head">
+      <svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>
+      <h1>Services Directory Toolkit</h1>
+      <p class="sdt-popup__where">gis.example.org/server/rest/services/Utilities</p>
+    </header>
+    <section class="sdt-popup__section" aria-labelledby="d-pub">
+      <h2 id="d-pub">What's public here</h2>
+      <p class="sdt-status" role="status">Checked the Utilities folder anonymously: 3 of 8 services are public.</p>
+      <h3 class="mock-list-title">Public</h3>
+      <ul class="mock-list"><li>Utilities/Geometry/GeometryServer</li><li>Utilities/PrintingTools/GPServer</li><li>Utilities/Hydrants/MapServer</li></ul>
+      <h3 class="mock-list-title">Secured</h3>
+      <ul class="mock-list"><li>Utilities/Valves/MapServer</li><li>Utilities/Mains/FeatureServer</li><li>and 3 more</li></ul>
+      <p class="sdt-hint">Subfolders aren't checked. Open one and check again.</p>
+    </section>
+  </div>
+
+  <p class="mock-caption">Page status bar: token states</p>
+  <div class="mock-host">
+    <div class="sdt sdt-statusbar">
+      <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+      <p class="sdt-status">Loaded details for 8 services in 10 requests</p>
+      <span class="sdt-statusbar__actions"><span class="sdt-badge"><svg class="sdt-icon" aria-hidden="true"><use href="#i-user"/></svg>jsmith</span></span>
+    </div>
+    <div class="sdt sdt-statusbar" data-tone="warn">
+      <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-warn"/></svg>12 of 41 services refused this token (499): "Token Required for subscription content"</p>
+    </div>
+    <div class="sdt sdt-statusbar" data-tone="error">
+      <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>The token in the page URL was rejected (498): "Invalid token". It may have expired, or be tied to another referrer or IP.</p>
+    </div>
+    <div class="sdt sdt-statusbar" data-tone="error">
+      <span class="sdt-statusbar__name"><svg class="sdt-glyph" aria-hidden="true"><use href="#i-glyph"/></svg>SD Toolkit</span>
+      <p class="sdt-status"><svg class="sdt-icon" aria-hidden="true"><use href="#i-error"/></svg>The server redirected a request that carried a token, so the toolkit stopped. Open the page at its final address.</p>
+    </div>
+  </div>
+</div>
+
+</main>
+</body>
+</html>
