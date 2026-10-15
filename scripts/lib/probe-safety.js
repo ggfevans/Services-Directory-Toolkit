@@ -10,6 +10,22 @@ export const sameOrigin = (url, base) => {
   }
 };
 
+/** A URL's origin for a message, or "no address" for a URL that doesn't parse. */
+export const originOf = (url) => {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "no address";
+  }
+};
+
+/**
+ * True when a login form may receive the password: the page, after any redirects, and the resolved
+ * action of the password field's form are both on base's origin. A field outside a form gets nothing.
+ */
+export const loginFormSafe = ({ pageUrl, formAction }, base) =>
+  Boolean(formAction) && sameOrigin(pageUrl, base) && sameOrigin(formAction, base);
+
 /**
  * The fetch redirect mode for a request. A request that carries a token or a password never follows a
  * redirect, because Node's fetch re-sends the body on a 307 or 308, even to another origin.

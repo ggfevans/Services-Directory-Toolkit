@@ -24,7 +24,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
-import { redirectModeFor, runHeadless, sameOrigin, sameOriginHeaders } from "./lib/probe-safety.js";
+import { loginFormSafe, originOf, redirectModeFor, runHeadless, sameOrigin, sameOriginHeaders } from "./lib/probe-safety.js";
 
 // This file is an ES module, so it loads the JSON it records with createRequire.
 const requireHere = createRequire(import.meta.url);
@@ -309,6 +309,33 @@ function waitForEnter(promptText) {
     const ctx = await browser.newContext({ ignoreHTTPSErrors: false });
     const page = await ctx.newPage();
 
+    // Fills and submits the login form on the current page, but only when the page (after any
+    // redirects) and the action of the password field's form are both on PROBE_BASE's origin.
+    // Otherwise it sends no password and records why.
+    const signIn = async (userSelector, passwordSelector, settleMs) => {
+      const target = await page.evaluate((selector) => {
+        const field = document.querySelector(selector);
+        return { found: !!field, formAction: field && field.form ? field.form.action : null };
+      }, passwordSelector);
+      const pageUrl = page.url();
+      if (!target.found) {
+        results.q3_login.skipped = "no password field on the login page";
+        return;
+      }
+      if (!loginFormSafe({ pageUrl, formAction: target.formAction }, BASE)) {
+        results.q3_login.skipped = `the login form is on ${originOf(pageUrl)} and posts to ${originOf(target.formAction)}. ` +
+          "Both must be PROBE_BASE's origin, so no password was sent. Use PROBE_MANUAL_LOGIN=1.";
+        return;
+      }
+      await page.fill(userSelector, USER);
+      await page.fill(passwordSelector, PASS);
+      await Promise.all([
+        page.waitForLoadState("domcontentloaded").catch(() => {}),
+        page.click(`form:has(${passwordSelector}) :is(input[type="submit"], button[type="submit"])`),
+      ]);
+      await page.waitForTimeout(settleMs);
+    };
+
     // --- Q3: login through the Services Directory ------------------------
     try {
       if (MANUAL) {
@@ -335,49 +362,22 @@ function waitForEnter(promptText) {
         results.q3_login.mode = "manual";
         results.q3_login.loggedIn = found;
       } else if (isFederated) {
-        // Federated: follow the Login link, which goes through the portal.
+        // Federated: follow the Login link, which may go through the portal. signIn fills the form
+        // only if it is on PROBE_BASE's origin and posts there.
         await gate("federated Login link");
         await page.goto(`${BASE}/rest/login`, { waitUntil: "domcontentloaded" });
-        // The standalone form may still be shown; try portal OAuth username/password.
-        // Fill whatever username/password fields are present on the resulting page.
         await page.waitForTimeout(1000);
-        // The password goes only to PROBE_BASE's origin. A Login link that leads to a portal or an
-        // identity provider gets no password; sign in there with PROBE_MANUAL_LOGIN=1.
-        const loginOrigin = new URL(page.url()).origin;
-        const onServer = sameOrigin(page.url(), BASE);
-        const filled = !onServer ? { u: false, p: false } : await page.evaluate(() => {
-          const u = document.querySelector("input[name=\"username\"], #username, input[type=\"text\"]");
-          const p = document.querySelector("input[name=\"password\"], #password, input[type=\"password\"]");
-          return { u: !!u, p: !!p };
-        });
-        if (filled.u && filled.p && sameOrigin(page.url(), BASE)) {
-          await page.fill("input[name=\"username\"], #username, input[type=\"text\"]", USER).catch(() => {});
-          await page.fill("input[name=\"password\"], #password, input[type=\"password\"]", PASS).catch(() => {});
-          await Promise.all([
-            page.waitForLoadState("domcontentloaded").catch(() => {}),
-            page.click("input[type=\"submit\"], button[type=\"submit\"], button").catch(() => {}),
-          ]);
-          await page.waitForTimeout(1500);
-        }
-        const cookies = await ctx.cookies();
         results.q3_login.mode = "federated-auto";
-        if (!onServer) {
-          results.q3_login.skipped = `the Login link led to ${loginOrigin}, which isn't PROBE_BASE's origin, so no password was sent. Use PROBE_MANUAL_LOGIN=1.`;
-        }
+        await signIn("input[name=\"username\"], #username, input[type=\"text\"]", "input[name=\"password\"], #password, input[type=\"password\"]", 1500);
+        const cookies = await ctx.cookies();
         results.q3_login.loggedIn = cookies.some((c) => c.name === "agstoken" && c.value);
       } else {
         // Standalone: the rest/login form (page JS RSA-encrypts the password).
         await gate("standalone rest/login");
         await page.goto(`${BASE}/rest/login`, { waitUntil: "domcontentloaded" });
-        await page.fill("#username", USER);
-        await page.fill("#password", PASS);
-        await Promise.all([
-          page.waitForLoadState("domcontentloaded").catch(() => {}),
-          page.click("input[type=\"submit\"]"),
-        ]);
-        await page.waitForTimeout(1200);
-        const cookies = await ctx.cookies();
         results.q3_login.mode = "standalone-auto";
+        await signIn("#username", "#password", 1200);
+        const cookies = await ctx.cookies();
         results.q3_login.loggedIn = cookies.some((c) => c.name === "agstoken" && c.value);
       }
 
