@@ -6,6 +6,11 @@ import globals from "globals";
 // become markup.
 const NO_HTML_STRINGS = "Build DOM nodes with loadElement and text nodes; don't write HTML strings.";
 
+// The console reads %s, %c, %o and the like in its first argument as a format string. A URL or
+// server text there would be read as one, so that argument must be a string literal.
+const CONSOLE_FORMAT = "Start console calls with a string literal and pass values as later arguments.";
+const CONSOLE_FORMAT_SELECTOR = "CallExpression[callee.object.name='console'][arguments.length>0]:not([arguments.0.value=type(string)])";
+
 export default [
   {
     ignores: ["build/", "dist/", "node_modules/", "test-results/", "playwright-report/", "blob-report/"]
@@ -30,7 +35,8 @@ export default [
         { selector: "CallExpression[callee.property.name='insertAdjacentHTML']", message: NO_HTML_STRINGS },
         { selector: "CallExpression[callee.property.value='insertAdjacentHTML']", message: NO_HTML_STRINGS },
         { selector: "CallExpression[callee.object.name='document'][callee.property.name=/^(write|writeln)$/]", message: NO_HTML_STRINGS },
-        { selector: "CallExpression[callee.object.name='document'][callee.property.value=/^(write|writeln)$/]", message: NO_HTML_STRINGS }
+        { selector: "CallExpression[callee.object.name='document'][callee.property.value=/^(write|writeln)$/]", message: NO_HTML_STRINGS },
+        { selector: CONSOLE_FORMAT_SELECTOR, message: CONSOLE_FORMAT }
       ]
     }
   },
