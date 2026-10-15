@@ -109,7 +109,7 @@ Phase 2 builds 5.1 and most of 5.3 (#30). v1 adds the read-operation allow-list 
 On a Services Directory page the content script:
 
 1. classifies the page and computes the scope, and stops if there is none
-2. sends one `rest/self` request, which counts toward the 50-request budget. On a hosted ArcGIS Online scope with a URL token it asks `https://www.arcgis.com/sharing/rest/community/self` instead. That host is the one documented exception to the scope rule. On a hosted ArcGIS Online scope without a URL token it sends nothing: the hosted host answers `rest/self` with 400, and v1 never reads ArcGIS Online's sign-in cookies (section 3). Identifying those users waits for v3.
+2. sends one `rest/self` request, which counts toward the 50-request budget. On a hosted ArcGIS Online scope with a URL token it asks `https://www.arcgis.com/sharing/rest/community/self` instead. That host is the one documented exception to the scope rule. Both identity requests carry the token as section 5.3 says, in a form POST body. Esri documents `community/self` as a GET with the token in the query string, so experiment E12 checks that it accepts the POST. If it doesn't, the hosted page shows no badge; the token never goes in a URL. On a hosted ArcGIS Online scope without a URL token it sends nothing: the hosted host answers `rest/self` with 400, and v1 never reads ArcGIS Online's sign-in cookies (section 3). Identifying those users waits for v3.
 3. shows the username as a badge in the status bar when there is one
 4. classifies failures by code and quotes the server's own message:
 
@@ -218,7 +218,7 @@ HttpOnly cookies are seeded with `context.addCookies`, so no login fixture is ne
 | Release | Contents | Starts when |
 |---|---|---|
 | 2.0.0, Phase 2 | TOK-1 to TOK-6 (#30) | The store-readiness plan reaches Phase 2 |
-| Tokens v1 | Sections 5.4 to 5.8, search through the content script, the tests in section 6, the probe script | 2.0.0 has shipped and E4 has run |
+| Tokens v1 | Sections 5.4 to 5.8, search through the content script, the tests in section 6, the probe script | 2.0.0 has shipped and E4 and E12 have run |
 | Tokens v2 | Pasted tokens and Read my sign-in (section 8) | E1, E2, E3, E6, E9, E10 and E11 have run |
 | Tokens v3 | ArcGIS Online sign-in through OAuth | Its own design |
 
@@ -270,6 +270,7 @@ The probe covers most of these. The owner runs it on their Enterprise servers, s
 | E9 | Does `permissions.request` from the popup survive the prompt taking focus, on macOS, Windows and Linux? | The v2 Read my sign-in flow |
 | E10 | Does `declarativeNetRequestWithHostAccess` work with host access from content-script `matches`, or does it need `host_permissions`? | v2 permissions and install warning |
 | E11 | Does a header that a `declarativeNetRequest` rule adds follow a redirect to another origin, and does a rule that removes it outside the scope stop that? | How v2 keeps a pasted token off redirect targets |
+| E12 | Do `rest/self` on Enterprise and ArcGIS Online's `community/self` accept the token in a form POST body? The probe's portability check (Q5) covers `rest/self`. It sends nothing outside `PROBE_BASE`'s origin, so `community/self` is checked by hand with a hosted service's token. | Whether v1 can show an identity for each case, or shows no badge there |
 
 ## 10. Non-goals
 
