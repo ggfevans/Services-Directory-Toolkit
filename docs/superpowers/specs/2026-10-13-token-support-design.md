@@ -211,7 +211,7 @@ HttpOnly cookies are seeded with `context.addCookies`, so no login fixture is ne
 - each status bar token state
 - no console message contains the token value
 
-**Live and manual checks.** `npm run test:live` stays anonymous. The probe moves into the repo as `scripts/probe-tokens.mjs`, with its output ignored by git, as section 8 of the store-readiness spec allows for a capture script. The owner runs it on their own servers before each release. Esri has changed the cookie's attributes twice (11.5 and 12.1), and the probe is how a change gets noticed.
+**Live and manual checks.** `npm run test:live` stays anonymous. The probe moves into the repo as `scripts/probe-tokens.js`, with its output ignored by git, as section 8 of the store-readiness spec allows for a capture script. The owner runs it on their own servers before each release. Esri has changed the cookie's attributes twice (11.5 and 12.1), and the probe is how a change gets noticed.
 
 ## 7. Phasing
 

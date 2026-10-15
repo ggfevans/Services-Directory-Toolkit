@@ -89,6 +89,39 @@ const roads = {
   ]
 };
 
+const valves = {
+  ...layerDefaults,
+  id: 0,
+  name: "Valves",
+  geometryType: "esriGeometryPoint",
+  displayField: "VALVE_ID",
+  fields: [
+    { name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID", domain: null },
+    { name: "SHAPE", type: "esriFieldTypeGeometry", alias: "Shape", domain: null },
+    { name: "VALVE_ID", type: "esriFieldTypeString", alias: "Valve ID", length: 12, domain: null }
+  ],
+  _rows: [
+    { OBJECTID: 1, SHAPE: true, VALVE_ID: "V-001" },
+    { OBJECTID: 2, SHAPE: true, VALVE_ID: "V-002" }
+  ]
+};
+
+const mains = {
+  ...layerDefaults,
+  id: 0,
+  name: "Mains",
+  geometryType: "esriGeometryPolyline",
+  displayField: "MAIN_ID",
+  fields: [
+    { name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID", domain: null },
+    { name: "SHAPE", type: "esriFieldTypeGeometry", alias: "Shape", domain: null },
+    { name: "MAIN_ID", type: "esriFieldTypeString", alias: "Main ID", length: 12, domain: null }
+  ],
+  _rows: [
+    { OBJECTID: 1, SHAPE: true, MAIN_ID: "M-001" }
+  ]
+};
+
 const exportWebMapTask = {
   name: "Export Web Map Task",
   json: {
@@ -108,9 +141,43 @@ const exportWebMapTask = {
 
 const documentInfo = (title, keywords) => ({ Title: title, Author: "", Comments: "", Subject: "", Category: "", Keywords: keywords });
 
+// The invented server's users. onlineRole is the role ArcGIS Online's community/self reports.
+export const users = {
+  jsmith: { username: "jsmith", roles: ["Administrators"], privilege: "ADMINISTER", onlineRole: "org_admin" },
+  viewer1: { username: "viewer1", roles: ["Viewers"], privilege: "ACCESS", onlineRole: "org_user" }
+};
+
+// The tokens the Enterprise-style server at https://arcgis.test accepts, by username. Real ArcGIS
+// tokens use only [A-Za-z0-9._-], and so do these.
+export const SERVER_TOKENS = { jsmith: "sdt-server.jsmith-0001", viewer1: "sdt-server.viewer1-0001" };
+
+const byToken = (tokens) => Object.fromEntries(Object.entries(tokens).map(([username, token]) => [token, username]));
+
+const parcelsFeatureServer = {
+  name: "Parcels",
+  type: "FeatureServer",
+  layers: [parcels, addresses],
+  info: {
+    serviceDescription: "Editable parcel boundaries for an invented county.",
+    description: "",
+    copyrightText: "Example County GIS",
+    hasVersionedData: false,
+    supportsDisconnectedEditing: false,
+    maxRecordCount: 1000,
+    supportedQueryFormats: "JSON",
+    capabilities: "Query",
+    spatialReference: WEB_MERCATOR,
+    initialExtent: EXTENT,
+    fullExtent: EXTENT,
+    allowGeometryUpdates: true,
+    units: "esriMeters"
+  }
+};
+
 export const catalog = {
   currentVersion: 11.3,
   folders: ["Transport", "Utilities"],
+  _tokens: byToken(SERVER_TOKENS),
   services: [
     {
       name: "Parcels",
@@ -134,26 +201,7 @@ export const catalog = {
         maxImageWidth: 4096
       }
     },
-    {
-      name: "Parcels",
-      type: "FeatureServer",
-      layers: [parcels, addresses],
-      info: {
-        serviceDescription: "Editable parcel boundaries for an invented county.",
-        description: "",
-        copyrightText: "Example County GIS",
-        hasVersionedData: false,
-        supportsDisconnectedEditing: false,
-        maxRecordCount: 1000,
-        supportedQueryFormats: "JSON",
-        capabilities: "Query",
-        spatialReference: WEB_MERCATOR,
-        initialExtent: EXTENT,
-        fullExtent: EXTENT,
-        allowGeometryUpdates: true,
-        units: "esriMeters"
-      }
-    },
+    parcelsFeatureServer,
     {
       name: "Elevation",
       type: "ImageServer",
@@ -205,6 +253,102 @@ export const catalog = {
         executionType: "esriExecutionTypeSynchronous",
         resultMapServerName: "",
         maximumRecords: 1000
+      }
+    },
+    {
+      // Secured: anonymous listings leave it out, and anonymous requests get 499.
+      name: "Utilities/Valves",
+      type: "MapServer",
+      _secured: true,
+      layers: [valves],
+      info: {
+        serviceDescription: "Water valves for an invented utility. Signed-in users only.",
+        mapName: "Valves",
+        description: "",
+        copyrightText: "",
+        spatialReference: WEB_MERCATOR,
+        singleFusedMapCache: false,
+        initialExtent: EXTENT,
+        fullExtent: EXTENT,
+        units: "esriMeters",
+        documentInfo: documentInfo("Valves", "valves"),
+        capabilities: "Map,Query",
+        supportedQueryFormats: "JSON",
+        maxRecordCount: 1000
+      }
+    },
+    {
+      // Secured, and only jsmith may use it: other signed-in users get 403.
+      name: "Utilities/Mains",
+      type: "FeatureServer",
+      _secured: true,
+      _allowed: ["jsmith"],
+      layers: [mains],
+      info: {
+        serviceDescription: "Water mains for an invented utility. Administrators only.",
+        description: "",
+        copyrightText: "",
+        hasVersionedData: false,
+        maxRecordCount: 1000,
+        supportedQueryFormats: "JSON",
+        capabilities: "Query",
+        spatialReference: WEB_MERCATOR,
+        initialExtent: EXTENT,
+        fullExtent: EXTENT,
+        units: "esriMeters"
+      }
+    }
+  ]
+};
+
+// The ArcGIS Online stand-in: one org's hosted services. Unlike ArcGIS Server, its listing includes
+// secured services, and the host has no sign-in of its own.
+export const ONLINE_ORG = "Fk3Org9xQ";
+
+// The tokens ArcGIS Online accepts, by username. They don't work on https://arcgis.test.
+export const ONLINE_TOKENS = { jsmith: "sdt-online.jsmith-0001" };
+
+const hydrants = {
+  ...layerDefaults,
+  id: 0,
+  name: "Hydrants",
+  geometryType: "esriGeometryPoint",
+  displayField: "HYDRANT_ID",
+  fields: [
+    { name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID", domain: null },
+    { name: "SHAPE", type: "esriFieldTypeGeometry", alias: "Shape", domain: null },
+    { name: "HYDRANT_ID", type: "esriFieldTypeString", alias: "Hydrant ID", length: 12, domain: null }
+  ],
+  _rows: [
+    { OBJECTID: 1, SHAPE: true, HYDRANT_ID: "H-001" },
+    { OBJECTID: 2, SHAPE: true, HYDRANT_ID: "H-002" },
+    { OBJECTID: 3, SHAPE: null, HYDRANT_ID: "H-003" }
+  ]
+};
+
+export const onlineCatalog = {
+  currentVersion: 12.1,
+  folders: [],
+  _tokens: byToken(ONLINE_TOKENS),
+  services: [
+    parcelsFeatureServer,
+    {
+      name: "Hydrants",
+      type: "FeatureServer",
+      _secured: true,
+      layers: [hydrants],
+      info: {
+        serviceDescription: "Fire hydrants for an invented city. Org members only.",
+        description: "",
+        copyrightText: "",
+        hasVersionedData: false,
+        maxRecordCount: 2000,
+        supportedQueryFormats: "JSON",
+        capabilities: "Query",
+        spatialReference: WEB_MERCATOR,
+        initialExtent: EXTENT,
+        fullExtent: EXTENT,
+        units: "esriMeters"
       }
     }
   ]

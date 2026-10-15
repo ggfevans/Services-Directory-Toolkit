@@ -1,4 +1,4 @@
-import { test, expect, FAKE_ORIGIN, html, REST_ROOT } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, html, ONLINE_REST_ROOT, ONLINE_TOKENS, PORTAL_ORIGIN, REST_ROOT } from "./fixtures.js";
 
 test("the extension loads with no manifest errors", async ({ page, extensionId }) => {
   await page.goto("chrome://extensions");
@@ -213,5 +213,99 @@ test.describe("a violation left at the end still fails the test", () => {
   test.fail("a leftover override that never matched", async ({ fakeServer }) => {
     fakeServer.override(/^\/never-requested$/, () => html("unused"));
     expect(fakeServer.unusedOverrides()).toEqual(["/^\\/never-requested$/"]);
+  });
+});
+
+test.describe("signing in", () => {
+  test("signIn sets an HttpOnly agstoken cookie that reaches the fake server", async ({ page, signIn }) => {
+    await signIn("jsmith");
+    await page.goto(REST_ROOT);
+    expect(await page.evaluate(() => document.cookie)).not.toContain("agstoken");
+    const self = await page.evaluate(() => fetch("/arcgis/rest/self?f=json").then((response) => response.json()));
+    expect(self.user.username).toBe("jsmith");
+  });
+
+  test("a request with credentials omitted runs anonymously", async ({ page, signIn }) => {
+    await signIn("jsmith");
+    await page.goto(REST_ROOT);
+    const self = await page.evaluate(() => fetch("/arcgis/rest/self?f=json", { credentials: "omit" }).then((response) => response.json()));
+    expect(self).toEqual({ user: {} });
+  });
+
+  test("the cookie goes only to paths in its own case", async ({ page, signIn, fakeServer }) => {
+    await signIn("jsmith");
+    await page.goto(REST_ROOT);
+    await page.evaluate(() => fetch("/ArcGIS/rest/self?f=json").then((response) => response.json()));
+    expect(fakeServer.calls.find((call) => call.path === "/ArcGIS/rest/self").cookies).toEqual({});
+  });
+});
+
+test.describe("the ArcGIS Online stand-ins", () => {
+  test("a hosted service page loads and runs the content scripts", async ({ page }) => {
+    await page.goto(`${ONLINE_REST_ROOT}/Parcels/FeatureServer`);
+    await expect(page.locator("img.status-icon")).toBeAttached();
+  });
+
+  test("community/self answers a page on another origin", async ({ page }) => {
+    await page.goto(`${ONLINE_REST_ROOT}/Parcels/FeatureServer`);
+    const self = await page.evaluate(([url, token]) => fetch(url, { method: "POST", body: new URLSearchParams({ f: "json", token }) })
+      .then((response) => response.json()), [`${PORTAL_ORIGIN}/sharing/rest/community/self`, ONLINE_TOKENS.jsmith]);
+    expect(self.username).toBe("jsmith");
+  });
+});
+
+test.describe("a redirect to another host", () => {
+  const redirectAway = () => ({ status: 307, headers: { location: "https://elsewhere.test/landing" }, body: "" });
+
+  test("is recorded as an off-host request when followed", async ({ page, fakeServer, harness }) => {
+    fakeServer.override(/^\/arcgis\/rest\/moved$/, redirectAway);
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    await page.evaluate(() => fetch("/arcgis/rest/moved").catch(() => {}));
+    expect(harness.offHost).toContainEqual("https://elsewhere.test/landing");
+    harness.forgive();
+  });
+
+  test("can't reach a real host, because the harness resolves no host names", async ({ page, fakeServer, harness }) => {
+    fakeServer.override(/^\/arcgis\/rest\/moved$/, () => ({ status: 307, headers: { location: "https://example.com/landing" }, body: "" }));
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    await page.evaluate(() => fetch("/arcgis/rest/moved").catch(() => {}));
+    expect(harness.offHost).toContainEqual("https://example.com/landing");
+    await expect.poll(() => harness.errors).toContainEqual(expect.stringContaining("ERR_NAME_NOT_RESOLVED [https://example.com/landing]"));
+    harness.forgive();
+  });
+
+  test("on a fake origin is recorded as not routed, because Playwright doesn't route redirect targets", async ({ page, fakeServer, harness }) => {
+    fakeServer.override(/^\/arcgis\/rest\/moved$/, () => ({ status: 302, headers: { location: `${FAKE_ORIGIN}/other/page` }, body: "" }));
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    await page.evaluate(() => fetch("/arcgis/rest/moved").catch(() => {}));
+    expect(harness.unmatched).toContainEqual(`not routed (redirect target): GET ${FAKE_ORIGIN}/other/page`);
+    harness.forgive();
+  });
+
+  test("sends nothing there when the request uses redirect: manual", async ({ page, fakeServer }) => {
+    fakeServer.override(/^\/arcgis\/rest\/moved$/, redirectAway);
+    await page.goto(`${FAKE_ORIGIN}/other/page`);
+    const type = await page.evaluate(() => fetch("/arcgis/rest/moved", { redirect: "manual" }).then((response) => response.type));
+    expect(type).toBe("opaqueredirect");
+  });
+});
+
+test.describe("openPopupTab", () => {
+  test("given a page, reports that page's real tab id", async ({ page, openPopupTab }) => {
+    await page.goto(REST_ROOT);
+    const popup = await openPopupTab(page);
+    const result = await popup.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const real = await chrome.tabs.get(tab.id);
+      const own = await chrome.tabs.getCurrent();
+      return { exists: real.id === tab.id, isOwnTab: tab.id === own.id, url: tab.url };
+    });
+    expect(result).toEqual({ exists: true, isOwnTab: false, url: REST_ROOT });
+  });
+
+  test("given a URL, reports no tab", async ({ openPopupTab }) => {
+    const popup = await openPopupTab(REST_ROOT);
+    const id = await popup.evaluate(async () => (await chrome.tabs.query({}))[0].id);
+    expect(id).toBe(-1);
   });
 });

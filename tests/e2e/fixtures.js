@@ -2,7 +2,8 @@
 //
 // Each test gets a fresh Chromium profile with the extension loaded. Playwright routing sees every
 // request from tab pages, from extension pages opened as tabs, from content scripts and from the
-// service worker. https://arcgis.test is answered by tests/fixtures/fake-arcgis.js, and every other
+// service worker. The origins in FAKE_ORIGINS are answered by tests/fixtures/fake-arcgis.js: an
+// Enterprise-style server at https://arcgis.test, and two ArcGIS Online stand-ins. Every other
 // http(s) host is blocked. The real toolbar popup's own requests are not routed, because it has no
 // Playwright Page. They fail at DNS for a .test host and appear in no list. Test popup logic with
 // openPopupTab, which opens the popup page as a tab.
@@ -10,6 +11,9 @@
 // A test fails if any of these is left over when it ends:
 // - a request to another host
 // - a request the fake server has no fixture for
+// - a redirect's target, which Playwright doesn't route: recorded as off-host, or as unmatched when
+//   it is on a fake origin. Browser tests therefore can't follow the fake server's 302 from a secured
+//   page to its login page; the unit tests cover that response.
 // - a request the fake server can't interpret, or an override that returned no status
 // - an override that never matched a request
 // - a dialog
@@ -26,9 +30,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, REST_ROOT } from "../fixtures/fake-arcgis.js";
+import {
+  arcgisError, createFakeArcGIS, FAKE_ORIGIN, FAKE_ORIGINS, html, json, ONLINE_ORIGIN, ONLINE_REST_ROOT, ONLINE_TOKENS,
+  PORTAL_ORIGIN, REST_ROOT, SERVER_TOKENS
+} from "../fixtures/fake-arcgis.js";
 
-export { arcgisError, expect, FAKE_ORIGIN, html, json, REST_ROOT };
+export { arcgisError, expect, FAKE_ORIGIN, html, json, ONLINE_ORIGIN, ONLINE_REST_ROOT, ONLINE_TOKENS, PORTAL_ORIGIN, REST_ROOT, SERVER_TOKENS };
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -91,6 +98,9 @@ export const test = base.extend({
         `--load-extension=${EXTENSION_PATH}`,
         // Lets clickAction use the CDP Extensions domain.
         "--enable-unsafe-extension-debugging",
+        // Resolves no host names. Routed requests never need DNS, and a request Playwright doesn't
+        // route, such as a redirect's target, then fails here and can't reach a real server.
+        "--host-resolver-rules=MAP * ~NOTFOUND",
         // Playwright passes a bare --headless, which Chrome before 132 reads as the old headless
         // mode, and that mode doesn't run extensions. The last value of a switch wins.
         ...(process.env.CHROME_PATH && !process.env.HEADED ? ["--headless=new"] : []),
@@ -105,6 +115,18 @@ export const test = base.extend({
       }
     });
     context.on("weberror", (webError) => harness.errors.push(`Uncaught: ${webError.error().message}`));
+    // Playwright doesn't route the target of a redirect: the browser requests it itself. Record it, so
+    // a test that follows a redirect fails, even when the target is one of the fake origins.
+    context.on("request", (request) => {
+      if (!request.redirectedFrom()) {
+        return;
+      }
+      if (FAKE_ORIGINS.includes(new URL(request.url()).origin)) {
+        harness.unmatched.push(`not routed (redirect target): ${request.method()} ${request.url()}`);
+      } else {
+        harness.offHost.push(request.url());
+      }
+    });
     context.on("dialog", async (dialog) => {
       harness.dialogs.push(`${dialog.type()}: ${dialog.message()}`);
       await dialog.dismiss();
@@ -113,14 +135,15 @@ export const test = base.extend({
     // http(s) only: the extension's own chrome-extension:// files must load untouched.
     await context.route(/^https?:\/\//, async (route) => {
       const request = route.request();
-      if (new URL(request.url()).origin !== FAKE_ORIGIN) {
+      if (!FAKE_ORIGINS.includes(new URL(request.url()).origin)) {
         harness.offHost.push(request.url());
         await route.abort("blockedbyclient");
         return;
       }
       // An override may answer slowly, or never. A hanging handler is harmless: closing the context
       // ends it, and the harness spec's hanging-response test keeps that true.
-      const response = await fakeServer.respond(request);
+      // allHeaders(), not headers(): Playwright documents only allHeaders() as including the Cookie header.
+      const response = await fakeServer.respond(request, await request.allHeaders());
       if (response === null) {
         harness.unmatched.push(`${request.method()} ${request.url()}`);
         await route.fulfill({ status: 404, contentType: "text/plain", body: "No fixture for this URL" });
@@ -182,13 +205,20 @@ export const test = base.extend({
     await use((keys = null) => inWorker(serviceWorker, (names) => chrome.storage.sync.get(names), keys));
   },
 
-  // Opens the popup page in a normal tab, with chrome.tabs.query answering as if tabUrl were the
-  // active tab. For popup logic; the real popup needs clickAction.
-  openPopupTab: async ({ context, extensionId }, use) => {
-    await use(async (tabUrl) => {
+  // Opens the popup page in a normal tab, with chrome.tabs.query answering as if target were the
+  // active tab. target is a Page, whose real tab id and URL the stub reports, or a URL, for which it
+  // reports chrome.tabs.TAB_ID_NONE (-1). For popup logic; the real popup needs clickAction.
+  openPopupTab: async ({ context, extensionId, serviceWorker }, use) => {
+    await use(async (target) => {
+      let tab = { id: -1, url: target };
+      if (typeof target !== "string") {
+        await target.bringToFront();
+        const id = await inWorker(serviceWorker, async () => (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id);
+        tab = { id, url: target.url() };
+      }
       const page = await context.newPage();
-      await page.addInitScript((url) => {
-        const tabs = [{ id: 1, index: 0, windowId: 1, active: true, url }];
+      await page.addInitScript(({ id, url }) => {
+        const tabs = [{ id, index: 0, windowId: 1, active: true, url }];
         chrome.tabs.query = (queryInfo, callback) => {
           if (callback) {
             callback(tabs);
@@ -196,10 +226,24 @@ export const test = base.extend({
           }
           return Promise.resolve(tabs);
         };
-      }, tabUrl);
+      }, tab);
       await page.goto(`chrome-extension://${extensionId}/src/page_action/page_action.html`);
       return page;
     });
+  },
+
+  // Signs the browser in to https://arcgis.test the way its login page does: an HttpOnly agstoken
+  // cookie on /arcgis/rest, which page scripts can't read. Call it before opening the page.
+  signIn: async ({ context }, use) => {
+    await use((username = "jsmith") => context.addCookies([{
+      name: "agstoken",
+      value: SERVER_TOKENS[username],
+      domain: "arcgis.test",
+      path: "/arcgis/rest",
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax"
+    }]));
   },
 
   // Whether the toolbar button is enabled for the page's tab. Brings the page to the front first,
