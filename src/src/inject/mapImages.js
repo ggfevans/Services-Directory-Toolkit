@@ -132,7 +132,7 @@
         mapImage.classList.remove("none");
         notifyLoading(false);
       }).catch(() => {
-        window.console && console.log("Error getting image url from: " + url);
+        window.console && console.log("Error getting image url from: %s", url);
         hoverHideMap();
         notifyLoading(false);
       });

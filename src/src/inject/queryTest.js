@@ -25,13 +25,13 @@
             let processedResponseText = (x.responseText || "{}").replace(/:\s*NaN,/ig, ":\"NaN\",");
             callback(JSON.parse(processedResponseText), x);
           } catch (err) {
-            console && console.warn(u, x.responseText, err);
+            console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
           }
         }
       };
       x.send(data);
     } catch (e) {
-      window.console && console.log(e);
+      window.console && console.log("Services Directory Toolkit: request failed", e);
     }
   };
 
