@@ -57,16 +57,31 @@ export const sameOriginHeaders = (base, extraHeaders) => async (route) => {
 };
 
 /**
- * A Playwright route handler for a page opened with ?token=. It aborts any request that carries a
- * token parameter and isn't on base's origin, so a redirect that keeps the query string (to a portal
- * login, or to http://) fails there instead of handing the token to another host. Other requests go
- * out unchanged.
+ * A Playwright route handler for a page opened with ?token=. Playwright calls a route handler only for
+ * the first URL of a redirect chain, so the browser must never follow a redirect from a token-bearing
+ * request: a redirect that keeps the query string would hand the token to its target. A token-bearing
+ * request on base's origin is fetched here with redirects off; a page goes to the browser, and a
+ * redirect is aborted and reported to onRedirect, with its target's query string dropped. A
+ * token-bearing request to any other origin, such as http://, is aborted. Other requests go out
+ * unchanged.
  */
-export const urlTokenStaysHome = (base) => async (route) => {
+export const urlTokenStaysHome = (base, onRedirect = () => {}) => async (route) => {
   const url = route.request().url();
-  if (!sameOrigin(url, base) && /[?&]token=/i.test(url)) {
+  if (!/[?&]token=/i.test(url)) {
+    await route.continue();
+    return;
+  }
+  if (!sameOrigin(url, base)) {
     await route.abort();
     return;
   }
-  await route.continue();
+  const response = await route.fetch({ maxRedirects: 0 });
+  const status = response.status();
+  if (status >= 300 && status < 400) {
+    const target = new URL(response.headers().location ?? "", url);
+    onRedirect({ status, to: `${target.origin}${target.pathname}` });
+    await route.abort();
+    return;
+  }
+  await route.fulfill({ response });
 };

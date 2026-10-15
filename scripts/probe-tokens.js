@@ -668,8 +668,9 @@ function waitForEnter(promptText) {
         skip("q9_queryParamNav", "no token available for the ?token= URL");
       } else {
         const ctx4 = await browser.newContext();
-        // The token in the URL goes only to PROBE_BASE's origin. A redirect elsewhere that keeps it fails.
-        await ctx4.route("**/*", urlTokenStaysHome(BASE));
+        // The token in the URL goes only to PROBE_BASE's origin, and no redirect is followed with it.
+        const q9Redirects = [];
+        await ctx4.route("**/*", urlTokenStaysHome(BASE, (r) => q9Redirects.push(r)));
         const p4 = await ctx4.newPage();
         await gate("?token= root listing");
         const u = new URL(`${BASE}${listingPathFrag}`);
@@ -686,7 +687,8 @@ function waitForEnter(promptText) {
         const su = new URL(`${BASE}${securedPathFrag}`);
         su.searchParams.set("token", urlToken);
         const secResp = await p4.goto(su.toString(), { waitUntil: "domcontentloaded" }).catch(() => null);
-        const secRendered = !/\/rest\/login/.test(p4.url());
+        // A redirect (to a login page, a portal or http://) is stopped, so the service didn't render.
+        const secRendered = Boolean(secResp?.ok()) && !/\/rest\/login/.test(p4.url());
         await ctx4.close();
 
         results.q9_queryParamNav = {
@@ -697,6 +699,7 @@ function waitForEnter(promptText) {
           totalLinks: info?.totalLinks ?? null,
           securedStatus: secResp ? secResp.status() : null,
           securedRendered: secRendered,
+          redirectsStopped: q9Redirects,
         };
       }
     } catch (e) {

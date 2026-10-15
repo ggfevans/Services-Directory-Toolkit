@@ -45,7 +45,7 @@ test("manual sign-in always shows the browser", () => {
 });
 
 // A stand-in for a Playwright Route that records what the handler did with it.
-const fakeRoute = (url, headers = {}) => {
+const fakeRoute = (url, headers = {}, response = { status: 302 }) => {
   const calls = [];
   return {
     calls,
@@ -55,7 +55,7 @@ const fakeRoute = (url, headers = {}) => {
     },
     fetch: async (options) => {
       calls.push(["fetch", options]);
-      return { status: 302 };
+      return response;
     },
     fulfill: async (options) => {
       calls.push(["fulfill", options]);
@@ -79,20 +79,35 @@ test("the auth header goes only to the server under test, and never through a re
   assert.deepEqual(other.calls, [["continue", undefined]]);
 });
 
-test("a ?token= URL stays on the server under test, even through a redirect", async () => {
-  const handler = urlTokenStaysHome("https://gis.example.org/server");
-  const own = fakeRoute("https://gis.example.org/server/rest/services?token=t");
+// A stand-in for a Playwright APIResponse.
+const apiResponse = (status, headers = {}) => ({ status: () => status, headers: () => headers });
+
+test("a ?token= request never follows a redirect, and never leaves the server under test", async () => {
+  const redirects = [];
+  const handler = urlTokenStaysHome("https://gis.example.org/server", (r) => redirects.push(r));
+  // A page on the server comes back through route.fetch, with redirects off.
+  const okResponse = apiResponse(200);
+  const own = fakeRoute("https://gis.example.org/server/rest/services?token=t", {}, okResponse);
   await handler(own);
-  assert.deepEqual(own.calls, [["continue", undefined]]);
-  // A federated server's redirect to its portal that keeps the query string
-  const portal = fakeRoute("https://portal.example.org/sharing/rest/oauth2/authorize?token=t&f=json");
-  await handler(portal);
-  assert.deepEqual(portal.calls, [["abort"]]);
-  // An http:// redirect on the same host is another origin
+  assert.deepEqual(own.calls, [["fetch", { maxRedirects: 0 }], ["fulfill", { response: okResponse }]]);
+  // A redirect is stopped, whether it keeps the token or not, and recorded without its query string.
+  const toPortal = fakeRoute("https://gis.example.org/server/rest/services/Secure?token=t", {},
+    apiResponse(302, { location: "https://portal.example.org/sharing/rest/oauth2/authorize?token=t" }));
+  await handler(toPortal);
+  assert.deepEqual(toPortal.calls, [["fetch", { maxRedirects: 0 }], ["abort"]]);
+  const toLogin = fakeRoute("https://gis.example.org/server/rest/services/Secure?token=t", {},
+    apiResponse(302, { location: "/server/rest/login?redirect=x" }));
+  await handler(toLogin);
+  assert.deepEqual(toLogin.calls, [["fetch", { maxRedirects: 0 }], ["abort"]]);
+  assert.deepEqual(redirects, [
+    { status: 302, to: "https://portal.example.org/sharing/rest/oauth2/authorize" },
+    { status: 302, to: "https://gis.example.org/server/rest/login" }
+  ]);
+  // A token-bearing request to another origin, such as http://, never goes out.
   const http = fakeRoute("http://gis.example.org/server/rest/services?f=json&TOKEN=t");
   await handler(http);
   assert.deepEqual(http.calls, [["abort"]]);
-  // Requests to other origins without a token go out unchanged
+  // Requests without a token go out unchanged.
   const css = fakeRoute("https://js.arcgis.com/4.30/esri/themes/light/main.css");
   await handler(css);
   assert.deepEqual(css.calls, [["continue", undefined]]);
@@ -108,5 +123,5 @@ test("the probe applies these rules", () => {
   assert.equal(source.match(/page\.fill\([^)]*PASS\)/g).length, 1, "the password is filled in one place, signIn");
   assert.match(source, /redirectModeFor\(\{ token, params, redirect: requestedRedirect \}\)/);
   assert.match(source, /sameOriginHeaders\(BASE, \{ "x-esri-authorization": `Bearer \$\{hdrToken\}` \}\)/);
-  assert.match(source, /await ctx4\.route\("\*\*\/\*", urlTokenStaysHome\(BASE\)\);\n\s+const p4 = await ctx4\.newPage\(\);/);
+  assert.match(source, /await ctx4\.route\("\*\*\/\*", urlTokenStaysHome\(BASE, \(r\) => q9Redirects\.push\(r\)\)\);\n\s+const p4 = await ctx4\.newPage\(\);/);
 });
