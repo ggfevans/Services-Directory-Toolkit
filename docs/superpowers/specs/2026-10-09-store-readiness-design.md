@@ -310,7 +310,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - times out
   - sends no `X-Requested-With` or `Content-type` on GET
   - keeps the default credentials (cookies, HTTP authentication and TLS client certificates), which servers behind SSO proxies or using IWA or PKI need on every request (TOK-5)
-  - puts a token in a form-encoded POST body, where Chrome's console errors and server logs don't record it (TOK-4)
+  - puts a token in a form-encoded POST body, which keeps it out of the URL that Chrome's console errors and server access logs record; a server or proxy that logs request bodies still sees it (TOK-4)
   - sends a request that carries a token with `redirect: "manual"`, and reports a redirect as an error (TOK-1)
   - always resolves to `{data}` or `{error}`
 - **Request limiter:** enforces the section 4.3 budget.
@@ -341,6 +341,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Unit tests cover `fetchJson`, the URL builder, the token scope and the classifier, including:
   - instance paths that differ only in case (one scope) and ArcGIS Online org IDs that differ only in case (two scopes)
   - `%2e%2e` segments and a `/restricted/rest/services` path
+  - `/admin`, `/tokens` and `/manager` paths, which stay outside the token scope
   - a Services Directory path that appears only in the query string
 - Browser tests show:
   - no automatic requests to another origin
@@ -814,7 +815,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | TOK-1 | M | A redirect re-sends a forwarded `token` to another origin in the query string, a 307's POST body or an `X-Esri-Authorization` header; Chrome strips only `Authorization` | 2 | Fix (`redirect: "manual"` on requests that carry a token) |
 | TOK-2 | M | The same-REST-root check is fooled by case, `/rest` elsewhere in the path, encoded dot segments and link fragments | 2 | Fix (scope from `URL.pathname` up to a whole-segment `/rest/services`; host and instance lower-cased; ArcGIS Online org ID kept as is) |
 | TOK-3 | M | Links that carry `token` or `f` skip the link filters, so a page opened with a token gets no metadata or previews | 2, 5, 6 | Fix (a helper strips `token`, `f` and the fragment before the filters match) |
-| TOK-4 | L | A query-string token reaches Chrome's console errors and server logs | 2 | Fix (token sent in a form POST body) |
+| TOK-4 | L | A query-string token reaches Chrome's console errors and server access logs | 2 | Fix (token sent in a form POST body) |
 | TOK-5 | M | Omitting credentials would break servers behind SSO proxies, IWA or PKI | 2 | Fix (`fetchJson` keeps the default credentials) |
 | TOK-6 | M | Content-script patterns also match the query string, and a page can rewrite its URL before the scripts load | 2 | Fix (classifier reads only `location.pathname`) |
 
