@@ -20,7 +20,7 @@ The design came out of a brainstorming session with the owner, a research pass o
 
 ## 2. Goals
 
-1. The toolkit shows which user a Services Directory page and its own requests run as.
+1. The toolkit shows which user a Services Directory page and its own requests run as. On a hosted ArcGIS Online page opened without a token, it can't until v3 (section 5.4).
 2. A token in the page URL can be copied as a token, a URL, a curl command or a header in two clicks.
 3. The user can see which services in a folder are public without opening a private window.
 4. Popup search finds secured services when the user is signed in.
@@ -99,7 +99,7 @@ A hosted ArcGIS Online scope is one on a `services*.arcgis.com` or `tiles*.arcgi
 ### 5.3 Sending a token
 
 - Only to URLs the URL builder makes from a scope and a known read operation: resource JSON, count and distinct `query`, `export`, and `rest/self`.
-- In a form POST body, with default credentials and `redirect: "manual"`. A redirect is reported and never followed.
+- In a form POST body, with default credentials and `redirect: "manual"`. A redirect is reported and never followed. Fetch hides the target of a manual redirect (an `opaqueredirect` response has status 0 and no headers), so the report names the request that redirected, not where it pointed.
 - Before a link filter tests an href, the href loses its `token`, `f` and fragment.
 
 Phase 2 builds 5.1 and most of 5.3 (#30). v1 adds the read-operation allow-list and everything else in section 5.
@@ -109,7 +109,7 @@ Phase 2 builds 5.1 and most of 5.3 (#30). v1 adds the read-operation allow-list 
 On a Services Directory page the content script:
 
 1. classifies the page and computes the scope, and stops if there is none
-2. sends one `rest/self` request, which counts toward the 50-request budget. On a hosted ArcGIS Online scope with a URL token it asks `https://www.arcgis.com/sharing/rest/community/self` instead. That host is the one documented exception to the scope rule.
+2. sends one `rest/self` request, which counts toward the 50-request budget. On a hosted ArcGIS Online scope with a URL token it asks `https://www.arcgis.com/sharing/rest/community/self` instead. That host is the one documented exception to the scope rule. On a hosted ArcGIS Online scope without a URL token it sends nothing: the hosted host answers `rest/self` with 400, and v1 never reads ArcGIS Online's sign-in cookies (section 3). Identifying those users waits for v3.
 3. shows the username as a badge in the status bar when there is one
 4. classifies failures by code and quotes the server's own message:
 
@@ -117,8 +117,8 @@ On a Services Directory page the content script:
 |---|---|
 | 498, or ArcGIS Online's 400 "Invalid token" (matched without case) | Error: the token in the page URL was rejected. It may have expired, or be tied to another referrer or IP. |
 | 499 or 403 | Warning: N services refused this token or this user, with the server's message |
-| A redirect on a request that carries a token | Error: the toolkit stopped, and names the address to open |
-| `rest/self` fails | No badge |
+| A redirect on a request that carries a token | Error: the toolkit stopped at a redirect, and names the request that redirected (without its token) so the user can open it |
+| `rest/self` fails, or a hosted ArcGIS Online page has no URL token | No badge |
 
 The badge shows a username and never a token. A script on the same server can already call `rest/self` with the same cookie, so the badge tells the page nothing new.
 
@@ -219,7 +219,7 @@ HttpOnly cookies are seeded with `context.addCookies`, so no login fixture is ne
 |---|---|---|
 | 2.0.0, Phase 2 | TOK-1 to TOK-6 (#30) | The store-readiness plan reaches Phase 2 |
 | Tokens v1 | Sections 5.4 to 5.8, search through the content script, the tests in section 6, the probe script | 2.0.0 has shipped and E4 has run |
-| Tokens v2 | Pasted tokens and Read my sign-in (section 8) | E1, E2, E3, E6, E9 and E10 have run |
+| Tokens v2 | Pasted tokens and Read my sign-in (section 8) | E1, E2, E3, E6, E9, E10 and E11 have run |
 | Tokens v3 | ArcGIS Online sign-in through OAuth | Its own design |
 
 v1 builds on the popup from Phase 9 and the status bar from Phase 5.
@@ -235,6 +235,7 @@ v1 builds on the popup from Phase 9 and the status bar from Phase 5.
   - The page itself then lists and renders secured services, and the token never enters a web renderer.
   - Scripts on the same origin in that tab can use the token's access through their own requests, but can't read the token.
   - Forget, closing the tab, and navigating out of the scope all remove the rule.
+  - A request that matches the rule and then redirects to another origin must not carry the header there. Section 4 shows Chrome re-sends `X-Esri-Authorization` on a cross-origin 307, and matching only the first URL doesn't cover the redirected request. Experiment E11 checks what Chrome does with a header that a rule adds, and v2 needs a browser test with a redirect target that receives nothing.
 - **The service worker** owns the records and rules. It answers a content script only when `sender.frameId` is 0, `documentLifecycle` is `active` and `sender.origin` matches the scope.
 - **Plain http.** Pasted tokens on `http:` are refused, except on loopback.
 - **Rejection.** A 498 never deletes a token. The popup marks it "rejected here".
@@ -268,6 +269,7 @@ The probe covers most of these. The owner runs it on their Enterprise servers, s
 | E8 | With a server's AllowedOrigins restricted, do content-script requests still pass? | Error wording |
 | E9 | Does `permissions.request` from the popup survive the prompt taking focus, on macOS, Windows and Linux? | The v2 Read my sign-in flow |
 | E10 | Does `declarativeNetRequestWithHostAccess` work with host access from content-script `matches`, or does it need `host_permissions`? | v2 permissions and install warning |
+| E11 | Does a header that a `declarativeNetRequest` rule adds follow a redirect to another origin, and does a rule that removes it outside the scope stop that? | How v2 keeps a pasted token off redirect targets |
 
 ## 10. Non-goals
 

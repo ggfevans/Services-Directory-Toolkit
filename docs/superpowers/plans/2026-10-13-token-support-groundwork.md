@@ -237,7 +237,7 @@ export const createPages = ({ restPath = REST_PATH, crumbPath = restPath, loginH
 <td class="breadcrumbs">
 ${breadcrumbs}
 </td>
-<td align="right"><a href="${restPath}?f=help" target="_blank">API Reference</a></td>
+<td align="right"><a href="${href(`${restPath}?f=help`)}" target="_blank">API Reference</a></td>
 </tr>
 </table>
 <table>
@@ -529,6 +529,7 @@ test("a bad token gets 498 on JSON requests and the login page on HTML ones", ()
   assert.equal(page.status, 302);
   assert.equal(page.headers.location, "https://arcgis.test/arcgis/rest/login?redirect=%2Farcgis%2Frest%2Fservices%3Ftoken%3Dbogus");
   assert.match(get(server, "/arcgis/rest/login?redirect=x").body, /name="loginForm"/);
+  assert.equal(get(server, "/arcgis/rest/services/NoSuchFolder?f=json&token=bogus"), null);
 });
 
 test("the instance name matches in any case", () => {
@@ -807,10 +808,12 @@ const route = (catalog, url, params, cookies, problems) => {
     return json(serverInfo(catalog), format);
   }
   const who = identify(catalog._tokens, params, cookies);
-  if (who.invalid) {
-    return format === "html" ? loginRedirect(url) : arcgisError(INVALID_TOKEN.message, format, INVALID_TOKEN.code);
-  }
+  // A bad token gets its error only on a path with a fixture, so the harness still sees the others as unmatched.
+  const invalid = format === "html" ? loginRedirect(url) : arcgisError(INVALID_TOKEN.message, format, INVALID_TOKEN.code);
   if (pathname === "/arcgis/rest/self") {
+    if (who.invalid) {
+      return invalid;
+    }
     return json({ user: who.user ? serverSelf(who.user) : {} }, format);
   }
   if (pathname !== REST_PATH && !pathname.startsWith(`${REST_PATH}/`)) {
@@ -819,10 +822,18 @@ const route = (catalog, url, params, cookies, problems) => {
   const parts = pathname.slice(REST_PATH.length).split("/").filter(Boolean).map(decodeURIComponent);
   const typeIndex = parts.findIndex((part) => SERVICE_TYPES.includes(part));
   if (typeIndex === -1) {
-    return folder(catalog, parts, format, ENTERPRISE_PAGES);
+    const listing = folder(catalog, parts, format, ENTERPRISE_PAGES);
+    return listing && who.invalid ? invalid : listing;
   }
   const service = catalog.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
-  return service ? serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, problems, ENTERPRISE_PAGES) : null;
+  if (!service) {
+    return null;
+  }
+  if (who.invalid) {
+    // A throwaway problems list: this call only checks that the path has a fixture.
+    return serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, [], ENTERPRISE_PAGES) ? invalid : null;
+  }
+  return serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, problems, ENTERPRISE_PAGES);
 };
 
 /**
@@ -1118,15 +1129,20 @@ const folder = (catalog, parts, format, user, pages) => {
 };
 ```
 
-In `route`, replace the last five lines (from `if (typeIndex === -1) {` to the final `return service ? …`) with:
+In `route`, replace everything from `if (typeIndex === -1) {` to the end of the function with:
 
 ```js
   if (typeIndex === -1) {
-    return folder(catalog, parts, format, who.user, ENTERPRISE_PAGES);
+    const listing = folder(catalog, parts, format, who.user, ENTERPRISE_PAGES);
+    return listing && who.invalid ? invalid : listing;
   }
   const service = catalog.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
   if (!service) {
     return null;
+  }
+  if (who.invalid) {
+    // A throwaway problems list: this call only checks that the path has a fixture.
+    return serviceResource(catalog, service, parts.slice(typeIndex + 1), params, format, [], ENTERPRISE_PAGES) ? invalid : null;
   }
   const refused = refusal(service, who.user);
   if (refused) {
@@ -1439,11 +1455,10 @@ const onlineRoute = (online, url, params, problems) => {
   }
   // Hosted services have no sign-in of their own, so a cookie counts for nothing here.
   const who = identify(online._tokens, params, {});
-  if (who.invalid) {
-    return format === "html" ? html(messagePage("Invalid token")) : arcgisError("Invalid token", format);
-  }
+  // As in route, a bad token gets its error only on a path with a fixture.
+  const invalid = format === "html" ? html(messagePage("Invalid token")) : arcgisError("Invalid token", format);
   if (tail.length === 1 && tail[0] === "self") {
-    return arcgisError("Unable to get user info.", format);
+    return who.invalid ? invalid : arcgisError("Unable to get user info.", format);
   }
   if (tail[0] !== "services") {
     return null;
@@ -1453,11 +1468,15 @@ const onlineRoute = (online, url, params, problems) => {
   const parts = tail.slice(1);
   const typeIndex = parts.findIndex((part) => SERVICE_TYPES.includes(part));
   if (typeIndex === -1) {
-    return folder(online, parts, format, who.user, pages, true);
+    const listing = folder(online, parts, format, who.user, pages, true);
+    return listing && who.invalid ? invalid : listing;
   }
   const service = online.services.find((s) => s.name === parts.slice(0, typeIndex).join("/") && s.type === parts[typeIndex]);
   if (!service) {
     return null;
+  }
+  if (who.invalid) {
+    return serviceResource(online, service, parts.slice(typeIndex + 1), params, format, [], pages) ? invalid : null;
   }
   const refused = refusal(service, who.user);
   if (refused) {
@@ -1799,7 +1818,7 @@ EOF
 ### Task 6: The token probe as a repo script
 
 **Files:**
-- Create: `scripts/probe-tokens.js`, copied from `/Users/gareth.evans/.claude/jobs/3e954f30/tmp/experiments/token-probe.mjs`
+- Create: `scripts/probe-tokens.js`, from the probe the owner ran in the brainstorming session
 - Create: `tests/unit/probe-tokens.test.js`
 - Modify: `.gitignore` (append)
 - Modify: `CLAUDE.md` (Commands)
@@ -1808,7 +1827,7 @@ EOF
 **Interfaces:**
 - Produces: `node scripts/probe-tokens.js`, configured by `PROBE_BASE`, `PROBE_SECURED`, `PROBE_USER`, `PROBE_PASS`, `PROBE_MANUAL_LOGIN`, `PROBE_OUT` and `HEADED`. It exits with status 2 and a usage message when settings are missing, and writes `probe-output/<host>-<time>.json` and `.md` by default.
 
-The source file lives in the brainstorming job's temporary folder, which is deleted along with that job. If it is gone, stop and ask the owner for a copy.
+The original probe was a file on the owner's machine, outside the repo. This task was carried out on the `token-groundwork` branch (#35), which commits the adapted script, so a clean checkout takes it from there (or from `main` once #35 has merged). That copy already has Step 4's edits, so skip that step and review the file instead.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1849,8 +1868,10 @@ Expected: FAIL. Node can't find `scripts/probe-tokens.js`, so the status is 1, n
 - [ ] **Step 3: Copy the probe in**
 
 ```bash
-cp /Users/gareth.evans/.claude/jobs/3e954f30/tmp/experiments/token-probe.mjs scripts/probe-tokens.js
+git show origin/token-groundwork:scripts/probe-tokens.js > scripts/probe-tokens.js
 ```
+
+The first run of this task copied the owner's local `token-probe.mjs` here instead.
 
 - [ ] **Step 4: Adapt it to the repo**
 
