@@ -99,3 +99,13 @@ test("the popup page renders its search and URL tools", async ({ openPopupTab })
   await expect(copy).toBeAttached();
   await expect(copy).toBeHidden();
 });
+
+test("the URL shortener drops query defaults only from query URLs", async ({ openPopupTab }) => {
+  const envelope = "geometry=0,0,10,10&geometryType=esriGeometryEnvelope";
+  // On identify, geometryType defaults to esriGeometryPoint, so an envelope has to stay.
+  const identify = await openPopupTab(`${SERVICE_PAGE}/identify?${envelope}&tolerance=2&f=html`);
+  await expect(identify.locator("#urlshortblank")).toHaveValue(`${SERVICE_PAGE}/identify?${envelope}&tolerance=2`);
+  // On query, esriGeometryEnvelope is the default, so it goes.
+  const query = await openPopupTab(`${SERVICE_PAGE}/0/query?${envelope}&where=1%3D1&f=html`);
+  await expect(query.locator("#urlshortblank")).toHaveValue(`${SERVICE_PAGE}/0/query?geometry=0,0,10,10&where=1%3D1`);
+});
