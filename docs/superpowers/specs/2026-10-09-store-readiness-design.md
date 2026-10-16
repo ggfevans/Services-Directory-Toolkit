@@ -715,7 +715,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | SET-7 | M | Gear, panel and options page accessibility | 3, 4 | Fix |
 | SET-8 | L | Web-accessible resources expose config and images (also MAN-1, SEC-4) | 3 | Fix |
 | SET-9 | L | Save stuck after an extension update | 3 | Moot: form removed; context guard in 2 |
-| SET-10 | L | Extensionizr leftovers; unused options.json ships (also PKG-1) | 1, 3 | Fix |
+| SET-10 | L | Extensionizr leftovers; unused options.json ships (also PKG-1) | 1, 4 | Fix |
 | SET-11 | L | Saved changes do not reach open tabs | 4 | Won't fix: the options page says changes apply on reload |
 | IMG-1 | M | Preview cache never hits | 6 | Fix (`f=image`, browser cache) |
 | IMG-2 | M | No hover delay or cancellation; stale previews | 6 | Fix |
