@@ -346,7 +346,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Browser tests show:
   - no automatic requests to another origin
   - no token reaches another origin through a 307 redirect
-  - a page opened with `?token=` gets metadata for links that carry the token
+  - a page opened with `?token=` gets metadata for links that carry the token, and the test asserts that each metadata request URL has no `token` parameter and that its form-encoded POST body carries the token
   - no spinner on JSON views
   - no `ajax` copies left in the code (checked by lint or grep)
 
