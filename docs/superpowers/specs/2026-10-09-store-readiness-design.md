@@ -142,7 +142,7 @@ Introduced in Phase 2.
 
 Phases run in order, except that the store track (S) runs alongside from the start.
 
-A design review of the whole UI (issue #7) happens after Phase 4 and before Phase 5. It decides the look, the interaction model and how settings appear in the toolbar popup. Phases 5 to 9 then implement its outcome as well as the findings listed for them, and the Phase 9 screenshots show the reviewed UI.
+A design review of the whole UI (issue #7) happened before Phase 2, in pull request #12. It decided the look, the interaction model and how settings appear in the toolbar popup. Phases 5 to 9 implement its outcome as well as the findings listed for them, and the Phase 9 screenshots show the reviewed UI.
 
 ### Track S: store assets and account
 
@@ -318,7 +318,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - takes the token as an argument and doesn't read `location`, so a later feature can supply a token from another source
   - attaches the token only to URLs inside the token scope: the origin plus the path up to and including the first whole-segment `/rest/services`, read from the parsed `URL.pathname` (TOK-2)
   - compares the host and the instance path in lower case, except an ArcGIS Online org ID, which is case-sensitive
-  - resolves `%2e%2e` segments before the check, scopes `/restricted/rest/services` to `/restricted`, and leaves `/admin`, `/tokens` and `/manager` outside the scope
+  - resolves `%2e%2e` segments before the check (`new URL()` resolves these; #44 settles what survives parsing), scopes `/restricted/rest/services` to `/restricted`, and leaves `/admin`, `/tokens` and `/manager` outside the scope
   - strips `token`, `f` and the fragment from a link's href before the link filters in `inject.js` and `mapImages.js` test it (TOK-3)
 
 **`SDT` page classifier:**
@@ -417,6 +417,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
   "Saved" appears only after the write succeeds.
 - A note says changes apply when a page is reloaded.
+- The map preview size labels read "Preview image width/height (px)" (IMG-4).
 - Meets WCAG 2.2 AA: `lang`, labels, and fieldsets with legends for radio groups.
 
 **Readers.** Every content script reads settings through the schema. Inline default objects in `storage.sync.get` calls are banned by lint outside `src/src/lib/`.
@@ -483,6 +484,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 **Requests:**
 - Previews request `export` with `f=image` and use the URL directly as the image source. There's no JSON round trip and no stored export `href`.
 - Only http(s) is allowed.
+- On a page opened with `?token=`, previews skip the token: a secured service shows "No preview: needs the page's token". The token never goes in an image URL.
 - The size is clamped to the service's `maxImageWidth` and `maxImageHeight`.
 
 **Interaction:**
@@ -496,7 +498,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - It closes on Escape or when the pointer and focus leave, and it stays open while the pointer is over it (WCAG 2.2 SC 1.4.13).
   - Its alt text names the service.
 - Previews for FeatureServer links appear only when a matching MapServer link is on the same page. Otherwise the dead branch is removed.
-- Labels read "Preview image width/height (px)". Styles are set through `style` properties, not concatenated strings.
+- Styles are set through `style` properties, not concatenated strings.
 
 **Acceptance:**
 - A delayed-response test shows the right image after fast hovering.

@@ -1,8 +1,8 @@
 # Token support for secured services
 
 - **Date:** 2026-10-13
-- **Status:** design approved by the owner on 2026-10-13; written spec awaiting review
-- **Scope:** working with ArcGIS tokens on secured services after the 2.0.0 store release. The Phase 2 token fixes land earlier, in 2.0.0, through pull request #30.
+- **Status:** approved by the owner on 2026-10-13, and merged as the accepted design in pull request #31
+- **Scope:** working with ArcGIS tokens on secured services after the 2.0.0 store release. The Phase 2 token fixes land earlier, in 2.0.0. Pull request #30 specified them, and issue #44 builds them.
 
 This spec covers three releases. Section 5 designs v1 in full. Section 8 outlines v2 and v3, and section 9 lists the experiments that gate them. Each release gets its own implementation plan.
 
@@ -80,12 +80,14 @@ Mockup: `docs/design/mockups/token-popup.html`, popup states A to D and the stat
 
 ### 5.1 Scope
 
-`SDT.auth.scopeOf(url)`, which Phase 2 builds (#30):
+`SDT.auth.scopeOf(url)`, which Phase 2 builds (issue #44):
 
 - parses with `new URL` and reads `pathname` only
 - splits at the first whole-segment `/rest/services`. The scope is the origin plus the path before it, such as `https://gis.example.org/server` or `https://services3.arcgis.com/Ab12Cd/arcgis`.
 - lower-cases the host and the instance path, but not an ArcGIS Online org ID
-- returns null for anything else, including `/restricted/...`, `/admin`, `/tokens` and paths with encoded dot segments
+- returns null for `/admin`, `/tokens`, `/manager` and any path without a whole-segment `/rest/services`
+
+A path such as `/restricted/rest/services` scopes to `/restricted`, as Phase 2 of the store-readiness spec says. `new URL` already resolves `%2e`-encoded dot segments. Issue #44 settles how encoded slashes and double-encoded dots that survive `new URL` are handled.
 
 A hosted ArcGIS Online scope is one on a `services*.arcgis.com` or `tiles*.arcgis.com` host. Other `*.arcgis.com` hosts, such as elevation and route, run their own servers with a Login link and an `agstoken` session, and count as Enterprise scopes here.
 
@@ -99,10 +101,11 @@ A hosted ArcGIS Online scope is one on a `services*.arcgis.com` or `tiles*.arcgi
 ### 5.3 Sending a token
 
 - Only to URLs the URL builder makes from a scope and a known read operation: resource JSON, count and distinct `query`, `export`, and `rest/self`.
+- Map previews are the exception. An `<img>` can't send a POST body, and the token never goes in a URL, so previews skip the token (Phase 6 of the store-readiness spec).
 - In a form POST body, with default credentials and `redirect: "manual"`. A redirect is reported and never followed. Fetch hides the target of a manual redirect (an `opaqueredirect` response has status 0 and no headers), so the report names the request that redirected, not where it pointed.
 - Before a link filter tests an href, the href loses its `token`, `f` and fragment.
 
-Phase 2 builds 5.1 and most of 5.3 (#30). v1 adds the read-operation allow-list and everything else in section 5.
+Phase 2 builds 5.1 and most of 5.3 (issue #44). v1 adds the read-operation allow-list and everything else in section 5.
 
 ### 5.4 Page flow
 
@@ -196,7 +199,7 @@ v1 adds these to section 4.4 of the store-readiness spec:
 - an Enterprise-style listing that hides secured services, and an ArcGIS Online-style listing that shows them
 - `rest/self`, and `rest/info` with `authInfo`
 - a 307 to another origin
-- a second fake origin standing in for `www.arcgis.com`. The harness accepts one origin today (`tests/e2e/fixtures.js`, around line 114), and needs an allow-list.
+- a second fake origin standing in for `www.arcgis.com`. Pull request #35 added it: the harness answers every origin in `FAKE_ORIGINS` (`tests/fixtures/fake-arcgis.js`).
 
 HttpOnly cookies are seeded with `context.addCookies`, so no login fixture is needed.
 
@@ -206,12 +209,12 @@ HttpOnly cookies are seeded with `context.addCookies`, so no login fixture is ne
 - the token goes only in the POST body, and only inside the scope
 - a redirect target receives nothing
 - "What's public here?" on an Enterprise-style listing, an ArcGIS Online-style listing and a server behind a sign-in layer
-- every copy format, through `openPopupTab`. Its `tabs.query` stub returns tab id 1 today (`tests/e2e/fixtures.js`, around line 191), and has to return the real tab's id.
+- every copy format, through `openPopupTab`. Since pull request #35, its `tabs.query` stub returns the real tab's id when given a Page.
 - search with a cookie session
 - each status bar token state
 - no console message contains the token value
 
-**Live and manual checks.** `npm run test:live` stays anonymous. The probe moves into the repo as `scripts/probe-tokens.js`, with its output ignored by git, as section 8 of the store-readiness spec allows for a capture script. The owner runs it on their own servers before each release. Esri has changed the cookie's attributes twice (11.5 and 12.1), and the probe is how a change gets noticed.
+**Live and manual checks.** `npm run test:live` stays anonymous. The probe is in the repo as `scripts/probe-tokens.js` (pull request #35), with its output in `probe-output/` ignored by git, as section 8 of the store-readiness spec allows for a capture script. The owner runs it on their own servers before each release. Esri has changed the cookie's attributes twice (11.5 and 12.1), and the probe is how a change gets noticed.
 
 ## 7. Phasing
 
