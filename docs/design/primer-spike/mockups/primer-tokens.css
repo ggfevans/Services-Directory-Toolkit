@@ -1,0 +1,66 @@
+/*
+ * Primer spike, adoption level "tokens only": the values of GitHub's Primer Primitives 11.10
+ * (functional themes light.css and dark.css) put onto the --sdt-* tokens of
+ * docs/design/mockups/sdt.css. Loaded after sdt.css, it changes no component, so the accepted
+ * mockups render in Primer's palette with native elements.
+ *
+ * Primer's dark muted backgrounds are translucent; they appear here blended onto their usual
+ * surface, because check-contrast.js needs opaque hex values. Where Primer has no matching token
+ * (the spatial reference palette) sdt.css keeps its own.
+ * sdt.css uses one accent for text and for filled buttons. Primer keeps them apart (#4493f8 text,
+ * #1f6feb fill with white text in dark), so Primer's dark text accent with white on it fails AA.
+ * Dark on-accent is therefore Primer's dark page colour and the hover is Primer's #79c0ff.
+ * docs/design/scripts/check-contrast.js --tokens <this file> checks the result against WCAG 2.2 AA.
+ * Keep each colour token on one line as a hex value.
+ */
+
+/* ---- Tokens: light ---- */
+:root {
+  --sdt-bg: #ffffff;
+  --sdt-bg-subtle: #f6f8fa;
+  --sdt-bg-selected: #ddf4ff;
+  --sdt-fg: #1f2328;
+  --sdt-fg-muted: #59636e;
+  --sdt-border: #d1d9e0;
+  --sdt-border-strong: #818b98;
+  --sdt-accent: #0969da;
+  --sdt-accent-hover: #0757ba;
+  --sdt-on-accent: #ffffff;
+  --sdt-focus: #0969da;
+  --sdt-warn-bg: #fff8c5;
+  --sdt-warn-fg: #9a6700;
+  --sdt-warn-border: #9a6700;
+  --sdt-error-bg: #ffebe9;
+  --sdt-error-fg: #d1242f;
+  --sdt-error-border: #cf222e;
+  --sdt-ok-fg: #1a7f37;
+  --sdt-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --sdt-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sdt-radius-s: 3px;
+  --sdt-radius-m: 6px;
+  --sdt-radius-l: 12px;
+}
+
+/* ---- Tokens: dark ---- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sdt-bg: #0d1117;
+    --sdt-bg-subtle: #151b23;
+    --sdt-bg-selected: #192639;
+    --sdt-fg: #f0f6fc;
+    --sdt-fg-muted: #9198a1;
+    --sdt-border: #3d444d;
+    --sdt-border-strong: #656c76;
+    --sdt-accent: #4493f8;
+    --sdt-accent-hover: #79c0ff;
+    --sdt-on-accent: #0d1117;
+    --sdt-focus: #1f6feb;
+    --sdt-warn-bg: #272215;
+    --sdt-warn-fg: #d29922;
+    --sdt-warn-border: #9e6a03;
+    --sdt-error-bg: #25181c;
+    --sdt-error-fg: #f85149;
+    --sdt-error-border: #da3633;
+    --sdt-ok-fg: #3fb950;
+  }
+}

@@ -1,0 +1,129 @@
+<!doctype html>
+<!--
+  Primer spike: docs/design/mockups/services-root.html with the in-page additions built from
+  Primer's CSS components and Octicons. The host page and its rows are the same as the accepted
+  mockup. Everything inside an element with class "sdt" is what the extension would add, and
+  each of those roots carries Primer's data-color-mode attributes, so Primer's theme variables
+  apply to the extension's elements only.
+  Linked labels use Label--large, which is 24px tall and meets SC 2.5.8; the default Label is 20px.
+  Primer's Label colours are semantic (danger, attention, severe), so the spatial reference badges
+  use only the four that carry no warning meaning: accent, success, done and sponsors.
+  The map preview pop-up is left out, as in the accepted mockup's other rows.
+  docs/design/primer-spike/scripts/capture.js serves the Primer packages at /primer/.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Folder: / with Primer (spike mockup)</title>
+<link rel="stylesheet" href="../../mockups/host-standin.css">
+<link rel="stylesheet" href="/primer/css/primitives.css">
+<link rel="stylesheet" href="/primer/primitives/functional/size/border.css">
+<link rel="stylesheet" href="/primer/primitives/functional/size/radius.css">
+<link rel="stylesheet" href="/primer/primitives/functional/size/size.css">
+<link rel="stylesheet" href="/primer/primitives/functional/typography/typography.css">
+<link rel="stylesheet" href="/primer/primitives/functional/themes/light.css">
+<link rel="stylesheet" href="/primer/primitives/functional/themes/dark.css">
+<link rel="stylesheet" href="/primer/pvc/primer_view_components.css">
+<style>
+  /* What the content-script stylesheet would add on top of Primer. */
+  .sdt { font-family: var(--fontStack-system); font-size: 12px; line-height: 1.5; color: var(--fgColor-default); }
+  .sdt *, .sdt *::before, .sdt *::after { box-sizing: border-box; }
+  .sdt .octicon { fill: currentColor; vertical-align: text-bottom; }
+  .sdt-statusbar { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 6px 12px; background: var(--bgColor-muted); border: 1px solid var(--borderColor-default); border-left: 3px solid var(--borderColor-accent-emphasis); border-radius: var(--borderRadius-medium); }
+  .sdt-statusbar__name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+  .sdt-statusbar p { margin: 0; }
+  .sdt-annot { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; background: none; }
+  .sdt-annot .Label { text-decoration: none; }
+  .sdt-annot .Label .sr-only, .sdt-details .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .sdt-error { display: inline-flex; align-items: center; gap: 4px; color: var(--fgColor-danger); }
+  .sdt-details { display: inline-block; margin-left: 8px; vertical-align: top; background: none; }
+  .sdt-details > summary { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; cursor: pointer; color: var(--fgColor-accent); }
+  .sdt-details__meta { color: var(--fgColor-muted); }
+  .sdt-details[open] { display: block; margin: 4px 0 8px; max-width: 46rem; }
+  .sdt-details .Box { margin-top: 4px; }
+  .sdt-dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 0; }
+  .sdt-dl dt { color: var(--fgColor-muted); }
+  .sdt-dl dd { margin: 0; }
+  .sdt-mono { font-family: var(--fontStack-monospace); }
+  .sdt-group { margin: 0 0 4px; font-weight: 600; }
+  .sdt-spinner { width: 12px; height: 12px; border: 2px solid var(--borderColor-default); border-top-color: var(--fgColor-accent); border-radius: 50%; animation: sdt-spin 0.8s linear infinite; }
+  @keyframes sdt-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .sdt-spinner { animation: none; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<symbol id="o-sync" viewBox="0 0 16 16"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"/></symbol>
+<symbol id="o-x-circle" viewBox="0 0 16 16"><path d="M2.344 2.343h-.001a8 8 0 0 1 11.314 11.314A8.002 8.002 0 0 1 .234 10.089a8 8 0 0 1 2.11-7.746Zm1.06 10.253a6.5 6.5 0 1 0 9.108-9.275 6.5 6.5 0 0 0-9.108 9.275ZM6.03 4.97 8 6.94l1.97-1.97a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l1.97 1.97a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-1.97 1.97a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L6.94 8 4.97 6.03a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018Z"/></symbol>
+<symbol id="o-stack" viewBox="0 0 16 16"><path d="M7.122.392a1.75 1.75 0 0 1 1.756 0l5.003 2.902c.83.481.83 1.68 0 2.162L8.878 8.358a1.75 1.75 0 0 1-1.756 0L2.119 5.456a1.251 1.251 0 0 1 0-2.162ZM8.125 1.69a.248.248 0 0 0-.25 0l-4.63 2.685 4.63 2.685a.248.248 0 0 0 .25 0l4.63-2.685ZM1.601 7.789a.75.75 0 0 1 1.025-.273l5.249 3.044a.248.248 0 0 0 .25 0l5.249-3.044a.75.75 0 0 1 .752 1.298l-5.248 3.044a1.75 1.75 0 0 1-1.756 0L1.874 8.814A.75.75 0 0 1 1.6 7.789Zm0 3.5a.75.75 0 0 1 1.025-.273l5.249 3.044a.248.248 0 0 0 .25 0l5.249-3.044a.75.75 0 0 1 .752 1.298l-5.248 3.044a1.75 1.75 0 0 1-1.756 0l-5.248-3.044a.75.75 0 0 1-.273-1.025Z"/></symbol>
+</svg>
+
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right"><a href="#login">Login</a></td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+<a href="#home">Home</a>
+  &gt; <a href="#services">services</a>
+</td>
+<td align="right"><a href="#help">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="#json">JSON</a></td></tr>
+</table>
+<h2>Folder: /</h2>
+
+<!-- Extension: page status bar, in the flow under the heading. -->
+<div class="sdt sdt-statusbar" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark">
+  <span class="sdt-statusbar__name"><svg class="octicon" width="16" height="16" aria-hidden="true"><use href="#o-stack"/></svg>SD Toolkit</span>
+  <span class="sdt-spinner" aria-hidden="true"></span>
+  <p role="status">Loading details: 6 of 8 services, 1 failed</p>
+</div>
+
+<div class="rbody">
+<b>Current Version: </b>11.3<br/><br/>
+<b>Folders: </b>
+<ul>
+<li><a href="#transport">Transport</a></li>
+<li><a href="#utilities">Utilities</a></li>
+</ul>
+<b>Services: </b>
+<ul>
+<li><a href="#parcels-map">Parcels</a> (MapServer)<span class="sdt sdt-annot" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><a class="Label Label--large Label--success" href="#sr-3857"><span class="sr-only">Spatial reference </span>3857</a><span class="Label Label--large Label--secondary">Dynamic</span></span><details class="sdt sdt-details" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><summary>Details <span class="sdt-details__meta">2 layers, max 1,000 records</span></summary></details></li>
+<li><a href="#parcels-feature">Parcels</a> (FeatureServer)<span class="sdt sdt-annot" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><a class="Label Label--large Label--success" href="#sr-3857"><span class="sr-only">Spatial reference </span>3857</a></span><details class="sdt sdt-details" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><summary>Details <span class="sdt-details__meta">2 layers, max 1,000 records</span></summary></details></li>
+<li><a href="#elevation">Elevation</a> (ImageServer)<span class="sdt sdt-annot" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><a class="Label Label--large Label--accent" href="#sr-4326"><span class="sr-only">Spatial reference </span>4326</a></span><details class="sdt sdt-details" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><summary>Details <span class="sdt-details__meta">1 band, F32 pixels</span></summary></details></li>
+<li><a href="#basemap">Basemap</a> (MapServer)<span class="sdt sdt-annot" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><a class="Label Label--large Label--success" href="#sr-3857"><span class="sr-only">Spatial reference </span>3857</a><span class="Label Label--large Label--secondary">Tiled</span></span><details class="sdt sdt-details" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><summary>Details <span class="sdt-details__meta">4 layers, max 2,000 records</span></summary></details></li>
+<li><a href="#hydrants">Hydrants</a> (FeatureServer)<span class="sdt sdt-annot" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><span class="sdt-error"><svg class="octicon" width="12" height="12" aria-hidden="true"><use href="#o-x-circle"/></svg>Details unavailable: HTTP 502</span><button class="Button Button--invisible Button--small" type="button"><span class="Button-content"><span class="Button-visual Button-leadingVisual"><svg class="octicon" width="16" height="16" aria-hidden="true"><use href="#o-sync"/></svg></span><span class="Button-label">Retry<span class="sr-only"> details for Hydrants</span></span></span></button></span></li>
+<li><a href="#survey">Survey Points</a> (MapServer)<span class="sdt sdt-annot" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><span class="sdt-spinner" aria-hidden="true"></span>Loading details</span></li>
+<li><a href="#zoning">Zoning</a> (MapServer)<span class="sdt sdt-annot" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><a class="Label Label--large Label--done" href="#sr-26910"><span class="sr-only">Spatial reference </span>26910</a><span class="Label Label--large Label--secondary">Dynamic</span></span><details class="sdt sdt-details" open data-color-mode="auto" data-light-theme="light" data-dark-theme="dark"><summary>Details <span class="sdt-details__meta">3 layers, max 1,000 records</span></summary>
+    <div class="Box Box--condensed">
+      <div class="Box-row">
+        <p class="sdt-group">Service</p>
+        <dl class="sdt-dl">
+          <dt>Description</dt><dd>Zoning districts and overlays for an invented county.</dd>
+          <dt>Copyright</dt><dd>© Example County GIS</dd>
+          <dt>Layers and tables</dt><dd>3 layers, 0 tables</dd>
+          <dt>Capabilities</dt><dd>Map, Query, Data</dd>
+          <dt>Max record count</dt><dd class="sdt-mono">1000</dd>
+          <dt>Units</dt><dd>Meters</dd>
+        </dl>
+      </div>
+      <div class="Box-row">
+        <p class="sdt-group">Extent</p>
+        <dl class="sdt-dl">
+          <dt>Initial</dt><dd class="sdt-mono">497000, 5035000, 541000, 5062000</dd>
+          <dt>Spatial reference</dt><dd><span class="sdt-mono">26910</span></dd>
+        </dl>
+      </div>
+    </div>
+  </details>
+</li>
+</ul>
+</div>
+</body>
+</html>
