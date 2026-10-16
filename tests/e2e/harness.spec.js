@@ -270,7 +270,10 @@ test.describe("a redirect to another host", () => {
     await page.goto(`${FAKE_ORIGIN}/other/page`);
     await page.evaluate(() => fetch("/arcgis/rest/moved").catch(() => {}));
     expect(harness.offHost).toContainEqual("https://example.com/landing");
-    await expect.poll(() => harness.errors).toContainEqual(expect.stringContaining("ERR_NAME_NOT_RESOLVED [https://example.com/landing]"));
+    // Behind a proxy, Chromium hands the request to the proxy, whose host name doesn't resolve either.
+    await expect.poll(() => harness.errors).toContainEqual(
+      expect.stringMatching(/ERR_(NAME_NOT_RESOLVED|PROXY_CONNECTION_FAILED) \[https:\/\/example\.com\/landing\]/)
+    );
     harness.forgive();
   });
 
