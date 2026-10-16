@@ -438,7 +438,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Status bar.** The Phase 3 indicator becomes a one-line status bar in the page flow, under the page's `<h2>` (design review section 6.3). It reports busy, done (with the number of requests made), budget reached (with a Load more button) and server pushback. Pages with nothing to report show no bar.
 
-**Settings.** The Count values button replaces `autoFieldCounts` and `autoDomainCounts`. Phase 4's schema already leaves them out, so the options page never offers them, and `inject.js` keeps its field counts on a constant until this phase replaces that constant with Count values. Nothing migrates, because 2.0.0 is unpublished.
+**Settings.** The Count values button replaces `autoFieldCounts` and `autoDomainCounts`. Phase 4's schema already leaves them out, so the options page never offers them, and `inject.js` keeps its field and domain counts on a constant until this phase replaces that constant with Count values. Nothing migrates, because 2.0.0 is unpublished.
 
 **Per-layer counts** stay automatic, within the request budget:
 - total features: `returnCountOnly`
