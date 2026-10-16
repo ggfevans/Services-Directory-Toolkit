@@ -2,6 +2,8 @@
 //
 //   node docs/design/scripts/check-contrast.js            prints a Markdown table
 //   node docs/design/scripts/check-contrast.js --quiet    prints failures only
+//   node docs/design/scripts/check-contrast.js --tokens docs/design/calcite-spike/mockups/calcite-tokens.css
+//                                                         checks sdt.css with another file's tokens on top
 //
 // Text pairs need 4.5:1 (SC 1.4.3). Non-text pairs (control borders, focus rings, icons, badge
 // borders, switch parts) need 3:1 (SC 1.4.11). "page" is the background of the host page the
@@ -12,18 +14,25 @@
 import { readFileSync } from "node:fs";
 
 const CSS = readFileSync(new URL("../mockups/sdt.css", import.meta.url), "utf8");
+const tokensFlag = process.argv.indexOf("--tokens");
+const OVERRIDE = tokensFlag > 0 ? readFileSync(process.argv[tokensFlag + 1], "utf8") : "";
 const PAGE = { light: "#ffffff", dark: "#16191d" };
 
-/** Reads the --sdt-* hex colours from the first block that follows marker. */
-const tokens = (marker) => {
-  const start = CSS.indexOf(marker);
-  const block = CSS.slice(start, CSS.indexOf("}", start));
+/** Reads the --sdt-* hex colours from the first block in css that follows marker. */
+const tokens = (css, marker) => {
+  const start = css.indexOf(marker);
+  if (start < 0) {
+    return {};
+  }
+  const block = css.slice(start, css.indexOf("}", start));
   return Object.fromEntries([...block.matchAll(/--sdt-([a-z0-9-]+):\s*(#[0-9a-f]{6});/gi)].map(([, name, value]) => [name, value.toLowerCase()]));
 };
 
-const light = tokens("/* ---- Tokens: light ---- */");
+const LIGHT = "/* ---- Tokens: light ---- */";
+const DARK = "/* ---- Tokens: dark ---- */";
+const light = { ...tokens(CSS, LIGHT), ...tokens(OVERRIDE, LIGHT) };
 // Dark tokens override light ones; anything not overridden keeps its light value.
-const dark = { ...light, ...tokens("/* ---- Tokens: dark ---- */") };
+const dark = { ...light, ...tokens(CSS, DARK), ...tokens(OVERRIDE, DARK) };
 
 const luminance = (hex) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)

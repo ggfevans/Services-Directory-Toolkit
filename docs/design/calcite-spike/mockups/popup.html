@@ -1,0 +1,172 @@
+<!doctype html>
+<!--
+  Calcite spike: frames A, C and D of docs/design/mockups/popup.html, built with Calcite 5.1
+  components. Same content and states as the accepted mockup, so the screenshots compare like
+  with like. docs/design/calcite-spike/scripts/capture.js serves Calcite's CDN build at /calcite/.
+  Each frame is the whole popup document in the extension, 23.75rem wide.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Toolbar popup in Calcite (spike mockup)</title>
+<link rel="stylesheet" href="/calcite/main.css">
+<script type="module" src="/calcite/index.js"></script>
+<style>
+  /* Mockup only: lays the frames out side by side. */
+  body { margin: 0; padding: 16px; background: var(--calcite-color-background); font-family: var(--calcite-font-family); }
+  .mock-grid { display: grid; grid-template-columns: repeat(3, 23.75rem); gap: 16px; align-items: start; }
+  .mock-caption { margin: 0 0 6px; font-size: 12px; color: var(--calcite-color-text-3); }
+  .mock-frame { border: 1px solid var(--calcite-color-border-1); box-shadow: var(--calcite-shadow-md, 0 4px 16px rgb(0 0 0 / 0.16)); }
+
+  /* What the popup's own stylesheet would add on top of Calcite. */
+  .popup { background: var(--calcite-color-foreground-1); color: var(--calcite-color-text-1); font-size: var(--calcite-font-size); }
+  .popup__head { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--calcite-color-border-3); }
+  .popup__head h1 { margin: 0; font-size: 16px; font-weight: var(--calcite-font-weight-semibold, 600); }
+  .popup__where { grid-column: 1 / -1; margin: 4px 0 0; font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--calcite-color-text-2); overflow-wrap: anywhere; }
+  .popup__section { padding: 12px 16px; border-bottom: 1px solid var(--calcite-color-border-3); display: grid; gap: 10px; }
+  .popup__section:last-child { border-bottom: 0; }
+  .popup__section h2 { margin: 0; display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: var(--calcite-font-weight-semibold, 600); }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row > calcite-input { flex: 1; }
+  .hint { margin: 0; font-size: 12px; color: var(--calcite-color-text-2); }
+  .switches { display: grid; gap: 8px; }
+  .results { list-style: none; margin: 0; padding: 0; border: 1px solid var(--calcite-color-border-2); }
+  .results li + li { border-top: 1px solid var(--calcite-color-border-3); }
+  .results a { display: grid; gap: 2px; padding: 8px 12px; color: var(--calcite-color-text-1); text-decoration: none; }
+  .results a:hover { background: var(--calcite-color-foreground-2); }
+  .results a:focus-visible { outline: 2px solid var(--calcite-color-focus); outline-offset: -2px; }
+  .results__match { color: var(--calcite-color-text-link, var(--calcite-color-brand)); text-decoration: underline; }
+  .results__where { font-size: 12px; color: var(--calcite-color-text-2); }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  mark { background: none; color: inherit; font-weight: 700; }
+  calcite-notice { width: 100%; }
+</style>
+</head>
+<body class="calcite-mode-auto">
+<main class="mock-grid">
+
+<!-- A -->
+<div id="frame-a">
+  <p class="mock-caption">A. On a query page</p>
+  <div class="mock-frame popup">
+    <header class="popup__head">
+      <calcite-icon icon="layers" scale="m" aria-hidden="true"></calcite-icon>
+      <h1>Services Directory Toolkit</h1>
+      <p class="popup__where">arcgis.test/arcgis/rest/services/Parcels/MapServer/0/query</p>
+    </header>
+    <section class="popup__section" aria-labelledby="a-trim">
+      <h2 id="a-trim">Trim query URL</h2>
+      <calcite-text-area label="Trimmed URL" read-only rows="2" resize="vertical" value="https://arcgis.test/arcgis/rest/services/Parcels/MapServer/0/query?where=1%3D1&amp;outFields=*"></calcite-text-area>
+      <p class="hint">Removed 11 empty or default parameters: 312 to 96 characters.</p>
+      <div class="row"><calcite-button icon-start="copy">Copy URL</calcite-button></div>
+    </section>
+    <section class="popup__section" aria-labelledby="a-search">
+      <h2 id="a-search">Search this server</h2>
+      <form role="search" aria-labelledby="a-search" class="switches">
+        <div class="row">
+          <calcite-input type="search" label-text="Find names, fields and descriptions" label="Find names, fields and descriptions" required></calcite-input>
+          <calcite-button appearance="outline" icon-start="search" type="submit">Search</calcite-button>
+        </div>
+        <calcite-checkbox label-text="Regular expression" label="Regular expression"></calcite-checkbox>
+        <p class="hint">Starts at Parcels/MapServer/0 and follows the layers and tables below it.</p>
+      </form>
+    </section>
+    <section class="popup__section" aria-labelledby="a-set">
+      <h2 id="a-set">Settings <calcite-link href="#options" icon-end="launch">All settings</calcite-link></h2>
+      <div class="switches">
+        <calcite-switch label-text-start="Load service details and spatial references" checked></calcite-switch>
+        <calcite-switch label-text-start="Count features in each layer" checked></calcite-switch>
+        <calcite-switch label-text-start="Show map previews on hover and focus" checked></calcite-switch>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- C -->
+<div id="frame-c">
+  <p class="mock-caption">C. Finished, with failures; a setting changed</p>
+  <div class="mock-frame popup">
+    <header class="popup__head">
+      <calcite-icon icon="layers" scale="m" aria-hidden="true"></calcite-icon>
+      <h1>Services Directory Toolkit</h1>
+      <p class="popup__where">arcgis.test/arcgis/rest/services</p>
+    </header>
+    <section class="popup__section" aria-labelledby="c-search">
+      <h2 id="c-search">Search this server</h2>
+      <form role="search" aria-labelledby="c-search">
+        <div class="row">
+          <calcite-input type="search" label-text="Find names, fields and descriptions" label="Find names, fields and descriptions" required value="roads"></calcite-input>
+          <calcite-button appearance="outline" icon-start="search" type="submit">Search</calcite-button>
+        </div>
+      </form>
+      <calcite-notice kind="warning" icon open scale="s" role="status">
+        <div slot="message">Searched 42 locations: 2 matches. 2 locations failed.</div>
+      </calcite-notice>
+      <calcite-block heading="Show the 2 failed locations" collapsible scale="s">
+        <ul class="hint">
+          <li><span class="mono">Utilities/PrintingTools/GPServer</span>: HTTP 500</li>
+          <li><span class="mono">Transport/Bridges/MapServer</span>: no answer in 10 s</li>
+        </ul>
+      </calcite-block>
+      <ul class="results">
+        <li><a href="#r5" target="_blank"><span class="results__match"><mark>Roads</mark></span><span class="results__where">Service name in <span class="mono">Transport/Roads/MapServer</span></span></a></li>
+        <li><a href="#r6" target="_blank"><span class="results__match"><mark>Roads</mark> 2019</span><span class="results__where">Layer in <span class="mono">Transport/Roads/MapServer/0</span></span></a></li>
+      </ul>
+    </section>
+    <section class="popup__section" aria-labelledby="c-set">
+      <h2 id="c-set">Settings <calcite-link href="#options" icon-end="launch">All settings</calcite-link></h2>
+      <div class="switches">
+        <calcite-switch label-text-start="Load service details and spatial references" checked></calcite-switch>
+        <calcite-switch label-text-start="Count features in each layer" checked></calcite-switch>
+        <calcite-switch label-text-start="Show map previews on hover and focus"></calcite-switch>
+      </div>
+      <calcite-notice kind="success" icon open scale="s" role="status">
+        <div slot="message">Saved. Reload the page to apply it.</div>
+        <calcite-button slot="actions-end" icon-start="refresh" scale="s">Reload page</calcite-button>
+      </calcite-notice>
+    </section>
+  </div>
+</div>
+
+<!-- D -->
+<div id="frame-d">
+  <p class="mock-caption">D. Problems</p>
+  <div class="mock-frame popup">
+    <header class="popup__head">
+      <calcite-icon icon="layers" scale="m" aria-hidden="true"></calcite-icon>
+      <h1>Services Directory Toolkit</h1>
+      <p class="popup__where">arcgis.test/arcgis/rest/services/Transport/Roads/MapServer/0/query</p>
+    </header>
+    <section class="popup__section" aria-labelledby="d-trim">
+      <h2 id="d-trim">Trim query URL</h2>
+      <calcite-text-area label="Trimmed URL" read-only rows="3" resize="vertical" value="https://arcgis.test/arcgis/rest/services/Transport/Roads/MapServer/0/query?where=ROAD_NAME+LIKE+%27S%25%27"></calcite-text-area>
+      <div class="row"><calcite-button icon-start="copy">Copy URL</calcite-button></div>
+      <calcite-notice kind="danger" icon open scale="s" role="status">
+        <div slot="message">Couldn't copy. Select the URL and press Ctrl+C.</div>
+      </calcite-notice>
+    </section>
+    <section class="popup__section" aria-labelledby="d-search">
+      <h2 id="d-search">Search this server</h2>
+      <form role="search" aria-labelledby="d-search" class="switches">
+        <div class="row">
+          <calcite-input type="search" label-text="Find names, fields and descriptions" label="Find names, fields and descriptions" required value="road(s" status="invalid" validation-icon validation-message="Not a valid regular expression: a group is missing its closing &quot;)&quot;."></calcite-input>
+          <calcite-button appearance="outline" icon-start="search" type="submit">Search</calcite-button>
+        </div>
+        <calcite-checkbox label-text="Regular expression" label="Regular expression" checked></calcite-checkbox>
+      </form>
+    </section>
+    <section class="popup__section" aria-labelledby="d-set">
+      <h2 id="d-set">Settings <calcite-link href="#options" icon-end="launch">All settings</calcite-link></h2>
+      <div class="switches">
+        <calcite-switch label-text-start="Load service details and spatial references"></calcite-switch>
+        <calcite-switch label-text-start="Count features in each layer" checked disabled></calcite-switch>
+        <p class="hint">Counting features needs service details turned on.</p>
+        <calcite-switch label-text-start="Show map previews on hover and focus" checked></calcite-switch>
+      </div>
+    </section>
+  </div>
+</div>
+
+</main>
+</body>
+</html>

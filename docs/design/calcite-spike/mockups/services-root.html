@@ -1,0 +1,106 @@
+<!doctype html>
+<!--
+  Calcite spike: docs/design/mockups/services-root.html with the in-page additions built from
+  Calcite 5.1 components. The host page and its rows are the same as the accepted mockup.
+  Everything inside an element with class "sdt" is what the extension would add.
+  In the extension these elements would be created by the isolated-world content script and
+  upgraded by Calcite loaded in the MAIN world (see the probe in ../scripts/).
+  docs/design/calcite-spike/scripts/capture.js serves Calcite's CDN build at /calcite/.
+  The map preview pop-up is left out: calcite-popover would need its own reference element and
+  open-state wiring, which the spike did not build.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Folder: / with Calcite (spike mockup)</title>
+<link rel="stylesheet" href="../../mockups/host-standin.css">
+<link rel="stylesheet" href="/calcite/main.css">
+<script type="module" src="/calcite/index.js"></script>
+<style>
+  /* What the content-script stylesheet would add on top of Calcite. */
+  .sdt { font-family: var(--calcite-font-family); font-size: 13px; color: var(--calcite-color-text-1); }
+  .sdt-statusbar { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 6px 12px; background: var(--calcite-color-foreground-1); border: 1px solid var(--calcite-color-border-2); border-inline-start: 3px solid var(--calcite-color-brand); }
+  .sdt-statusbar__name { font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .sdt-statusbar p { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+  .sdt-annot { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-inline-start: 8px; vertical-align: middle; }
+  .sdt-annot calcite-chip { vertical-align: middle; }
+  .sdt-error { display: inline-flex; align-items: center; gap: 4px; color: var(--calcite-color-status-danger-hover, #a82b1e); }
+  .sdt-details { margin: 4px 0 8px; max-width: 46rem; }
+  .sdt-dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 0; }
+  .sdt-dl dt { color: var(--calcite-color-text-2); }
+  .sdt-dl dd { margin: 0; }
+  .sdt-mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .sdt-details__group { margin: 8px 0 4px; font-weight: 600; }
+  .sdt-details__group:first-child { margin-top: 0; }
+  @media (prefers-color-scheme: dark) {
+    .sdt-error { color: var(--calcite-color-status-danger); }
+  }
+</style>
+</head>
+<body>
+
+<table width="100%" class="userTable">
+<tr>
+<td class="titlecell">ArcGIS REST Services Directory</td>
+<td align="right"><a href="#login">Login</a></td>
+</tr>
+</table>
+<table width="100%" class="navTable">
+<tr valign="top">
+<td class="breadcrumbs">
+<a href="#home">Home</a>
+  &gt; <a href="#services">services</a>
+</td>
+<td align="right"><a href="#help">API Reference</a></td>
+</tr>
+</table>
+<table>
+<tr><td class="apiref"><a href="#json">JSON</a></td></tr>
+</table>
+<h2>Folder: /</h2>
+
+<!-- Extension: page status bar, in the flow under the heading. -->
+<div class="sdt sdt-statusbar calcite-mode-auto">
+  <span class="sdt-statusbar__name"><calcite-icon icon="layers" scale="s" aria-hidden="true"></calcite-icon>SD Toolkit</span>
+  <p role="status"><calcite-loader inline label="Loading details" scale="s"></calcite-loader>Loading details: 6 of 8 services, 1 failed</p>
+</div>
+
+<div class="rbody">
+<b>Current Version: </b>11.3<br/><br/>
+<b>Folders: </b>
+<ul>
+<li><a href="#transport">Transport</a></li>
+<li><a href="#utilities">Utilities</a></li>
+</ul>
+<b>Services: </b>
+<ul>
+<li><a href="#parcels-map">Parcels</a> (MapServer)<span class="sdt sdt-annot calcite-mode-auto"><calcite-chip scale="s" kind="brand" appearance="outline-fill" label="Spatial reference 3857" value="3857">3857</calcite-chip><calcite-chip scale="s" label="Dynamic" value="dynamic">Dynamic</calcite-chip></span></li>
+<li><a href="#parcels-feature">Parcels</a> (FeatureServer)<span class="sdt sdt-annot calcite-mode-auto"><calcite-chip scale="s" kind="brand" appearance="outline-fill" label="Spatial reference 3857" value="3857">3857</calcite-chip></span></li>
+<li><a href="#elevation">Elevation</a> (ImageServer)<span class="sdt sdt-annot calcite-mode-auto"><calcite-chip scale="s" kind="brand" appearance="outline-fill" label="Spatial reference 4326" value="4326">4326</calcite-chip></span></li>
+<li><a href="#hydrants">Hydrants</a> (FeatureServer)<span class="sdt sdt-annot calcite-mode-auto"><span class="sdt-error"><calcite-icon icon="exclamation-mark-circle" scale="s" aria-hidden="true"></calcite-icon>Details unavailable: HTTP 502</span><calcite-button appearance="transparent" scale="s" icon-start="refresh" label="Retry details for Hydrants">Retry</calcite-button></span></li>
+<li><a href="#survey">Survey Points</a> (MapServer)<span class="sdt sdt-annot calcite-mode-auto"><calcite-loader inline label="Loading details" scale="s"></calcite-loader>Loading details</span></li>
+<li><a href="#zoning">Zoning</a> (MapServer)<span class="sdt sdt-annot calcite-mode-auto"><calcite-chip scale="s" kind="brand" appearance="outline-fill" label="Spatial reference 26910" value="26910">26910</calcite-chip><calcite-chip scale="s" label="Dynamic" value="dynamic">Dynamic</calcite-chip></span>
+  <calcite-block class="sdt sdt-details calcite-mode-auto" heading="Details" description="3 layers, max 1,000 records" collapsible expanded scale="s">
+    <p class="sdt-details__group">Service</p>
+    <dl class="sdt-dl">
+      <dt>Description</dt><dd>Zoning districts and overlays for an invented county.</dd>
+      <dt>Copyright</dt><dd>© Example County GIS</dd>
+      <dt>Layers and tables</dt><dd>3 layers, 0 tables</dd>
+      <dt>Capabilities</dt><dd>Map, Query, Data</dd>
+      <dt>Max record count</dt><dd class="sdt-mono">1000</dd>
+      <dt>Units</dt><dd>Meters</dd>
+    </dl>
+    <p class="sdt-details__group">Extent</p>
+    <dl class="sdt-dl">
+      <dt>Initial</dt><dd class="sdt-mono">497000, 5035000, 541000, 5062000</dd>
+      <dt>Spatial reference</dt><dd><span class="sdt-mono">26910</span></dd>
+    </dl>
+  </calcite-block>
+</li>
+<li><a href="#basemap">Basemap</a> (MapServer)<span class="sdt sdt-annot calcite-mode-auto"><calcite-chip scale="s" kind="brand" appearance="outline-fill" label="Spatial reference 3857" value="3857">3857</calcite-chip><calcite-chip scale="s" label="Tiled" value="tiled">Tiled</calcite-chip></span>
+  <calcite-block class="sdt sdt-details calcite-mode-auto" heading="Details" description="4 layers, max 2,000 records" collapsible scale="s"></calcite-block>
+</li>
+</ul>
+</div>
+</body>
+</html>

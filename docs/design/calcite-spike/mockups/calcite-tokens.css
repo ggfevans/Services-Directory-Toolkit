@@ -1,0 +1,60 @@
+/*
+ * Calcite spike, adoption level "tokens only": Calcite 5.1's colour, shape and type values put
+ * onto the --sdt-* tokens of docs/design/mockups/sdt.css. Loaded after sdt.css, it changes no
+ * component, so the accepted mockups render in Calcite's palette with native elements.
+ *
+ * Values come from Calcite's main.css (:root and .calcite-mode-dark). Where Calcite has no
+ * matching token (the warning and error tints, the spatial reference palette) sdt.css keeps its own.
+ * Calcite's base values fail five of the contrast checks, so five tokens take the next Calcite
+ * step: the accent is Calcite's brand-hover in light and dark (its text-link colour in light), the
+ * hover is brand-press, light error text is status-danger-hover, and the strong border is
+ * Calcite's dark-mode border-input. Dark bg-selected is Calcite's foreground-current darkened
+ * from #2b465f to #283f55, which has no Calcite token. The spike report lists the failing pairs.
+ * docs/design/scripts/check-contrast.js --tokens <this file> checks the result against WCAG 2.2 AA.
+ * Keep each colour token on one line as a hex value.
+ */
+
+/* ---- Tokens: light ---- */
+:root {
+  --sdt-bg: #ffffff;
+  --sdt-bg-subtle: #f7f7f7;
+  --sdt-bg-selected: #d6efff;
+  --sdt-fg: #141414;
+  --sdt-fg-muted: #4a4a4a;
+  --sdt-border: #d4d4d4;
+  --sdt-border-strong: #757575;
+  --sdt-accent: #00619b;
+  --sdt-accent-hover: #004874;
+  --sdt-on-accent: #ffffff;
+  --sdt-focus: #007ac2;
+  --sdt-warn-border: #da7c0b;
+  --sdt-error-fg: #a82b1e;
+  --sdt-error-border: #d83020;
+  --sdt-ok-fg: #288835;
+  --sdt-font-sans: "Avenir Next", Avenir, "Helvetica Neue", sans-serif;
+  --sdt-radius-s: 0;
+  --sdt-radius-m: 0;
+  --sdt-radius-l: 0;
+  --sdt-shadow-pop: 0 6px 20px -4px rgb(0 0 0 / 0.1), 0 4px 12px -2px rgb(0 0 0 / 0.08);
+}
+
+/* ---- Tokens: dark ---- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sdt-bg: #2b2b2b;
+    --sdt-bg-subtle: #212121;
+    --sdt-bg-selected: #283f55;
+    --sdt-fg: #ffffff;
+    --sdt-fg-muted: #bfbfbf;
+    --sdt-border: #545454;
+    --sdt-border-strong: #757575;
+    --sdt-accent: #40b9ff;
+    --sdt-accent-hover: #80d1ff;
+    --sdt-on-accent: #141414;
+    --sdt-focus: #009af2;
+    --sdt-warn-border: #f89927;
+    --sdt-error-fg: #fe583e;
+    --sdt-error-border: #fe583e;
+    --sdt-ok-fg: #36da43;
+  }
+}
