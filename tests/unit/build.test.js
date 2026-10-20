@@ -70,3 +70,27 @@ test("the build fails when package.json and the manifest versions differ", (t) =
   assert.strictEqual(result.status, 1);
   assert.match(result.stderr, /Version mismatch/);
 });
+
+test("the build fails when a content-script group loads a script that uses SDT before the lib", (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), "sdt-build-"));
+  t.after(() => rmSync(tmp, { recursive: true }));
+
+  cpSync(join(ROOT, "scripts"), join(tmp, "scripts"), { recursive: true });
+  cpSync(join(ROOT, "src"), join(tmp, "src"), { recursive: true });
+  cpSync(join(ROOT, "package.json"), join(tmp, "package.json"));
+  cpSync(join(ROOT, "LICENSE"), join(tmp, "LICENSE"));
+  symlinkSync(join(ROOT, "node_modules"), join(tmp, "node_modules"), "dir");
+
+  // Move the lib files to the end of inject.js's group.
+  const manifestPath = join(tmp, "src", "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const group = manifest.content_scripts.find((entry) => entry.js?.includes("src/inject/inject.js"));
+  group.js = [...group.js.filter((file) => !file.startsWith("src/lib/")), ...group.js.filter((file) => file.startsWith("src/lib/"))];
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  const result = spawnSync(process.execPath, [join(tmp, "scripts/build.js")], { cwd: tmpdir(), encoding: "utf8" });
+
+  assert.strictEqual(result.status, 1);
+  assert.match(result.stderr, /content_scripts\[\d\]: src\/inject\/inject\.js uses SDT\.dom before a script that defines it/);
+  assert.strictEqual(existsSync(join(tmp, "build", `${pkg.name}-${pkg.version}.zip`)), false);
+});
