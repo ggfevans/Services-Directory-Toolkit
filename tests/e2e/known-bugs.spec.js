@@ -24,7 +24,7 @@ const PRINT_TASK = `${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%2
 // The extension's own requests: those with f=json, in the query string or in a form body.
 const extensionRequests = (fakeServer) => fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json");
 
-knownBug("INJ-1", "a layer's JSON view gets no requests and no spinner", async ({ page, fakeServer }) => {
+test("INJ-1: a layer's JSON view gets no requests and no spinner", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0?f=pjson`);
   // Nothing on a JSON view signals that the scripts are done, so give them a moment.
   await page.waitForTimeout(1000);

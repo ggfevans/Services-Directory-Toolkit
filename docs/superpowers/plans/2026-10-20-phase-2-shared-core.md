@@ -2914,6 +2914,11 @@ import { folderPage } from "../fixtures/pages.js";
 const ROOT_PAGE = /^\/arcgis\/rest\/services$/;
 const LIMIT_NOTE = "Not loaded: request limit reached (50)";
 
+// The manifest's patterns match path plus query, and none of them matches .../rest/services?token=,
+// so the content scripts don't run there until Phase 3 adds a ?-query variant (MAN-2). These tests
+// open the root with a trailing slash, which /rest/services/* matches.
+const withToken = (root, token) => `${root}/?token=${token}`;
+
 /** The services root, with extra list items (HTML) at the top of its services list. */
 const rootWith = (extraItems) => folderPage({
   folder: "",
@@ -2969,7 +2974,7 @@ test("a page opened with ?token= sends the token in each metadata request's POST
 
 test("on ArcGIS Online, links that carry the page's token get metadata, with the token only in the body (TOK-3)", async ({ page, fakeServer }) => {
   const token = ONLINE_TOKENS.jsmith;
-  await page.goto(`${ONLINE_REST_ROOT}?token=${token}`);
+  await page.goto(withToken(ONLINE_REST_ROOT, token));
   await expect(page.locator(".sdt-datablock")).toHaveCount(2);
   await expect(page.locator(".sdt-datablock", { hasText: "Fire hydrants for an invented city." })).toHaveCount(1);
   const metadata = fakeServer.calls.filter((call) => call.origin === ONLINE_ORIGIN && /\/FeatureServer$/.test(call.path));
@@ -2984,7 +2989,7 @@ test("on ArcGIS Online, links that carry the page's token get metadata, with the
 test("a request that carries the token stops at a 307, and nothing reaches the redirect's target (TOK-1)", async ({ page, fakeServer }) => {
   const token = SERVER_TOKENS.jsmith;
   fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer$/, () => ({ status: 307, headers: { location: `${ONLINE_ORIGIN}/landing` }, body: "" }));
-  await page.goto(`${REST_ROOT}?token=${token}`);
+  await page.goto(withToken(REST_ROOT, token));
   const row = page.locator("li").filter({ hasText: /^\s*Parcels \(MapServer\)/ });
   await expect(row).toContainText("redirect");
   const redirected = fakeServer.calls.filter((call) => call.path === "/arcgis/rest/services/Parcels/MapServer");
@@ -3130,7 +3135,7 @@ Expected: FAIL. The online link gets a request, all 60 bulk services are request
   ```
 
 - In `checkDomains`, replace the `params` string and the `ajax(url + params, (response) => {...})` call. Send `limiter.fetchJson(`${url}/query`, { params: { where: `${item.field} = ${value}`, returnGeometry: "false", returnCountOnly: "true", f: "json" }, token })`, make the function `async`, and handle the result the same way: a skipped row appends `skippedNote(result.error, "li")` to `tr` and carries on with the next code, and a `null` from `legacyResponse` returns, as today.
-- In `FieldSelector`, make the same changes as in `queryTest.js` (Task B7 Step 5): the constructor calls `this.load(jsonUrl, callback)` through `SDT.net.pageLimiter()`, and `updateValues` calls `SDT.net.fetchJson` with the page token. In `updateValues`, use `token` from the block and `limiter` only in `load`.
+- In `FieldSelector`, make the same changes as in `queryTest.js` (Task B7 Step 5): the constructor calls `this.load(jsonUrl, callback)`, which uses `limiter`, and `updateValues` calls `SDT.net.fetchJson` with the page token. Both use `token` and `limiter` from the block.
 - Replace `setActive` with the IE-free version from Task B7 Step 5.
 - Replace the body of the `SDT.guard.onLoad(() => { ... })` handler with:
 
@@ -3145,11 +3150,15 @@ Expected: FAIL. The online link gets a request, all 60 bulk services are request
     const url = SDT.page.baseUrl(location);
 
     // Links to services on this server, outside the breadcrumbs. Each href loses its token, f and
-    // fragment before the test (TOK-3), and links to other servers get no requests (SEC-5).
+    // fragment before the test (TOK-3), and links to other servers get no requests (SEC-5). The
+    // page's own JSON link (?f=pjson) then points at the page itself, so links to the page are left out.
+    const self = url.replace(/\/+$/, "");
     const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0);
     const urls = tags
       .map((tag, i) => ({ i, url: SDT.url.stripForFilter(tag.href) }))
-      .filter((item) => tags[item.i].parentNode.className !== "breadcrumbs"
+      .filter((item) => pageScope !== null
+        && tags[item.i].parentNode.className !== "breadcrumbs"
+        && item.url.replace(/\/+$/, "") !== self
         && SDT.auth.scopeOf(item.url) === pageScope
         && /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url));
 
@@ -3205,12 +3214,18 @@ Expected: FAIL. The online link gets a request, all 60 bulk services are request
   ```
 
   Metadata requests now run through the limiter, up to four at once, instead of one after another. A failed one shows its error in its own row and no longer stops the others.
+
+  Two filter conditions aren't obvious. Without `pageScope !== null`, a page with no scope (an encoded separator in its instance path) would pass links that also have no scope, such as links to other sites. And once `f` is stripped, every page's own "JSON" link (`?f=pjson`) points at the page, so a service or layer page would request its own metadata and show it under that link.
 - Move today's field-count block (from `ajax(url + "?f=json", (results) => {` to its closing `});`) into a new top-level function. Keep its body, and change only the request and the callback's first lines:
 
   ```js
   /** Counts values for each field and coded value of the layer at url. */
   const countFields = async (url) => {
     const results = SDT.net.legacyResponse(await limiter.fetchJson(url, { params: { f: "json" }, token }));
+    // The answer can arrive after an update has cut this script off.
+    if (!SDT.guard.alive()) {
+      return;
+    }
     if (results && results.fields && results.fields.length > 0) {
       // ...today's body, unchanged, from "const fieldHTML = getFieldList();" on...
     }
