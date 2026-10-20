@@ -41,6 +41,7 @@
         "src/lib/auth.js",
         "src/lib/url.js",
         "src/lib/net.js",
+        "src/lib/page.js",
         "src/inject/inject.js",
         "src/inject/status.js",
         "src/inject/mapImages.js"
@@ -57,6 +58,7 @@
         "src/lib/auth.js",
         "src/lib/url.js",
         "src/lib/net.js",
+        "src/lib/page.js",
         "src/inject/queryTest.js"
       ]
     },
@@ -73,6 +75,7 @@
         "src/lib/auth.js",
         "src/lib/url.js",
         "src/lib/net.js",
+        "src/lib/page.js",
         "src/inject/printTask.js"
       ]
     }

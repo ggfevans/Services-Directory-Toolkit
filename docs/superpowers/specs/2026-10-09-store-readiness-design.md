@@ -318,7 +318,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - takes the token as an argument and doesn't read `location`, so a later feature can supply a token from another source
   - attaches the token only to URLs inside the token scope: the origin plus the path up to and including the first whole-segment `/rest/services`, read from the parsed `URL.pathname` (TOK-2)
   - compares the host and the instance path in lower case, except an ArcGIS Online org ID, which is case-sensitive
-  - resolves `%2e%2e` segments before the check (`new URL()` resolves these; #44 settles what survives parsing), scopes `/restricted/rest/services` to `/restricted`, and leaves `/admin`, `/tokens` and `/manager` outside the scope
+  - resolves `%2e%2e` segments before the check (`new URL()` resolves these), gives no scope to an instance path that still contains `%2f`, `%2e`, `%25` or `%5c` after parsing (owner's decision on #44), scopes `/restricted/rest/services` to `/restricted`, and leaves `/admin`, `/tokens` and `/manager` outside the scope
   - strips `token`, `f` and the fragment from a link's href before the link filters in `inject.js` and `mapImages.js` test it (TOK-3)
 
 **`SDT` page classifier:**
@@ -327,6 +327,13 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - A page can still rewrite its path with `history.replaceState` before the scripts load. The extension's requests from that page go only to the page's origin, and section 3 treats the check as a correctness filter.
 - It relies on markers common to 10.9, 11.x, 12.x (12.1 is current) and ArcGIS Online. Check the 12.1 Services Directory markup before choosing the markers, and add a 12.x fixture variant if it differs.
 - On `jsonView` and `other` the scripts do nothing and show no spinner.
+
+**12.1 markup check (2026-10-20).** Source: a search engine's index of public 12.0, 12.1 and ArcGIS Online Services Directory pages, read on 2026-10-20: EPA's `edg.epa.gov`, `gispub.epa.gov` and `geodata.epa.gov` (12.1), Esri's `utility.arcgisonline.com` (12.1, including its Export Web Map Task and execute pages), `imagery.superiordcgis.org` (12.1), UNHCR's `gis.unhcr.org` and the Colorado School of Mines' `cgsarcimage.mines.edu` (12.0), and three ArcGIS Online orgs on `services`, `services1` and `services9.arcgis.com` (reporting 12), plus the summaries of Esri's 12.1 What's new pages for ArcGIS Enterprise and the REST API. Esri's hosts were unreachable from the build environment, so no 12.1 HTML was read: the index shows page titles and text, not tags or classes.
+- Titles, headings and labels match the 10.9 and 11.x fixtures (`Folder: /`, `Current Version:`, `Layer: X (ID: n)`, `Task: X`, `Display Field`), and no release note mentions a redesigned Services Directory. So no difference was found at the text level.
+- Element classes such as `td.breadcrumbs` and `td.titlecell`, and the `<b>Fields: </b>` list, are unverified on 12.1.
+- The 12.1 index shows the execute page's title as `Execute Task (Export Web Map Task)`, where the fixture has `Execute Task: Export Web Map Task`. That may be the fixture's mistake in every version.
+
+The classifier therefore takes the type from the pathname and `document.contentType`, and accepts a page with any one of three markers: a `.breadcrumbs` element, the title cell's text, or a Services Directory heading in the title or first `h2` (either execute-title form matches). No 12.x fixture variant was added. The `CONTRIBUTING.md` release check includes opening a 12.1 page to confirm the classes.
 
 **Extension-context guard:** stops cleanly after an update cuts off old content scripts. Its `onLoad` replaces `inject.js`'s `readyState` polling (INJ-17, moved from Phase 5).
 
