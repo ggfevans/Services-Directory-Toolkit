@@ -20,3 +20,24 @@ test("the extension is not localised: no default_locale and no _locales folder",
 test("package.json and the manifest have the same version", () => {
   assert.equal(manifest.version, pkg.version);
 });
+
+const LIB = "src/lib/";
+
+test("every content-script group with scripts loads the same lib files first", () => {
+  const groups = manifest.content_scripts.filter((group) => group.js);
+  const libs = groups[0].js.filter((file) => file.startsWith(LIB));
+  assert.ok(libs.length > 0, "no lib files");
+  for (const [index, group] of groups.entries()) {
+    assert.deepEqual(group.js.slice(0, libs.length), libs, `group ${index}`);
+    assert.deepEqual(group.js.filter((file) => file.startsWith(LIB)), libs, `group ${index}`);
+  }
+});
+
+test("the popup loads the lib files first, in the manifest's order", () => {
+  const page = readFileSync(join(ROOT, "src/src/page_action/page_action.html"), "utf8");
+  const scripts = [...page.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(([, src]) => src);
+  const libs = manifest.content_scripts.find((group) => group.js).js
+    .filter((file) => file.startsWith(LIB))
+    .map((file) => `../lib/${file.slice(LIB.length)}`);
+  assert.deepEqual(scripts.slice(0, libs.length), libs);
+});

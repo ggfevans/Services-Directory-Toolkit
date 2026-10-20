@@ -24,7 +24,9 @@ export default [
       sourceType: "script",
       globals: {
         ...globals.browser,
-        ...globals.webextensions
+        ...globals.webextensions,
+        // The shared namespace from src/src/lib/ (store-readiness spec, section 5).
+        SDT: "readonly"
       }
     },
     rules: {
