@@ -328,7 +328,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - It relies on markers common to 10.9, 11.x, 12.x (12.1 is current) and ArcGIS Online. Check the 12.1 Services Directory markup before choosing the markers, and add a 12.x fixture variant if it differs.
 - On `jsonView` and `other` the scripts do nothing and show no spinner.
 
-**Extension-context guard:** stops cleanly after an update cuts off old content scripts.
+**Extension-context guard:** stops cleanly after an update cuts off old content scripts. Its `onLoad` replaces `inject.js`'s `readyState` polling (INJ-17, moved from Phase 5).
 
 **Switch-over:**
 - Every script replaces its `ajax` and `loadElement` copies with the shared ones.
@@ -469,7 +469,6 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 **Clean-up:**
 - the colour map uses `Map`
-- `readyState` polling is replaced with a load listener
 - dead code is removed
 - CSS typos are fixed and redundant prefixes removed
 
@@ -670,7 +669,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | INJ-14 | L | Badge and tiled/dynamic logic; http, unencoded spatialreference.org link | 5 | Fix |
 | INJ-15 | L | FeatureServer layers never get shape counts | 5 | Fix |
 | INJ-16 | L | Page `token` dropped (also QRY-17, part of POP-6) | 2 | Fix, scoped by ADV-6 |
-| INJ-17 | L | `readyState` polling | 5 | Fix |
+| INJ-17 | L | `readyState` polling | 2 | Fix (moved from Phase 5 on 2026-10-20: the guard's `onLoad` replaces it) |
 | INJ-18 | L | Dead code, including IE paths | 2, 5 | Fix (IE paths in 2) |
 | INJ-19 | L | CSS typos, prefixes and generic class names | 2, 3, 5 | Fix (prefix sweep in 2, form and gear CSS in 3, the rest in 5) |
 

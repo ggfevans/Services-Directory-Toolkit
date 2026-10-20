@@ -36,6 +36,8 @@
         "*://*/*/rest/services/*"
       ],
       "js": [
+        "src/lib/dom.js",
+        "src/lib/guard.js",
         "src/inject/inject.js",
         "src/inject/status.js",
         "src/inject/mapImages.js"
@@ -47,6 +49,8 @@
         "*://*/*/rest/services/*/query*"
       ],
       "js": [
+        "src/lib/dom.js",
+        "src/lib/guard.js",
         "src/inject/queryTest.js"
       ]
     },
@@ -58,6 +62,8 @@
         "*://*/*/rest/services*submitjob*"
       ],
       "js": [
+        "src/lib/dom.js",
+        "src/lib/guard.js",
         "src/inject/printTask.js"
       ]
     }

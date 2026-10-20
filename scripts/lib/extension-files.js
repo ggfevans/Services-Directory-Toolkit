@@ -21,6 +21,38 @@ const STRING_LITERAL = /^\s*(["'`])([^"'`$]+)\1\s*$/;
 
 const globToRegExp = (glob) => new RegExp(`^${glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
 
+// SDT namespaces: a lib file defines one with "SDT.dom = {" (or ??=) at the start of a line, and a
+// script uses one wherever "SDT.dom" appears.
+const SDT_DEFINES = /^\s*SDT\.(\w+)\s*\?{0,2}=(?!=)/gm;
+const SDT_USES = /\bSDT\.(\w+)/g;
+const PAGE_SCRIPT = /<script\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
+
+/**
+ * Checks one load order: a content-script group's js list, or an extension page's scripts. Every SDT
+ * namespace a script uses must be defined by that script or an earlier one. Returns problem strings.
+ */
+export const sdtLoadOrderProblems = (extDir, scripts, source) => {
+  const defined = new Set();
+  const problems = [];
+  for (const script of scripts) {
+    let code;
+    try {
+      code = readFileSync(join(extDir, script), "utf8");
+    } catch {
+      continue; // A missing file is reported elsewhere.
+    }
+    const own = new Set([...code.matchAll(SDT_DEFINES)].map(([, name]) => name));
+    const used = new Set([...code.matchAll(SDT_USES)].map(([, name]) => name));
+    for (const name of used) {
+      if (!own.has(name) && !defined.has(name)) {
+        problems.push(`${source}: ${script} uses SDT.${name} before a script that defines it`);
+      }
+    }
+    own.forEach((name) => defined.add(name));
+  }
+  return problems;
+};
+
 /**
  * Finds the files an extension uses:
  * - everything the manifest names
@@ -29,7 +61,8 @@ const globToRegExp = (glob) => new RegExp(`^${glob.replace(/[.+?^${}()|[\]\\]/g,
  * - the _locales folder, if default_locale is set
  *
  * Returns { files, problems }. Both use paths relative to extDir. problems lists missing files,
- * files nothing references, and getURL calls that can't be checked.
+ * files nothing references, getURL calls that can't be checked, and scripts that use an SDT
+ * namespace before a file that defines it.
  */
 export const referencedFiles = (extDir) => {
   const manifest = JSON.parse(readFileSync(join(extDir, "manifest.json"), "utf8"));
@@ -55,8 +88,9 @@ export const referencedFiles = (extDir) => {
   if (manifest.background?.service_worker) {
     add(manifest.background.service_worker, "background.service_worker");
   }
-  for (const script of manifest.content_scripts || []) {
+  for (const [index, script] of (manifest.content_scripts || []).entries()) {
     [...(script.js || []), ...(script.css || [])].forEach((path) => add(path, "content_scripts"));
+    problems.push(...sdtLoadOrderProblems(extDir, script.js || [], `content_scripts[${index}]`));
   }
 
   const pages = [manifest.options_page, manifest.options_ui?.page, manifest.action?.default_popup].filter(Boolean);
@@ -71,6 +105,11 @@ export const referencedFiles = (extDir) => {
         add(posix.join(posix.dirname(page), reference), page);
       }
     }
+    const scripts = [...html.matchAll(PAGE_SCRIPT)]
+      .map(([, reference]) => reference)
+      .filter((reference) => !/^[a-z][a-z0-9+.-]*:/i.test(reference))
+      .map((reference) => posix.normalize(posix.join(posix.dirname(page), reference)));
+    problems.push(...sdtLoadOrderProblems(extDir, scripts, page));
   }
 
   for (const entry of manifest.web_accessible_resources || []) {

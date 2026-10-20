@@ -1,5 +1,5 @@
 {
-  let url = window.location.href.split("?")[0];
+  const { loadElement } = SDT.dom;
  
   /**
    * requests data from a URL and returns it in JSON format
@@ -15,7 +15,7 @@
       x.open(data ? "POST" : "GET", u, 1);
       x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = () => {
+      x.onreadystatechange = SDT.guard.wrap(() => {
         if (x.readyState > 3 && callback) {
           try {
             // JSON.parse doesn't handle NaN values where numbers are supposed to go
@@ -25,29 +25,11 @@
             console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
           }
         }
-      };
+      });
       x.send(data);
     } catch (e) {
       window.console && console.log("Services Directory Toolkit: request failed", e);
     }
-  };
-
-  /**
-   * Creates an HTML element.
-   * @function loadElement
-   * @param {string} tag - HTML tag name that you want to create.
-   * @param {object} attributes - name value object describing properties you want to assign to the object
-   * @param {string} [text] - if present, this is the content you shoul add to the HTML element.
-   */
-  const loadElement = (tag, attributes, text) => {
-    let el = document.createElement(tag);
-    for (let a in attributes) {
-      el.setAttribute(a, attributes[a]);
-    }
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    return el;
   };
 
   /**
@@ -122,7 +104,7 @@
         nodeType = hideInput(nodeToReplace);
 
         // when the select is triggered, update the value of the element
-        select.addEventListener("change", () => {
+        SDT.guard.listen(select, "change", () => {
           if (select.value === otherValue) {
             showInput(nodeToReplace, nodeType);
             nodeToReplace.value = "";
@@ -170,9 +152,9 @@
         if (blank.name === "Web_Map_as_JSON" && /^\s*$/.test(blank.value)) {
           chrome.storage.sync.get({
             defaultWebMapAsJSON: ""
-          }, (items) => {
+          }, SDT.guard.wrap((items) => {
             blank.value = items.defaultWebMapAsJSON;
-          });
+          }));
         }
         return blank.name === "Web_Map_as_JSON";
       });
@@ -182,5 +164,8 @@
     }
   };
 
-  ajax(url.replace(/\/(execute|submitjob)\/?$/i, "") + "?f=json", updateGPForm);
+  SDT.guard.run(() => {
+    const url = window.location.href.split("?")[0];
+    ajax(url.replace(/\/(execute|submitjob)\/?$/i, "") + "?f=json", updateGPForm);
+  });
 }

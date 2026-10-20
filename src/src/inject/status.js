@@ -1,10 +1,5 @@
 {
-  // Enable the toolbar button for this tab (see src/src/bg/background.js). Re-send when the page is
-  // restored from the back/forward cache, because Chrome clears the tab's action state on navigation.
-  const enableAction = () => chrome.runtime.sendMessage({ type: "enableAction" });
-  enableAction();
-  window.addEventListener("pageshow", (evt) => evt.persisted && enableAction());
-
+  const { loadElement } = SDT.dom;
   /**
    * requests data from a URL and returns it in JSON format
    * @function ajax
@@ -19,7 +14,7 @@
       x.open(data ? "POST" : "GET", u, 1);
       x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = () => {
+      x.onreadystatechange = SDT.guard.wrap(() => {
         if (x.readyState > 3 && callback) {
           try {
             // JSON.parse doesn't handle NaN values where numbers are supposed to go
@@ -29,44 +24,19 @@
             console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
           }
         }
-      };
+      });
       x.send(data);
     } catch (e) {
       window.console && console.log("Services Directory Toolkit: request failed", e);
     }
   };
 
-  /**
-   * Creates an HTML element.
-   * @function loadElement
-   * @param {string} tag - HTML tag name that you want to create.
-   * @param {object} attributes - name value object describing properties you want to assign to the object
-   * @param {string} [text] - if present, this is the content you shoul add to the HTML element.
-   */
-  const loadElement = (tag, attributes, text) => {
-    const el = document.createElement(tag);
-    attributes = attributes || {};
-    for (let a in attributes) {
-      el.setAttribute(a, attributes[a]);
-    }
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    return el;
-  };
+  // Enable the toolbar button for this tab (see src/src/bg/background.js). Re-send when the page is
+  // restored from the back/forward cache, because Chrome clears the tab's action state on navigation.
+  const enableAction = () => chrome.runtime.sendMessage({ type: "enableAction" });
 
-  const statusNode = loadElement("DIV", {
-    "class": "status"
-  });
-  const settingsImg = loadElement("IMG", {
-    "class": "status-icon"
-  });
-  
-  statusNode.appendChild(settingsImg);
-  
-  const showSettingsImg = () => { 
-    settingsImg.src = chrome.runtime.getURL("src/images/settings.svg");
-  };
+  // The gear and its in-page form. Phase 3 removes the form.
+  let statusNode = null;
 
   const openOptionsForm = () => {
     if (!statusNode) {
@@ -85,10 +55,6 @@
       statusNode.className = statusNode.className.replace(" open", "");
     }
   };
- 
-  showSettingsImg();
-
-  statusNode.addEventListener("click", openOptionsForm);
 
   class OptionsForm {
     
@@ -118,7 +84,7 @@
       }, "Save");
 
       // assign save function
-      saveButton.addEventListener("click", evt => {
+      SDT.guard.listen(saveButton, "click", evt => {
         if (evt && evt.stopPropagation) {
           evt.stopPropagation();
         }
@@ -131,7 +97,7 @@
         type: "reset"
       }, "Cancel");
       
-      cancelButton.addEventListener("click", evt => {
+      SDT.guard.listen(cancelButton, "click", evt => {
         if (evt && evt.stopPropagation) {
           evt.stopPropagation();
         }
@@ -174,9 +140,9 @@
           if (!isLastItem) {
             parentNode.appendChild(loadElement("BR"));
           }
-          chrome.storage.sync.get(storageItem, items => {
+          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
             checkbox.checked = items[questionItem.property];
-          });
+          }));
           break;
         }
         case "radio": {
@@ -198,14 +164,14 @@
             return checkbox;
           });
   
-          chrome.storage.sync.get(storageItem, items => {
+          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
             radioBoxes.forEach(radioBox => {
             //console.log(radioBox.value, items[questionItem.property], questionItem.property);
               if (radioBox.value === items[questionItem.property]) {
                 radioBox.checked = true;
               }
             });
-          });
+          }));
           break;
         }
         case "textarea": {
@@ -217,9 +183,9 @@
           });
           parentNode.appendChild(label);
           parentNode.appendChild(blank);
-          chrome.storage.sync.get(storageItem, items => {
+          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
             blank.value = items[questionItem.property];
-          });
+          }));
           break;
         }
         case "number": {
@@ -234,9 +200,9 @@
           if (!isLastItem) {
             parentNode.appendChild(loadElement("BR"));
           }
-          chrome.storage.sync.get(storageItem, items => {
+          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
             blank.value = items[questionItem.property];
-          });
+          }));
           break;
         }
         default: {
@@ -251,9 +217,9 @@
           if (!isLastItem) {
             parentNode.appendChild(loadElement("BR"));
           }
-          chrome.storage.sync.get(storageItem, items => {
+          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
             blank.value = items[questionItem.property];
-          });
+          }));
         }      
       }
     }
@@ -308,19 +274,30 @@
       saveBtn.textContent = "Saving options.";
       saveBtn.setAttribute("disabled", "disabled");
 
-      chrome.storage.sync.set(dataToSave, () => {
+      chrome.storage.sync.set(dataToSave, SDT.guard.wrap(() => {
         
-        setTimeout(() => {
+        setTimeout(SDT.guard.wrap(() => {
           saveBtn.textContent = "Save";
           saveBtn.removeAttribute("disabled");
           // close form
           closeOptionsForm();
-        });
-      });
+        }));
+      }));
     }
   }
 
-  new OptionsForm(statusNode);
-  document.body.appendChild(statusNode);
+  const start = () => {
+    enableAction();
+    SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
+    statusNode = loadElement("DIV", { "class": "status" });
+    const settingsImg = loadElement("IMG", { "class": "status-icon" });
+    statusNode.appendChild(settingsImg);
+    settingsImg.src = chrome.runtime.getURL("src/images/settings.svg");
+    SDT.guard.listen(statusNode, "click", openOptionsForm);
+    new OptionsForm(statusNode);
+    document.body.appendChild(statusNode);
+  };
+
+  SDT.guard.run(start);
   
 }

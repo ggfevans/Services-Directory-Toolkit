@@ -87,3 +87,38 @@ test("listFiles skips .DS_Store", (t) => {
 test("the extension in src/ references every file it contains, and none are missing", () => {
   assert.deepEqual(referencedFiles(SRC).problems, []);
 });
+
+const withLib = (overrides) => ({
+  ...FILES,
+  "lib/dom.js": "globalThis.SDT ??= {};\nSDT.dom = {};\n",
+  "lib/net.js": "globalThis.SDT ??= {};\nSDT.net = { get: () => SDT.dom };\n",
+  // cs.js keeps its getURL call, so img/gear.svg stays referenced.
+  "cs.js": "chrome.runtime.getURL(\"img/gear.svg\");\nSDT.dom.loadElement(\"b\");\n",
+  ...overrides
+});
+const manifestWith = (js) => JSON.stringify({ ...MANIFEST, content_scripts: [{ matches: ["*://*/*"], js, css: ["cs.css"] }] });
+
+test("a content script may use SDT once a lib file earlier in its group defines it", (t) => {
+  const dir = makeExtension(t, withLib({ "manifest.json": manifestWith(["lib/dom.js", "lib/net.js", "cs.js"]) }));
+  assert.deepEqual(referencedFiles(dir).problems, []);
+});
+
+test("reports a content script that uses SDT before the lib file that defines it", (t) => {
+  const dir = makeExtension(t, withLib({ "manifest.json": manifestWith(["cs.js", "lib/dom.js", "lib/net.js"]) }));
+  assert.deepEqual(referencedFiles(dir).problems, ["content_scripts[0]: cs.js uses SDT.dom before a script that defines it"]);
+});
+
+test("reports a lib file that uses a namespace a later lib file defines", (t) => {
+  const dir = makeExtension(t, withLib({ "manifest.json": manifestWith(["lib/net.js", "lib/dom.js", "cs.js"]) }));
+  assert.deepEqual(referencedFiles(dir).problems, ["content_scripts[0]: lib/net.js uses SDT.dom before a script that defines it"]);
+});
+
+test("reports an extension page that loads a script using SDT before the lib", (t) => {
+  const page = "<script src=\"popup.js\"></script><script src=\"../lib/dom.js\"></script><link rel=\"stylesheet\" href=\"popup.css\">";
+  const dir = makeExtension(t, withLib({
+    "manifest.json": manifestWith(["lib/dom.js", "lib/net.js", "cs.js"]),
+    "popup/popup.html": page,
+    "popup/popup.js": "SDT.dom.loadElement(\"b\");\n"
+  }));
+  assert.deepEqual(referencedFiles(dir).problems, ["popup/popup.html: popup/popup.js uses SDT.dom before a script that defines it"]);
+});
