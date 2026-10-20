@@ -36,7 +36,7 @@
     }
   };
 
-  const LOADING_CSS = "loading-querytest";
+  const LOADING_CSS = "sdt-loading-querytest";
   const notifyLoading = (value) => {
     const bodyClasses = (document.body.className || "").split(" ");
     if (value) {
@@ -227,14 +227,14 @@
    */
   function addStatisticsControl (parentNode) {
     ["Count", "Sum", "Min", "Max", "Avg", "StdDev", "Var"].forEach(function (stat) {
-      const btn = loadElement("BUTTON", {"type":"button", "class": "statistic", "style": "display:none;"}, stat);
+      const btn = loadElement("BUTTON", {"type":"button", "class": "sdt-statistic", "style": "display:none;"}, stat);
       SDT.guard.listen(btn, "click", addStatistic.bind(this, stat.toLowerCase()));
       parentNode.appendChild(btn);
     });
 
     // show/hide buttons on textbox focus
     listenAll(document, "input[type=text], textarea", "focus", function () {
-      const buttonNodes = document.querySelectorAll(".statistic"),
+      const buttonNodes = document.querySelectorAll(".sdt-statistic"),
         il = buttonNodes.length;
 
       for (let i = 0; i < il; i++) {
@@ -254,11 +254,11 @@
    * @param {object} parentNode - HTML dom node of the sidepanel or whatever control you're adding
    */
   function addSqlControl (parentNode) {
-    const btns = loadElement("DIV", {"class": "buttonbox"});
+    const btns = loadElement("DIV", {"class": "sdt-buttonbox"});
     //[" = ", " &lt;&gt; ", " LIKE ", " &gt; ", " &gt;= ", " AND ", " &lt; ", " &lt;= ", " OR ", "_", "%", "()", "NOT ", " IS ", "*", "&#39;&#39;", " IN ", ", " ].forEach(function (txt) {
     [" = ", " <> ", " LIKE ", " > ", " >= ", " AND ", " < ", " <= ", " OR ", "_", "%", "()", "NOT ", " IS ", "*", "''", " IN ", ", ", "NULL" ].forEach(function (txt) {
       btns.appendChild(loadElement("button", {
-        "class": "sql",
+        "class": "sdt-sql",
         "type": "button",
         "name": txt
       }, txt.replace(/\s+/g, "")));
@@ -275,9 +275,9 @@
    */
   class SidePanel { 
     constructor(title) {
-      this.node = loadElement("DIV", {"class": "sidepanel"});
+      this.node = loadElement("DIV", {"class": "sdt-sidepanel"});
       // insert title
-      const titlePanel = loadElement("DIV", {"class": "titlepanel"});
+      const titlePanel = loadElement("DIV", {"class": "sdt-titlepanel"});
       titlePanel.appendChild(loadElement("b", {}, title));
 
       // insert clear button
@@ -380,7 +380,7 @@
   
       // if layer 
       if (dataItems.length === 1) {
-        this.layerSelect.className = "hidden";
+        this.layerSelect.className = "sdt-hidden";
         this.updateFields(dataItems);
       } else {
         df.appendChild(loadElement("SPAN", {}, "Layers:"));
@@ -520,7 +520,7 @@
       sidepanel.node.appendChild(df);
 
       // listen for SQL buttons to be clicked.
-      listenAll(sidepanel.node, "button.sql", "click", function (evt) {
+      listenAll(sidepanel.node, "button.sdt-sql", "click", function (evt) {
         setActive(evt.currentTarget.name);
       });
 

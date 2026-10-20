@@ -20,28 +20,28 @@ const item = (parent, pattern) => parent.locator("li", { hasText: pattern });
 
 test("the services root shows the gear, spatial reference badges and service details", async ({ page }) => {
   await page.goto(REST_ROOT);
-  const gear = page.locator("img.status-icon");
+  const gear = page.locator("img.sdt-status-icon");
   await expect(gear).toBeVisible();
   await expect.poll(() => gear.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
   await expect(page.getByRole("link", { name: "3857" })).toHaveCount(2);
   await expect(page.getByRole("link", { name: "4326" })).toHaveCount(1);
-  await expect(page.locator(".datablock")).toHaveCount(3);
+  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
   for (const description of [
     "Parcel boundaries and site addresses for an invented county.",
     "Editable parcel boundaries for an invented county.",
     "An invented elevation surface."
   ]) {
-    await expect(page.locator(".datablock", { hasText: `Service Description: ${description}` })).toHaveCount(1);
+    await expect(page.locator(".sdt-datablock", { hasText: `Service Description: ${description}` })).toHaveCount(1);
   }
 });
 
 test("a MapServer page shows details and feature counts for each layer", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer`);
-  await expect(page.locator(".datablock")).toHaveCount(2);
+  await expect(page.locator(".sdt-datablock")).toHaveCount(2);
   await expect(label(page, "Number of features:")).toHaveCount(2);
   await expect(label(page, "Features with shapes:")).toHaveCount(2);
-  await expect(page.locator(".datablock", { hasText: "Display Field: OWNER_NAME" })).toHaveCount(1);
-  await expect(page.locator(".datablock", { hasText: "Display Field: ADDRESS" })).toHaveCount(1);
+  await expect(page.locator(".sdt-datablock", { hasText: "Display Field: OWNER_NAME" })).toHaveCount(1);
+  await expect(page.locator(".sdt-datablock", { hasText: "Display Field: ADDRESS" })).toHaveCount(1);
   const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
   for (const [name, { features, shapes }] of Object.entries(counts)) {
     await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);
@@ -65,13 +65,13 @@ test("a layer page counts values for every field and every coded value", async (
   }
   await expect(item(field(page, "LAND_USE"), /^Residential:\s+2\b/)).toHaveCount(1);
   await expect(item(field(page, "LAND_USE"), /^Commercial:\s+1\b/)).toHaveCount(1);
-  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/loading-/);
+  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
 
 test("a query page gets the Query Helper with SQL and quick-fill buttons", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0/query`);
   // status.js also lists "Query Helper" as a legend in the in-page settings form, so scope to the panel.
-  await expect(page.locator(".sidepanel").getByText("Query Helper", { exact: true })).toBeVisible();
+  await expect(page.locator(".sdt-sidepanel").getByText("Query Helper", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "LIKE", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Select All *", exact: true })).toBeVisible();
 });

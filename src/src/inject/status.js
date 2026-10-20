@@ -42,18 +42,14 @@
     if (!statusNode) {
       return;
     }
-    if (!/open/i.test(statusNode.className)) {
-      statusNode.className += " open";
-    }
+    statusNode.classList.add("sdt-open");
   };
 
   const closeOptionsForm = () => {
     if (!statusNode) {
       return;
     }
-    if (/open/i.test(statusNode.className)) {
-      statusNode.className = statusNode.className.replace(" open", "");
-    }
+    statusNode.classList.remove("sdt-open");
   };
 
   class OptionsForm {
@@ -289,8 +285,8 @@
   const start = () => {
     enableAction();
     SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
-    statusNode = loadElement("DIV", { "class": "status" });
-    const settingsImg = loadElement("IMG", { "class": "status-icon" });
+    statusNode = loadElement("DIV", { "class": "sdt-status" });
+    const settingsImg = loadElement("IMG", { "class": "sdt-status-icon" });
     statusNode.appendChild(settingsImg);
     settingsImg.src = chrome.runtime.getURL("src/images/settings.svg");
     SDT.guard.listen(statusNode, "click", openOptionsForm);

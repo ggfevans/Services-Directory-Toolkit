@@ -44,7 +44,7 @@
         node.setAttribute("type", "hidden");
         break;
       default:
-        node.className += (node.className ? " " : "") + "hidden";
+        node.classList.add("sdt-hidden");
     }
     return type;
   };
@@ -60,7 +60,7 @@
         node.setAttribute("type", type);
         break;
       default:
-        node.className = node.className.replace(/\s?hidden/ig, "");
+        node.classList.remove("sdt-hidden");
     }
   };
 

@@ -112,7 +112,7 @@
       .then((href) => {
         let mapImage = document.getElementById("mapimage");
         mapImage.setAttribute("src", href);
-        mapImage.classList.remove("none");
+        mapImage.classList.remove("sdt-none");
         notifyLoading(false);
       }).catch(() => {
         window.console && console.log("Error getting image url from: %s", url);
@@ -124,10 +124,10 @@
   const hoverHideMap = () => {
     let mapImage = document.getElementById("mapimage");
     mapImage.setAttribute("src",NO_IMAGE_SRC);
-    mapImage.classList.add("none");
+    mapImage.classList.add("sdt-none");
   };
 
-  const LOADING_CSS = "loading-mapimage";
+  const LOADING_CSS = "sdt-loading-mapimage";
   const notifyLoading = (value) => {
     const bodyClasses = (document.body.className || "").split(" ");
     if (value) {
@@ -153,14 +153,14 @@
       WIDTH_HEIGHT["height"] = items.mapImageHeight;
       // construct parent container.
       let parentDiv = loadElement("DIV", {
-        "class": "map-image-panel",
+        "class": "sdt-map-image-panel",
         "style": "min-width:" + items.mapImageWidth + "px;min-height:" + (items.mapImageHeight + 30) + "px;"
       });
       let mapDiv = loadElement("IMG", {
         id: "mapimage",
         src: NO_IMAGE_SRC,
         alt: "Map image goes here",
-        "class": "none"
+        "class": "sdt-none"
       });
       parentDiv.appendChild(mapDiv);
       parentDiv.appendChild(loadElement("P", {"style": "margin:2px 0;padding:0;"}, "Hover over a link to view."));

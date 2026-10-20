@@ -189,7 +189,7 @@
         }
     }
 
-    return addSubList("Error", err0r, "error");
+    return addSubList("Error", err0r, "sdt-error");
   };
 
   /**
@@ -203,7 +203,7 @@
       boolPreCheck = ["defaultVisibility", "isDataVersioned"];
     if (data) {
       const div = loadElement("DIV", {
-        "class": "datablock collapsed"
+        "class": "sdt-datablock sdt-collapsed"
       });
       div.appendChild(document.createElement("br"));
       const ul = document.createElement("ul");
@@ -376,11 +376,7 @@
    * @param {HTML} div
    */
   const toggleCollapse = (div) => {
-    if (div.className.indexOf("collapsed") > -1) {
-      div.className = div.className.replace(" collapsed", "");
-    } else {
-      div.className += " collapsed";
-    }
+    div.classList.toggle("sdt-collapsed");
   };
 
   /**
@@ -602,9 +598,9 @@
    */
   class SidePanel { 
     constructor(title) {
-      this.node = loadElement("DIV", {"class": "sidepanel"});
+      this.node = loadElement("DIV", {"class": "sdt-sidepanel"});
       // insert title
-      const titlePanel = loadElement("DIV", {"class": "titlepanel"});
+      const titlePanel = loadElement("DIV", {"class": "sdt-titlepanel"});
       titlePanel.appendChild(loadElement("b", {}, title));
 
       // insert clear button
@@ -708,7 +704,7 @@
   
       // if layer 
       if (dataItems.length === 1) {
-        this.layerSelect.className = "hidden";
+        this.layerSelect.className = "sdt-hidden";
         this.updateFields(dataItems);
       } else {
         df.appendChild(loadElement("SPAN", {}, "Layers:"));
@@ -830,10 +826,10 @@
   };
 
 
-  const LOADING_METADATA_CSS = "loading-metadata";
-  const LOADING_NULLS_CSS = "loading-nulls";
-  const LOADING_DOMAINS_CSS = "loading-domains";
-  const LOADING_SOMETHING_CSS = "loading-something";
+  const LOADING_METADATA_CSS = "sdt-loading-metadata";
+  const LOADING_NULLS_CSS = "sdt-loading-nulls";
+  const LOADING_DOMAINS_CSS = "sdt-loading-domains";
+  const LOADING_SOMETHING_CSS = "sdt-loading-something";
   const notifyLoading = (value, cssClass) => {
     const bodyClasses = (document.body.className || "").split(" ");
     if (value) {

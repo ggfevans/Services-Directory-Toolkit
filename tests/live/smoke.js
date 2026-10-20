@@ -106,12 +106,12 @@ try {
   // 3. Content scripts on each page type.
   const other = await open("non-REST page", "https://example.com/");
   const root = await open("services root", BASE);
-  record("services root: status icon injected", (await count(root.locator(".status-icon"))) > 0);
+  record("services root: status icon injected", (await count(root.locator(".sdt-status-icon"))) > 0);
   const srLinks = await count(root.locator("a[href*='spatialreference.org']"));
   record("services root: spatial reference links rendered", srLinks > 0);
 
   const mapServer = await open("MapServer", `${BASE}/USA/MapServer`);
-  const blocks = await count(mapServer.locator(".datablock"));
+  const blocks = await count(mapServer.locator(".sdt-datablock"));
   record("MapServer: metadata blocks rendered", blocks > 0);
 
   const layer = await open("layer", `${BASE}/USA/MapServer/0`);
@@ -119,8 +119,8 @@ try {
   record("layer page: field value counts rendered", fieldCounts > 0);
 
   const query = await open("query page", `${BASE}/USA/MapServer/0/query`);
-  record("query page: side panel rendered", (await count(query.locator(".sidepanel"))) > 0);
-  const sqlButtons = await count(query.locator("button.sql"));
+  record("query page: side panel rendered", (await count(query.locator(".sdt-sidepanel"))) > 0);
+  const sqlButtons = await count(query.locator("button.sdt-sql"));
   record("query page: SQL buttons rendered", sqlButtons > 0);
 
   const print = await open("print page", `${BASE}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute`);

@@ -1,40 +1,40 @@
 /**
  * Place your custom CSS styles here.
  **/
-.datablock {
+.sdt-datablock {
     padding: 2px;
     background-color: white;
     display: inline;
 }
-.datablock::before {
+.sdt-datablock::before {
     content: 'Click to hide details...';
     color: #669;
     cursor: pointer;
     margin: 0 0 0 1em;
 }
-.datablock > ul {
+.sdt-datablock > ul {
     border: solid 1px #669;
     height: auto;
     transition: height 0.5s ease;
     margin: 0.3em 0;
 }
-.datablock.collapsed::before {
+.sdt-datablock.sdt-collapsed::before {
     content: 'Click to show details...';
 }
-.collapsed > br,
-.collapsed > ul {
+.sdt-collapsed > br,
+.sdt-collapsed > ul {
     height: 0;
     display: none;
     border: 0;
 }
 
-.sidepanel,
-.buttonbox {
+.sdt-sidepanel,
+.sdt-buttonbox {
     display: flex;
     flex-flow: row wrap;
 }
 
-.sidepanel {
+.sdt-sidepanel {
     font-size: 0.875em;
     position: fixed;
     left: auto;
@@ -50,19 +50,19 @@
     padding: 0.3em;
 }
 
-.titlepanel {
+.sdt-titlepanel {
     width: 100%;
     display: inline-flex;
     justify-content: space-between;
 }
 
-.titlepanel b {
+.sdt-titlepanel b {
     margin: 0.5em 0 0.8em;
 }
 
-.sidepanel button,
-.status button[type=submit],
-.status buttton[type=button] {
+.sdt-sidepanel button,
+.sdt-status button[type=submit],
+.sdt-status buttton[type=button] {
     font-size: 1.0em;
     border: 0;
     border-radius: 4px;
@@ -74,7 +74,7 @@
     z-index: inherit;
 }
 
-.status button[type=reset] {
+.sdt-status button[type=reset] {
     font-size: 1.0em;
     border: 0;
     border-radius: 4px;
@@ -84,40 +84,40 @@
     z-index: inherit;
 }
 
-.sidepanel p {
+.sdt-sidepanel p {
     margin: 0.5em 0;
 }
 
-.sidepanel select {
+.sdt-sidepanel select {
     width: 100%;
 }
 
-.sidepanel select.hidden {
+.sdt-sidepanel select.sdt-hidden {
     visibility: hidden;
     height: 1px;
     margin-top: -1px;
 }
 
-.buttonbox {
+.sdt-buttonbox {
     justify-content: flex-start;
     align-content: space-between;
 }
-.buttonbox > button {
+.sdt-buttonbox > button {
     width: 23%;
 }
-.error {
+.sdt-error {
   color: #d00;
   font-weight: bold;
   background-color: #fcc;
 }
 
-textarea.hidden {
+textarea.sdt-hidden {
     visibility: hidden;
     height: 1px;
     margin-top: -1px;
 }
 
-.status {
+.sdt-status {
     position: fixed;
     bottom: 22px;
     right: 22px;
@@ -130,7 +130,7 @@ textarea.hidden {
     font-size: 0.75em;
 }
 
-.status.open {
+.sdt-status.sdt-open {
     width: 30%;
     height: 50%;
     max-height: 50%;
@@ -140,7 +140,7 @@ textarea.hidden {
     /* overflow: auto; */
 }
 
-.status div {
+.sdt-status div {
     display: none;
     overflow-x: hidden;
     overflow-y: hidden;
@@ -149,23 +149,23 @@ textarea.hidden {
     bottom: 0;
 }
 
-.status.open div {
+.sdt-status.sdt-open div {
     display:block;
     overflow-y: auto;
     bottom: 30px;
 }
 
-.status.open div:last-child {
+.sdt-status.sdt-open div:last-child {
     bottom: 0;
     top: auto;
 }
 
-@-webkit-keyframes spin { 
+@-webkit-keyframes sdt-spin { 
     100% { 
         -webkit-transform: rotate(360deg); 
     } 
 }
-@keyframes spin { 
+@keyframes sdt-spin { 
     100% { 
         -webkit-transform: rotate(360deg); 
         transform:rotate(360deg); 
@@ -173,23 +173,23 @@ textarea.hidden {
 }
 
 /* Changing how loading is handled to remove messages between pages */
-.loading-metadata .status-icon,
-.loading-querytest .status-icon,
-.loading-mapimage .status-icon,
-.loading-domains .status-icon,
-.loading-nulls .status-icon,
-.loading-something .status-icon {
-    -webkit-animation:spin 1s linear infinite;
-    animation:spin 1s linear infinite;
+.sdt-loading-metadata .sdt-status-icon,
+.sdt-loading-querytest .sdt-status-icon,
+.sdt-loading-mapimage .sdt-status-icon,
+.sdt-loading-domains .sdt-status-icon,
+.sdt-loading-nulls .sdt-status-icon,
+.sdt-loading-something .sdt-status-icon {
+    -webkit-animation:sdt-spin 1s linear infinite;
+    animation:sdt-spin 1s linear infinite;
 }
 
-.status textarea,
-.status input[type=text],
-.status input[type=number] {
+.sdt-status textarea,
+.sdt-status input[type=text],
+.sdt-status input[type=number] {
     width: 100%;
 }
 
-.status-icon {
+.sdt-status-icon {
     float: right;
     opacity: 0.5;
     transition-property: opacity, height;
@@ -198,22 +198,22 @@ textarea.hidden {
     height: 50px;
 }
 
-.status-icon:hover {
+.sdt-status-icon:hover {
     opacity: 1.0;
 }
 
-.open .status-icon {
+.sdt-open .sdt-status-icon {
     opacity: 0;
     height: 0;
 }
 
-.status fieldset {
+.sdt-status fieldset {
     display: none;
 }
-.status.open fieldset {
+.sdt-status.sdt-open fieldset {
     display: block;
 }
-.map-image-panel {
+.sdt-map-image-panel {
     position:fixed;
     top:0;
     right:0;
@@ -229,17 +229,17 @@ textarea.hidden {
     text-align: center;
 }
 
-.map-image-panel > img {
+.sdt-map-image-panel > img {
     width: auto;
     max-width: 100%;
     height: auto;
 }
 
-.map-image-panel > img.none {
+.sdt-map-image-panel > img.sdt-none {
     height: 50%;
 }
 
-.map-image-panel > p {
+.sdt-map-image-panel > p {
     text-align: center;
     size: 0.8em;
 }

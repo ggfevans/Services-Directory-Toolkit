@@ -5,6 +5,8 @@
 // bundled Chromium (headless), answers every page request from the fake ArcGIS Server in
 // tests/fixtures/fake-arcgis.js, and writes PNGs to docs/design/images/before-*.png. Requests to any
 // other host are aborted, so nothing leaves the machine.
+//
+// It captures the UI before Phase 2's sdt- class prefix, so run it from a checkout of b3a1efa or earlier.
 import { chromium } from "@playwright/test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

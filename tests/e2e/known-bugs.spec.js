@@ -21,12 +21,15 @@ const knownBug = (id, title, body) => {
 const BAD_GATEWAY = () => ({ status: 502, contentType: "text/html", body: "<html><body>Bad Gateway</body></html>" });
 const PRINT_TASK = `${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task`;
 
+// The extension's own requests: those with f=json, in the query string or in a form body.
+const extensionRequests = (fakeServer) => fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json");
+
 knownBug("INJ-1", "a layer's JSON view gets no requests and no spinner", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0?f=pjson`);
   // Nothing on a JSON view signals that the scripts are done, so give them a moment.
   await page.waitForTimeout(1000);
-  expect(fakeServer.requests.filter((request) => request.includes("f=json"))).toEqual([]);
-  expect(await page.evaluate(() => document.body.className)).not.toMatch(/loading-/);
+  expect(extensionRequests(fakeServer)).toEqual([]);
+  expect(await page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
 
 // Phase 5 replaces these automatic per-field GET counts with an on-demand "Count values" button
@@ -42,12 +45,12 @@ knownBug("INJ-2", "one failed count query does not stop the counts for the other
   for (const field of await fields.all()) {
     await expect(field).toContainText(/Features with values:|Error/);
   }
-  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/loading-/);
+  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
 
 knownBug("INJ-3", "the Find Helper inserts the raw value even when no form field had focus", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/find`);
-  const lists = page.locator(".sidepanel select");
+  const lists = page.locator(".sdt-sidepanel select");
   await lists.nth(0).selectOption("0");
   await lists.nth(1).selectOption("OWNER_NAME");
   const value = lists.nth(2).locator("option", { hasText: "A. Example" });
@@ -65,7 +68,7 @@ knownBug("INJ-11", "service details label the copyright text without a literal &
 knownBug("PRT-1", "a geoprocessing JSON result gets no requests and no dialog", async ({ page, fakeServer }) => {
   await page.goto(`${PRINT_TASK}/execute?f=pjson&Format=PDF`);
   await page.waitForTimeout(1000);
-  expect(fakeServer.requests.filter((request) => request.includes("f=json"))).toEqual([]);
+  expect(extensionRequests(fakeServer)).toEqual([]);
 });
 
 knownBug("QRY-1", "quick-fill buttons keep the visible True/False choice matching what is submitted", async ({ page, seedStorage }) => {
