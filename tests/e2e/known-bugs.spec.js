@@ -65,7 +65,7 @@ knownBug("INJ-11", "service details label the copyright text without a literal &
   await expect(page.getByText("&copy;")).toHaveCount(0);
 });
 
-knownBug("PRT-1", "a geoprocessing JSON result gets no requests and no dialog", async ({ page, fakeServer }) => {
+test("PRT-1: a geoprocessing JSON result gets no requests and no dialog", async ({ page, fakeServer }) => {
   await page.goto(`${PRINT_TASK}/execute?f=pjson&Format=PDF`);
   await page.waitForTimeout(1000);
   expect(extensionRequests(fakeServer)).toEqual([]);

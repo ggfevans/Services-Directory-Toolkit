@@ -8,8 +8,12 @@ test("the toolbar button is enabled on Services Directory pages and disabled els
   await rest.goto(SERVICE_PAGE);
   const other = await context.newPage();
   await other.goto(OTHER_PAGE);
+  // The content scripts run on a JSON view, but leave the button disabled there.
+  const jsonView = await context.newPage();
+  await jsonView.goto(`${SERVICE_PAGE}?f=pjson`);
   await expect.poll(() => actionEnabled(rest)).toBe(true);
   await expect.poll(() => actionEnabled(other)).toBe(false);
+  expect(await actionEnabled(jsonView)).toBe(false);
 });
 
 test.describe("with the back/forward cache on", () => {

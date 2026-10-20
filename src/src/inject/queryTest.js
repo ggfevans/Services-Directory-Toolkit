@@ -5,37 +5,6 @@
   
 
 
-  /**
-   * requests data from a URL and returns it in JSON format
-   * @function ajax
-   * @param {string} u - URL to send the requests
-   * @param {function} callback - function to call when results are returned
-   * @param {object} [data] - optional information to send, triggers a post instead of a get requests
-   * @param {object} [x] - state of the application
-   */
-  const ajax = (u, callback, data, x) => {
-    try {
-      x = new(this.XMLHttpRequest)("MSXML2.XMLHTTP.3.0");
-      x.open(data ? "POST" : "GET", u, 1);
-      x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-      x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = SDT.guard.wrap(() => {
-        if (x.readyState > 3 && callback) {
-          try {
-            // JSON.parse doesn't handle NaN values where numbers are supposed to go
-            let processedResponseText = (x.responseText || "{}").replace(/:\s*NaN,/ig, ":\"NaN\",");
-            callback(JSON.parse(processedResponseText), x);
-          } catch (err) {
-            console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
-          }
-        }
-      });
-      x.send(data);
-    } catch (e) {
-      window.console && console.log("Services Directory Toolkit: request failed", e);
-    }
-  };
-
   const LOADING_CSS = "sdt-loading-querytest";
   const notifyLoading = (value) => {
     const bodyClasses = (document.body.className || "").split(" ");
@@ -77,32 +46,19 @@
    * @param {string} value - input to insert in the "active" input
    */
   const setActive = (value) => {
-    if (active === undefined)
+    if (active === undefined) {
       return;
-    
-    // get cursor position
-    let oldVal = active.value.substring(0),
-      iCaretPos = oldVal.length;
-    active.focus();
-    if (document.selection) {
-      let oSel = document.selection.createRange();
-      oSel.moveStart("character", -active.value.length);
-      iCaretPos = oSel.text.length;
-    } else if ("selectionStart" in active) {
-      iCaretPos = active.selectionStart;
     }
+    const oldVal = active.value;
+    active.focus();
+    let iCaretPos = "selectionStart" in active ? active.selectionStart : oldVal.length;
     // insert clicked text
     active.value = oldVal.substring(0, iCaretPos) + value + oldVal.substring(iCaretPos);
-
     // reset cursor position
     iCaretPos += value.length - (["()", "''"].indexOf(value) > -1);
-    if (active.createTextRange) {
-      let range = active.createTextRange();
-      range.move("character", iCaretPos);
-      range.select();
-    } else if ("selectionStart" in active) {
+    if ("selectionStart" in active) {
       active.setSelectionRange(iCaretPos, iCaretPos);
-    }      
+    }
   };
 
   /**
@@ -255,7 +211,6 @@
    */
   function addSqlControl (parentNode) {
     const btns = loadElement("DIV", {"class": "sdt-buttonbox"});
-    //[" = ", " &lt;&gt; ", " LIKE ", " &gt; ", " &gt;= ", " AND ", " &lt; ", " &lt;= ", " OR ", "_", "%", "()", "NOT ", " IS ", "*", "&#39;&#39;", " IN ", ", " ].forEach(function (txt) {
     [" = ", " <> ", " LIKE ", " > ", " >= ", " AND ", " < ", " <= ", " OR ", "_", "%", "()", "NOT ", " IS ", "*", "''", " IN ", ", ", "NULL" ].forEach(function (txt) {
       btns.appendChild(loadElement("button", {
         "class": "sdt-sql",
@@ -330,7 +285,7 @@
      */
     constructor(url, parentNode, callback) {
       const singleLayer = /server\/\d+\/?$/i.test(url),
-        jsonUrl = url + (singleLayer ? "" : "/layers") + "?f=json";
+        jsonUrl = url + (singleLayer ? "" : "/layers");
       let helpMessage = "Click field name to get up to 1000 examples. Double-click selections to add to form.";
 
       this.url = url;
@@ -344,8 +299,21 @@
       parentNode.appendChild(helpMessageNode);
       
       // get JSON data from service and build data afterward.
-      ajax(jsonUrl, this.buildRenderer.bind(this, callback));
-    
+      this.load(jsonUrl, callback);
+    }
+
+    /** Loads the layer JSON, an automatic request, and builds the lists from it. */
+    async load(jsonUrl, callback) {
+      const result = await SDT.net.pageLimiter().fetchJson(jsonUrl, { params: { f: "json" }, token: SDT.auth.pageToken(location) });
+      // The answer can arrive after an update has cut this script off.
+      SDT.guard.run(() => {
+        const data = SDT.net.legacyResponse(result);
+        if (data === null) {
+          this.parentNode.appendChild(loadElement("P", {}, `Could not load the fields: ${result.error.message}`));
+          return;
+        }
+        this.buildRenderer(callback, data);
+      });
     }
     /**
      * Renderer for the Field Selector
@@ -442,7 +410,7 @@
      * Update the value items
      * @param {string} url
      */
-    updateValues(url) {
+    async updateValues(url) {
       const val = this.fieldSelect.value;
       const layerId = this.layerSelect.value;
       // loading of values
@@ -452,8 +420,12 @@
       this.valueList.setAttribute("disabled", "disabled");
       // stop additional clicks on fieldSelect from subsequent calls
       this.fieldSelect.setAttribute("disabled", "disabled");
-      // request distinct values
-      ajax(url + "/" + layerId + "/query?where=1%3D1&returnGeometry=false&outFields=field&orderByFields=field&returnDistinctValues=true&f=json".replace(/field/g, val), this._updateValuesCallback.bind(this));
+      // request distinct values. A click starts this, so it doesn't count toward the request limit.
+      const result = await SDT.net.fetchJson(`${url}/${layerId}/query`, {
+        params: { where: "1=1", returnGeometry: "false", outFields: val, orderByFields: val, returnDistinctValues: "true", f: "json" },
+        token: SDT.auth.pageToken(location)
+      });
+      this._updateValuesCallback(SDT.net.legacyResponse(result));
     }
     /**
      * Updates values after query
@@ -506,7 +478,7 @@
     const sidepanel = new SidePanel("Query Helper");
     
     new FieldSelector(url, sidepanel.node, () => {
-      var df = document.createDocumentFragment();
+      const df = document.createDocumentFragment();
       addSqlControl(df);
     
       addStatisticsControl(df);
@@ -529,11 +501,11 @@
   };
 
   const onPageLoaded = () => {
-    // collect the links on the web page to collect information about the content they link to.
-    const url = window.location.href.split("?")[0];
-
-    // handling query page with quick query helpers
-    queryHelper(url.replace(/\/query\/?$/i, ""));
+    // Only real query forms: not other operations, and not JSON results (QRY-3).
+    if (SDT.page.classify(location, document) !== "query") {
+      return;
+    }
+    queryHelper(SDT.page.baseUrl(location).replace(/\/query\/?$/i, ""));
   };
 
   SDT.guard.onLoad(onPageLoaded);

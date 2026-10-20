@@ -2703,15 +2703,29 @@ EOF
 Append to `tests/e2e/pages.spec.js`. Add `FAKE_ORIGIN` to its import from `./fixtures.js`.
 
 ```js
-// The extension's own requests: those with f=json, in the query string or in a form body.
-const extensionRequests = (fakeServer) => fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json");
+// The extension's own requests: those with f=json, in the query string or in a form body. On a page
+// opened with ?f=json, the page's own load is such a request too, so pass the page to leave out that
+// one call. A second identical call would still be the extension's.
+const extensionRequests = (fakeServer, page) => {
+  const opened = page ? new URL(page.url()) : null;
+  let pageLoad = opened ? fakeServer.calls.find((call) => call.method === "GET"
+    && `${call.origin}${call.path}` === `${opened.origin}${opened.pathname}`
+    && new URLSearchParams(call.query).toString() === opened.searchParams.toString()) : null;
+  return fakeServer.calls.filter((call) => {
+    if (call === pageLoad) {
+      pageLoad = null;
+      return false;
+    }
+    return call.query.f === "json" || call.body.f === "json";
+  });
+};
 
 for (const path of ["?f=json", "/Parcels/MapServer?f=pjson", "/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task?f=pjson"]) {
   test(`a JSON view gets no requests, no gear and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
     await page.goto(`${REST_ROOT}${path}`);
     // Nothing on a JSON view signals that the scripts are done, so give them a moment.
     await page.waitForTimeout(1000);
-    expect(extensionRequests(fakeServer)).toEqual([]);
+    expect(extensionRequests(fakeServer, page)).toEqual([]);
     await expect(page.locator(".sdt-status-icon")).toHaveCount(0);
     expect(await page.evaluate(() => document.body.className)).not.toMatch(/sdt-/);
     expect(await actionEnabled(page)).toBe(false);
@@ -2737,6 +2751,8 @@ test("the Query Helper says when it can't load the fields (QRY-5)", async ({ pag
 
 In `known-bugs.spec.js`, change `knownBug("PRT-1", ...` to `test("PRT-1: a geoprocessing JSON result gets no requests and no dialog", ...`, keeping the body. The harness fails the test on the "Invalid form." dialog.
 
+In `action-popup.spec.js`, "the toolbar button is enabled on Services Directory pages and disabled elsewhere" also opens `${SERVICE_PAGE}?f=pjson` and expects the button to stay disabled there (open point 5).
+
 - [ ] **Step 2: Run the tests to see them fail**
 
 Run: `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npx playwright test tests/e2e/pages.spec.js tests/e2e/known-bugs.spec.js -g "JSON view|query string|can't load|PRT-1"`
@@ -2750,7 +2766,8 @@ Expected: FAIL. The JSON views and the TOK-6 page get a gear and an enabled butt
   ```js
     async load() {
       const result = await SDT.net.fetchJson(chrome.runtime.getURL("src/config/options.json"));
-      this.renderForm(SDT.net.legacyResponse(result) ?? {});
+      // The answer can arrive after an update has cut this script off.
+      SDT.guard.run(() => this.renderForm(SDT.net.legacyResponse(result) ?? {}));
     }
   ```
 
@@ -2811,14 +2828,19 @@ Delete the `ajax` copy, and replace the final `SDT.guard.run(...)` with:
     /** Loads the layer JSON, an automatic request, and builds the lists from it. */
     async load(jsonUrl, callback) {
       const result = await SDT.net.pageLimiter().fetchJson(jsonUrl, { params: { f: "json" }, token: SDT.auth.pageToken(location) });
-      const data = SDT.net.legacyResponse(result);
-      if (data === null) {
-        this.parentNode.appendChild(loadElement("P", {}, `Could not load the fields: ${result.error.message}`));
-        return;
-      }
-      this.buildRenderer(callback, data);
+      // The answer can arrive after an update has cut this script off.
+      SDT.guard.run(() => {
+        const data = SDT.net.legacyResponse(result);
+        if (data === null) {
+          this.parentNode.appendChild(loadElement("P", {}, `Could not load the fields: ${result.error.message}`));
+          return;
+        }
+        this.buildRenderer(callback, data);
+      });
     }
   ```
+
+  `load` and `status.js`'s `load` aren't awaited by a guarded caller, so the code after their `await` goes through `SDT.guard.run` itself.
 
 - `updateValues`: replace the `ajax(...)` call. A click starts it, so it doesn't use the limiter:
 
