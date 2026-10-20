@@ -24,6 +24,17 @@ reviews:
         with text nodes instead. Flag MV2-only APIs (chrome.extension.*, background pages,
         the page_action manifest key, chrome.pageAction). The src/src/page_action/ folder
         name is historical and fine.
+    - path: "src/src/lib/**"
+      instructions: |
+        Shared classic scripts. Each starts with globalThis.SDT ??= {} and assigns one SDT namespace;
+        flag top-level const, let, function or class declarations. A lib file may use only the SDT
+        namespaces of files loaded before it: the manifest's content_scripts groups and
+        page_action.html list them in one order, which the build checks.
+    - path: "src/src/inject/**"
+      instructions: |
+        Content scripts can outlive their extension after an update. Flag addEventListener calls,
+        timers, chrome.* callbacks and XHR callbacks that don't go through SDT.guard, and top-level
+        code that runs before SDT.guard.onLoad or SDT.guard.run.
     - path: "src/manifest.json"
       instructions: |
         Flag any new permissions or host_permissions and explain why each is needed. The

@@ -486,7 +486,7 @@ No new test: the browser characterisation tests cover these elements, and Task A
 
 - [ ] **Step 1: Replace the copies**
 
-In each file, delete the local `loadElement` arrow function and its JSDoc comment, and add this line as the first statement inside the file's `{` block (after `let active;` in `inject.js` and `queryTest.js`):
+In each file, delete the local `loadElement` arrow function and its JSDoc comment, and add this line as the first statement inside the file's `{` block (after `let active;` in `queryTest.js`):
 
 ```js
   const { loadElement } = SDT.dom;
@@ -1019,10 +1019,10 @@ Expected: FAIL in all three groups. The `inject.js` group fails on `setInterval(
 
 - [ ] **Step 3: Restructure the scripts**
 
-The rule for each file: the top level of the `{ }` block only declares names (`const`, `let`, functions, classes), and the last statement starts the script through the guard. Inside, every `addEventListener` becomes `SDT.guard.listen(target, type, handler)`, and every inline callback passed to a `chrome.*` call or to `setTimeout` is wrapped in `SDT.guard.wrap(...)`.
+The rule for each file: the top level of the `{ }` block only declares names (`const`, `let`, functions, classes), and the last statement starts the script through the guard. Inside, every `addEventListener` becomes `SDT.guard.listen(target, type, handler)`, and every inline callback passed to a `chrome.*` call or to `setTimeout` is wrapped in `SDT.guard.wrap(...)`. The `x.onreadystatechange` callback in the four `ajax` copies (`inject.js`, `status.js`, `queryTest.js`, `printTask.js`) is an entry point too, so it becomes `x.onreadystatechange = SDT.guard.wrap(() => {...});` until Part B replaces `ajax`. Lint can't see that assignment, so this is by hand.
 
 `inject.js`:
-- Replace the `let readyStateCheckInterval = setInterval(() => { if (document.readyState === "complete") { clearInterval(readyStateCheckInterval); ...BODY... } }, 10);` statement with `SDT.guard.onLoad(() => { ...BODY... });`, keeping BODY as it is.
+- Replace the `let readyStateCheckInterval = setInterval(() => { if (document.readyState === "complete") { clearInterval(readyStateCheckInterval); ...BODY... } }, 10);` statement with `SDT.guard.onLoad(() => { ...BODY... });`, keeping BODY as it is apart from removing one indent level, which the indent rule needs.
 - `listenAll`: `[].forEach.call(node.querySelectorAll(selector), (el) => SDT.guard.listen(el, evt, callback));`
 - `showMetadata`: `SDT.guard.listen(div, "click", () => { toggleCollapse(div); });`
 - `SidePanel`: `SDT.guard.listen(clearBtn, "click", clearActive);`
@@ -1111,8 +1111,8 @@ The rule for each file: the top level of the `{ }` block only declares names (`c
 
 - [ ] **Step 4: Check that no bare entry point is left**
 
-Run: `grep -nE "addEventListener|setInterval|readyState" src/src/inject/*.js`
-Expected: no output.
+Run: `grep -nE "addEventListener|setInterval|document\.readyState" src/src/inject/*.js`
+Expected: no output. (`x.readyState` in the `ajax` copies is the XHR's state, and stays until Part B.)
 
 - [ ] **Step 5: Run the checks**
 
@@ -1276,8 +1276,12 @@ EOF
   After an extension update, Chrome cuts off the old content scripts: `chrome.runtime.id` reads undefined and `chrome.*` calls throw. So a content script's top level only declares names and ends with `SDT.guard.onLoad(start)` or `SDT.guard.run(start)`, and every listener, timer and `chrome.*` callback goes through `SDT.guard.listen` or `SDT.guard.wrap`. Lint enforces this, and `tests/unit/guard-entry-points.test.js` runs each group with the context gone.
   ```
 
+  As written, the paragraphs say "which lint enforces for content and popup scripts" (lint doesn't check the options page or the service worker), name `SDT.dom`'s `text` and `clear` and `SDT.guard`, keep the note that a change to an `ajax` copy applies only to that file, add XHR callbacks to the guarded entry points, and say lint checks listeners, timers and inline `chrome.*` callbacks under `src/src/inject/`.
+- In "Commands", in the `npm run lint` bullet, add the block, guard and lib-file rules.
 - In "Architecture", in the Background paragraph, change "`mapImages.js` and `queryTest.js` start from a `window` `load` listener" to "`inject.js`, `mapImages.js` and `queryTest.js` start from `SDT.guard.onLoad`".
 - Change the last line, "Code under `src/` builds DOM with `loadElement` and text nodes", to "Code under `src/` builds DOM with `SDT.dom.loadElement` and text nodes".
+
+- In the store-readiness spec, move INJ-17 to Phase 2 in Appendix A, drop the `readyState` line from Phase 5's clean-up list, and mention it under Phase 2's extension-context guard.
 
 - [ ] **Step 2: Update `CONTRIBUTING.md`**
 
