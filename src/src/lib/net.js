@@ -58,7 +58,7 @@ SDT.net = {
   async fetchJson(url, { params = {}, token = null, method = "GET", timeoutMs = SDT.net.TIMEOUT_MS, signal, credentials, referrerPolicy } = {}) {
     const request = SDT.url.build(url, params, token, { method });
     if (!request) {
-      return { error: { type: "url", message: "Not an http(s) URL.", url: String(url) } };
+      return { error: { type: "url", message: "Not an http(s) URL.", url: SDT.url.withoutToken(url) } };
     }
     const fail = (type, message, extra = {}) => ({ error: { type, message, url: request.url, ...extra } });
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -145,7 +145,7 @@ SDT.net = {
     const controller = new AbortController();
     const queue = [];
     const state = { accepted: 0, active: 0, peak: 0, stopped: null };
-    const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: String(url), ...extra } });
+    const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: SDT.url.withoutToken(url), ...extra } });
     const halted = (url) => (state.stopped
       ? refusal("stopped", SDT.net.stoppedNote(state.stopped), url, { status: state.stopped })
       : refusal("aborted", "Not loaded: the page was left.", url));

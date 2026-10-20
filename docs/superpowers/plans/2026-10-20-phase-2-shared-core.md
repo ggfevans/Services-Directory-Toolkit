@@ -123,6 +123,7 @@ Everything a later phase may call. Lib files in `src/src/lib/`, in load order.
 | `stripForFilter(href)` | `string` | Drops the fragment and every `token` and `f` parameter (names in any case), and a trailing `?`. Returns the input as a string when it doesn't parse. (TOK-3) |
 | `tidy(url)` | `string` | `url.href` without a trailing `?` |
 | `dropParams(url, names)` | `undefined` | Deletes each query parameter of a `URL` whose name is in `names`, in any case |
+| `withoutToken(href)` | `string` | `href` without its fragment or any `token` parameter, or `""` when it doesn't parse. Error objects use it for their `url`. |
 
 `build()` takes the token as an argument and never reads `location` (TOK-2). It returns `null` unless `base` is an `http:`, `https:` or `chrome-extension:` URL. It always removes the fragment and any `token` parameter, whatever the case of its name, from `base`. Parameters with `undefined` or `null` values are dropped, and the rest become strings in insertion order.
 - `carriesToken` is true when `token.value` is non-empty and `scopeOf(base) === token.scope`. An empty token is never sent.
@@ -147,7 +148,7 @@ Everything a later phase may call. Lib files in `src/src/lib/`, in load order.
 
 `fetchJson` builds the request with `SDT.url.build(url, params, token, { method })`. It sends no headers of its own, so a GET has no `X-Requested-With` or `Content-Type` (POP-9), and a POST's `URLSearchParams` body sets `application/x-www-form-urlencoded`. It leaves `credentials` at the browser default unless the caller passes one (TOK-5), and passes `referrerPolicy` through. A request that carries a token uses `redirect: "manual"` (TOK-1). The signal is `AbortSignal.timeout(timeoutMs)`, combined with the caller's `signal` through `AbortSignal.any`.
 
-An error is `{ error: { type, message, url, status?, code?, arcgis? } }`. `url` is the request URL, which never holds a token. The types:
+An error is `{ error: { type, message, url, status?, code?, arcgis? } }`. `url` is the request URL, which never holds a token. When nothing is sent (the `url` type, and the limiter's refusals), it is the given URL through `SDT.url.withoutToken`. The types:
 
 | `type` | When | Extra fields |
 |---|---|---|
@@ -1669,6 +1670,12 @@ test("stripForFilter drops token, f and the fragment, so the link filters can ma
   assert.equal(url.stripForFilter(BASE), BASE);
   assert.equal(url.stripForFilter("not a url"), "not a url");
 });
+
+test("withoutToken drops every token parameter and the fragment, and gives up on a URL that doesn't parse", () => {
+  assert.equal(url.withoutToken(`${BASE}?f=json&Token=abc#x`), `${BASE}?f=json`);
+  assert.equal(url.withoutToken("ftp://gis.example.org/x?token=abc"), "ftp://gis.example.org/x");
+  assert.equal(url.withoutToken("not a url ?token=abc"), "");
+});
 ```
 
 - [ ] **Step 2: Run the tests to see them fail**
@@ -1735,6 +1742,22 @@ SDT.url = {
     }
     entries.forEach(([key, value]) => url.searchParams.append(key, value));
     return { url: SDT.url.tidy(url), method: "GET", body: null, carriesToken: false };
+  },
+
+  /**
+   * href without its fragment or any token parameter, for error objects and messages. Returns ""
+   * for a URL that doesn't parse, because its token can't be found.
+   */
+  withoutToken(href) {
+    let url;
+    try {
+      url = new URL(href);
+    } catch {
+      return "";
+    }
+    url.hash = "";
+    SDT.url.dropParams(url, ["token"]);
+    return SDT.url.tidy(url);
   },
 
   /** href without its fragment or any token and f parameters, for the link filters (TOK-3). */
@@ -1910,6 +1933,14 @@ test("legacyResponse gives today's callers data, an ArcGIS error as { error }, o
   assert.deepEqual(plain(net.legacyResponse({ error: { type: "arcgis", arcgis: { code: 400 } } })), { error: { code: 400 } });
   assert.equal(net.legacyResponse({ error: { type: "http", status: 502 } }), null);
 });
+
+test("an error never repeats a token from the URL it was given", async () => {
+  const { calls, net } = withFetch();
+  const { error } = plain(await net.fetchJson("ftp://gis.example.org/x?token=abc"));
+  assert.equal(error.type, "url");
+  assert.doesNotMatch(JSON.stringify(error), /abc/);
+  assert.equal(calls.length, 0);
+});
 ```
 
 - [ ] **Step 2: Run the tests to see them fail**
@@ -1980,7 +2011,7 @@ SDT.net = {
   async fetchJson(url, { params = {}, token = null, method = "GET", timeoutMs = SDT.net.TIMEOUT_MS, signal, credentials, referrerPolicy } = {}) {
     const request = SDT.url.build(url, params, token, { method });
     if (!request) {
-      return { error: { type: "url", message: "Not an http(s) URL.", url: String(url) } };
+      return { error: { type: "url", message: "Not an http(s) URL.", url: SDT.url.withoutToken(url) } };
     }
     const fail = (type, message, extra = {}) => ({ error: { type, message, url: request.url, ...extra } });
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -2224,6 +2255,15 @@ test("isSkipped is true for the limit and for stopped work only", () => {
   assert.equal(net.isSkipped({ error: { type: "http", status: 502 } }), false);
   assert.equal(net.isSkipped({ data: {} }), false);
 });
+
+test("a refused request's error never repeats a token from its URL", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ scope: SCOPE, max: 0, fetchJson: fake.fetchJson });
+  for (const url of [`${at(1)}?token=abc`, "https://other.example.org/server/rest/services/A/MapServer?token=abc"]) {
+    assert.doesNotMatch(JSON.stringify(plain(await limiter.fetchJson(url))), /abc/, url);
+  }
+  assert.equal(fake.sent(), 0);
+});
 ```
 
 - [ ] **Step 2: Run the tests to see them fail**
@@ -2261,7 +2301,7 @@ Add these members to the `SDT.net` object, after `legacyResponse`:
     const controller = new AbortController();
     const queue = [];
     const state = { accepted: 0, active: 0, peak: 0, stopped: null };
-    const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: String(url), ...extra } });
+    const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: SDT.url.withoutToken(url), ...extra } });
     const halted = (url) => (state.stopped
       ? refusal("stopped", SDT.net.stoppedNote(state.stopped), url, { status: state.stopped })
       : refusal("aborted", "Not loaded: the page was left.", url));
@@ -3779,3 +3819,4 @@ Part B followed the tasks above. Where the code showed the plan was wrong, the i
 - **B9:** `mapImages.js` uses the same two filter conditions as B8. A second test shows that a preview on the page's own server still loads, and that its requests carry no token.
 - **B10:** The lint rule also catches `window.fetch(...)`. The `@cdp` stub returns a `Response` made in the popup's realm and sends the form body as a string with its content type.
 - **B11:** The docs got the text in Steps 1 to 4, extended to cover the changes above: the skipped-row notes, the self-link and scope filter rules, the `?token=` root gap until Phase 3, and the `@cdp` stub.
+- **Review:** error objects for requests that weren't sent (`url`, `destination`, `limit`, `stopped`, `aborted`) echoed the caller's URL as given, which could hold a `token`. They now pass it through `SDT.url.withoutToken`.

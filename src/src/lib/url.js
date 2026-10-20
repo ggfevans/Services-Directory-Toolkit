@@ -56,6 +56,22 @@ SDT.url = {
     return { url: SDT.url.tidy(url), method: "GET", body: null, carriesToken: false };
   },
 
+  /**
+   * href without its fragment or any token parameter, for error objects and messages. Returns ""
+   * for a URL that doesn't parse, because its token can't be found.
+   */
+  withoutToken(href) {
+    let url;
+    try {
+      url = new URL(href);
+    } catch {
+      return "";
+    }
+    url.hash = "";
+    SDT.url.dropParams(url, ["token"]);
+    return SDT.url.tidy(url);
+  },
+
   /** href without its fragment or any token and f parameters, for the link filters (TOK-3). */
   stripForFilter(href) {
     let url;

@@ -137,3 +137,12 @@ test("isSkipped is true for the limit and for stopped work only", () => {
   assert.equal(net.isSkipped({ error: { type: "http", status: 502 } }), false);
   assert.equal(net.isSkipped({ data: {} }), false);
 });
+
+test("a refused request's error never repeats a token from its URL", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ scope: SCOPE, max: 0, fetchJson: fake.fetchJson });
+  for (const url of [`${at(1)}?token=abc`, "https://other.example.org/server/rest/services/A/MapServer?token=abc"]) {
+    assert.doesNotMatch(JSON.stringify(plain(await limiter.fetchJson(url))), /abc/, url);
+  }
+  assert.equal(fake.sent(), 0);
+});

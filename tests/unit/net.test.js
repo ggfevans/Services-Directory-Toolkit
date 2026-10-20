@@ -115,3 +115,11 @@ test("legacyResponse gives today's callers data, an ArcGIS error as { error }, o
   assert.deepEqual(plain(net.legacyResponse({ error: { type: "arcgis", arcgis: { code: 400 } } })), { error: { code: 400 } });
   assert.equal(net.legacyResponse({ error: { type: "http", status: 502 } }), null);
 });
+
+test("an error never repeats a token from the URL it was given", async () => {
+  const { calls, net } = withFetch();
+  const { error } = plain(await net.fetchJson("ftp://gis.example.org/x?token=abc"));
+  assert.equal(error.type, "url");
+  assert.doesNotMatch(JSON.stringify(error), /abc/);
+  assert.equal(calls.length, 0);
+});

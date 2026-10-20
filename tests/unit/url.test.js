@@ -95,3 +95,9 @@ test("stripForFilter drops token, f and the fragment, so the link filters can ma
   assert.equal(url.stripForFilter(BASE), BASE);
   assert.equal(url.stripForFilter("not a url"), "not a url");
 });
+
+test("withoutToken drops every token parameter and the fragment, and gives up on a URL that doesn't parse", () => {
+  assert.equal(url.withoutToken(`${BASE}?f=json&Token=abc#x`), `${BASE}?f=json`);
+  assert.equal(url.withoutToken("ftp://gis.example.org/x?token=abc"), "ftp://gis.example.org/x");
+  assert.equal(url.withoutToken("not a url ?token=abc"), "");
+});
