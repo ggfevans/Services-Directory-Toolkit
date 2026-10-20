@@ -37,6 +37,7 @@
       ],
       "js": [
         "src/lib/dom.js",
+        "src/lib/guard.js",
         "src/inject/inject.js",
         "src/inject/status.js",
         "src/inject/mapImages.js"
@@ -49,6 +50,7 @@
       ],
       "js": [
         "src/lib/dom.js",
+        "src/lib/guard.js",
         "src/inject/queryTest.js"
       ]
     },
@@ -61,6 +63,7 @@
       ],
       "js": [
         "src/lib/dom.js",
+        "src/lib/guard.js",
         "src/inject/printTask.js"
       ]
     }
