@@ -142,7 +142,8 @@
     const result = await SDT.net.pageLimiter().fetchJson(url, { params: { f: "json" }, token: SDT.auth.pageToken(location) });
     const response = SDT.net.legacyResponse(result);
     if (response !== null) {
-      updateGPForm(response);
+      // The extension may have been updated while the request was out.
+      SDT.guard.run(updateGPForm, response);
     }
   });
 }
