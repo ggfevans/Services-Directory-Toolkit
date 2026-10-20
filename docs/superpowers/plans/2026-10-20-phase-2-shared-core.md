@@ -122,11 +122,12 @@ Everything a later phase may call. Lib files in `src/src/lib/`, in load order.
 | `build(base, params = {}, token = null, { method = "GET" } = {})` | `{ url, method, body, carriesToken }` or `null` | See below |
 | `stripForFilter(href)` | `string` | Drops the fragment and every `token` and `f` parameter (names in any case), and a trailing `?`. Returns the input as a string when it doesn't parse. (TOK-3) |
 | `tidy(url)` | `string` | `url.href` without a trailing `?` |
+| `dropParams(url, names)` | `undefined` | Deletes each query parameter of a `URL` whose name is in `names`, in any case |
 
-`build()` takes the token as an argument and never reads `location` (TOK-2). It returns `null` unless `base` is an `http:`, `https:` or `chrome-extension:` URL. It always removes the fragment and any `token` parameter from `base`. Parameters with `undefined` or `null` values are dropped, and the rest become strings in insertion order.
+`build()` takes the token as an argument and never reads `location` (TOK-2). It returns `null` unless `base` is an `http:`, `https:` or `chrome-extension:` URL. It always removes the fragment and any `token` parameter, whatever the case of its name, from `base`. Parameters with `undefined` or `null` values are dropped, and the rest become strings in insertion order.
 - `carriesToken` is true when `token.value` is non-empty and `scopeOf(base) === token.scope`. An empty token is never sent.
-- If `carriesToken`, or `method` is `"POST"`: `method` is `"POST"`, the URL loses every key in `params`, and `body` is a `URLSearchParams` of the params plus `token` when it carries one (TOK-4).
-- Otherwise: `method` is `"GET"`, the params are `set` on the URL's query in order, and `body` is `null`.
+- If `carriesToken`, or `method` is `"POST"`: `method` is `"POST"`, the URL loses every key in `params` (in any case), and `body` is a `URLSearchParams` of the params plus `token` when it carries one (TOK-4).
+- Otherwise: `method` is `"GET"`, the params replace any base parameter of the same name in any case, and are appended to the URL's query in order, and `body` is `null`.
 
 ### `SDT.net` (`net.js`, Part B)
 
@@ -1638,6 +1639,13 @@ test("a token in the base URL is dropped whatever its case", () => {
   }
 });
 
+test("a param replaces a base parameter of the same name in any case", () => {
+  assert.equal(url.build(`${BASE}?F=html&keep=1`, { f: "json" }).url, `${BASE}?keep=1&f=json`);
+  const request = url.build(`${BASE}?F=html&keep=1`, { f: "json" }, TOKEN);
+  assert.equal(request.url, `${BASE}?keep=1`);
+  assert.equal(request.body.toString(), "f=json&token=tok.en-1");
+});
+
 test("method POST without a token puts the params in the body", () => {
   assert.deepEqual(summary(url.build(BASE, { f: "json" }, null, { method: "POST" })), { url: BASE, method: "POST", body: "f=json", carriesToken: false });
 });
@@ -1686,8 +1694,19 @@ SDT.url = {
   },
 
   /**
+   * Deletes every query parameter of url named in names, whatever its case. ArcGIS reads parameter
+   * names without regard to case, so Token= and TOKEN= are tokens too.
+   */
+  dropParams(url, names) {
+    const lower = new Set([...names].map((name) => name.toLowerCase()));
+    [...url.searchParams.keys()]
+      .filter((key) => lower.has(key.toLowerCase()))
+      .forEach((key) => url.searchParams.delete(key));
+  },
+
+  /**
    * Builds a request. token is { value, scope } or null. Returns { url, method, body, carriesToken },
-   * or null when base isn't an http(s) or extension URL. A token in base itself is always dropped.
+   * or null when base isn't an http(s) or extension URL. A token in base itself, in any case, is always dropped.
    */
   build(base, params = {}, token = null, { method = "GET" } = {}) {
     let url;
@@ -1700,26 +1719,21 @@ SDT.url = {
       return null;
     }
     url.hash = "";
-    // ArcGIS reads parameter names without regard to case, so Token= and TOKEN= are tokens too.
-    [...url.searchParams.keys()]
-      .filter((key) => /^token$/i.test(key))
-      .forEach((key) => url.searchParams.delete(key));
+    SDT.url.dropParams(url, ["token"]);
     const entries = Object.entries(params ?? {})
       .filter(([, value]) => value !== undefined && value !== null)
       .map(([key, value]) => [key, String(value)]);
     const carriesToken = Boolean(token && token.value && token.scope) && SDT.auth.scopeOf(url.href) === token.scope;
+    // A param replaces any parameter of the same name in base, whatever its case.
+    SDT.url.dropParams(url, entries.map(([key]) => key));
     if (carriesToken || method === "POST") {
-      const moved = new Set(entries.map(([key]) => key.toLowerCase()));
-      [...url.searchParams.keys()]
-        .filter((key) => moved.has(key.toLowerCase()))
-        .forEach((key) => url.searchParams.delete(key));
       const body = new URLSearchParams(entries);
       if (carriesToken) {
         body.set("token", token.value);
       }
       return { url: SDT.url.tidy(url), method: "POST", body, carriesToken };
     }
-    entries.forEach(([key, value]) => url.searchParams.set(key, value));
+    entries.forEach(([key, value]) => url.searchParams.append(key, value));
     return { url: SDT.url.tidy(url), method: "GET", body: null, carriesToken: false };
   },
 
@@ -1732,9 +1746,7 @@ SDT.url = {
       return String(href ?? "");
     }
     url.hash = "";
-    [...url.searchParams.keys()]
-      .filter((key) => /^(?:token|f)$/i.test(key))
-      .forEach((key) => url.searchParams.delete(key));
+    SDT.url.dropParams(url, ["token", "f"]);
     return SDT.url.tidy(url);
   }
 };
