@@ -3269,7 +3269,7 @@ EOF
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `tests/e2e/requests.spec.js`:
+Append to `tests/e2e/requests.spec.js`. The second test passes today too: it guards the rewrite, and shows previews never send the page's token.
 
 ```js
 test("hovering a link to another server sends nothing", async ({ page, fakeServer }) => {
@@ -3279,6 +3279,25 @@ test("hovering a link to another server sends nothing", async ({ page, fakeServe
   await page.getByRole("link", { name: "Online parcels map", exact: true }).hover();
   await page.waitForTimeout(500);
   expect(fakeServer.calls.filter((call) => call.origin !== FAKE_ORIGIN)).toEqual([]);
+});
+
+test("hovering a link on this server shows its map preview, without the page's token", async ({ page, fakeServer }) => {
+  // A 1x1 transparent PNG, so the preview loads nothing from the network.
+  const image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=#preview";
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/\?f=json$/, () => json({ initialExtent: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 } }));
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/export\?/, () => json({ href: image }));
+  await page.goto(withToken(REST_ROOT, SERVER_TOKENS.jsmith));
+  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+  await page.getByRole("link", { name: "Parcels", exact: true }).first().hover();
+  await expect(page.locator("#mapimage")).toHaveAttribute("src", image);
+  const previews = fakeServer.calls.filter((call) => /\/Parcels\/MapServer\/(export)?$/.test(call.path));
+  expect(previews.map((call) => call.path)).toEqual(["/arcgis/rest/services/Parcels/MapServer/", "/arcgis/rest/services/Parcels/MapServer/export"]);
+  for (const call of previews) {
+    expect(call.method).toBe("GET");
+    expect(call.body).toEqual({});
+    expect(Object.keys(call.query)).not.toContain("token");
+  }
+  expect(previews[1].query).toEqual({ size: "300,200", format: "png32", f: "json", bbox: "0,0,10,10" });
 });
 ```
 
@@ -3333,7 +3352,7 @@ Expected: FAIL. The hover sends `GET https://services9.arcgis.com/.../Parcels/Ma
       throw new Error("Not a map or image service");
     }
     const result = await SDT.net.fetchJson(request[0], { params: request[1] });
-    if (result.error || !("href" in result.data)) {
+    if (result.error || !result.data || typeof result.data !== "object" || !("href" in result.data)) {
       throw new Error("No image in the answer");
     }
     IMAGE_LOOKUP[url] = result.data.href;
@@ -3364,13 +3383,18 @@ Expected: FAIL. The hover sends `GET https://services9.arcgis.com/.../Parcels/Ma
 
   ```js
     const pageScope = SDT.auth.scopeOf(location.href);
+    const self = SDT.page.baseUrl(location).replace(/\/+$/, "");
     const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0);
     const urls = tags
       .map((tag, i) => ({ i, url: SDT.url.stripForFilter(tag.href) }))
-      .filter((item) => tags[item.i].parentNode.className !== "breadcrumbs"
+      .filter((item) => pageScope !== null
+        && tags[item.i].parentNode.className !== "breadcrumbs"
+        && item.url.replace(/\/+$/, "") !== self
         && SDT.auth.scopeOf(item.url) === pageScope
         && /(map|image)server\/?$/i.test(item.url));
   ```
+
+  The two extra conditions are the ones Task B8 explains.
 
   and `SDT.guard.listen(tags[item.i], "mouseover", () => hoverGetMap(item.url));`.
 - At the start of `onPageLoaded`:
