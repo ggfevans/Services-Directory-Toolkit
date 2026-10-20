@@ -1326,7 +1326,7 @@ End the body with `🤖 Generated with [Claude Code](https://claude.com/claude-c
 
 Start after PR A has merged (`git fetch origin && git merge origin/main`).
 
-Closes INJ-1, INJ-12, INJ-16, QRY-17, POP-9, SEC-11, ADV-6, TOK-1, TOK-2, TOK-4, TOK-5 and TOK-6. Closes this phase's part of INJ-2, INJ-4, INJ-18, INJ-19, PRT-1, QRY-3, QRY-5, QRY-10, QRY-15, QRY-18, SEC-5, ADV-1, ADV-5, TOK-3 and POP-6 (token part). Token spec: TR-2, TR-6, TR-8, the pathname half of TR-5, and this phase's part of TR-7 and TR-14.
+Closes INJ-1, INJ-12, INJ-16, QRY-17, POP-9, SEC-11, ADV-6, TOK-1, TOK-2, TOK-4, TOK-5 and TOK-6. Closes this phase's part of INJ-2, INJ-4, INJ-18, INJ-19, PRT-1, QRY-3, QRY-5, QRY-10, QRY-18, SEC-5, ADV-1, ADV-5, TOK-3 and POP-6 (token part). Token spec: TR-2, TR-6, TR-8, the pathname half of TR-5, and this phase's part of TR-7 and TR-14.
 
 ### Task B1: `SDT.auth`: the token scope
 
@@ -3672,7 +3672,7 @@ In the `src/src/inject/**` instructions, add: "Each script checks SDT.page.class
 
 - [ ] **Step 5: Record the budget decisions in the spec**
 
-In the store-readiness spec, section 4.3, after the "Total" bullet, add:
+In the store-readiness spec, change the QRY-15 register row's phases to `4, 7`, with the resolution "Fix (`nothing`/`donothing` in 4, the rest in 7)" (open point 8). Then, in section 4.3, after the "Total" bullet, add:
 
 ```markdown
   Until Phase 5 adds Load more, each row left out shows the text "Not loaded: request limit reached (50)" (owner's decision on issue #44, 2026-10-20).
@@ -3681,7 +3681,7 @@ In the store-readiness spec, section 4.3, after the "Total" bullet, add:
 After the "Server pushback" bullet, add:
 
 ```markdown
-  Until Phase 5's status bar, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent.
+  Until Phase 5's status bar, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent (owner's decision on issue #44, 2026-10-20).
 ```
 
 - [ ] **Step 6: Final verification**
@@ -3720,7 +3720,6 @@ Open the PR against `main` with the title "Phase 2, part B: fetchJson, the reque
   - PRT-1: the classifier; its known-bug case is now a test. Alerts are Phase 8's.
   - QRY-3: the classifier skips other operations and JSON results.
   - QRY-5: `fetchJson` errors reach the Query Helper, which says so.
-  - QRY-15: list what this PR changed for it, and ask the owner (see "Open points").
   - TOK-3: `stripForFilter` in `inject.js` and `mapImages.js`.
   - POP-6: the popup forwards the tab's token.
   - ADV-1: the docs.
@@ -3763,3 +3762,20 @@ Points 4 and 9 stand as written unless review says otherwise. Points 6 and 7 nee
 7. **POST on 11.x, 12.x and ArcGIS Online.** POST with the token in the body is verified only on 10.9.1 (probe Q5). If a server refuses POST on resource endpoints, metadata on `?token=` pages fails there, while pages without a token aren't affected. Running the probe on an 11.x or 12.x server before PR B merges would settle it.
 8. **QRY-15's Phase 2 part** isn't spelled out in the register ("Auto-submit label, `nothing`/`donothing`, stale tab, submit buttons by index | 2, 4, 7"). This plan's Query Helper changes are the classifier gate and the `sdt-` class on its controls. The owner should say whether that is Phase 2's part, or what is.
 9. **Map previews outside the cap.** Hover requests skip the limiter, because a hover is a user action. Phase 6's request-count test then sets their limit (one export per hovered link).
+
+## Changes made while implementing Part B
+
+Part B followed the tasks above. Where the code showed the plan was wrong, the implementation and this plan were changed together. The code blocks above show the final code.
+
+- **B1:** `scopeOf` also refuses `%25` and `%5c` in the instance path (open point 3), and the token spec says so.
+- **B2:** `build` drops `token` from the base URL whatever the case of its name, and a param replaces a base parameter of the same name in any case. ArcGIS reads parameter names without regard to case. `SDT.url.dropParams` does both.
+- **B3:** Node unrefs `AbortSignal.timeout`'s timer, so the timeout unit test holds the event loop open with its own timer.
+- **B7:** `status.js` and `queryTest.js` call `load()` without awaiting it, so the code after its `await` runs through `SDT.guard.run`. The JSON-view test leaves out the page's own load: on a page opened with `?f=json`, that request has `f=json` too. The action-state test also checks a JSON view (open point 5).
+- **B8:**
+  - The link filter skips links to the page itself. Once `f` is stripped, every page's `?f=pjson` link points at the page, and the MapServer page test caught a third data block.
+  - The link filter needs `pageScope !== null`. Without it, a page with no scope would pass links that have no scope either.
+  - `countFields` checks `SDT.guard.alive()` after its `await`, before it calls `chrome.storage`.
+  - The manifest's patterns don't match `.../rest/services?token=`, because a pattern's path also covers the query string. The token and 307 tests open `.../rest/services/?token=` instead. Phase 3 adds the `?` variants (MAN-2).
+- **B9:** `mapImages.js` uses the same two filter conditions as B8. A second test shows that a preview on the page's own server still loads, and that its requests carry no token.
+- **B10:** The lint rule also catches `window.fetch(...)`. The `@cdp` stub returns a `Response` made in the popup's realm and sends the form body as a string with its content type.
+- **B11:** The docs got the text in Steps 1 to 4, extended to cover the changes above: the skipped-row notes, the self-link and scope filter rules, the `?token=` root gap until Phase 3, and the `@cdp` stub.

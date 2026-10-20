@@ -100,10 +100,12 @@ These are part of each phase's definition of done.
 Automatic requests are those the extension sends without a user action. They are limited as follows:
 
 - **Total:** at most 50 automatic requests per page view. Past that, the remaining rows show a "Load more" control.
+  Until Phase 5 adds Load more, each row left out shows the text "Not loaded: request limit reached (50)" (owner's decision on issue #44, 2026-10-20).
 - **Concurrency:** at most 4 requests in flight at once.
 - **Destination:** only the page's own origin and its `/rest/services` root. Links to other servers get no automatic requests.
 - **Cancellation:** pending requests are cancelled on `pagehide`.
 - **Server pushback:** an HTTP 429 or 503 stops automatic work on that page and shows a notice.
+  Until Phase 5's status bar, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent (owner's decision on issue #44, 2026-10-20).
 - **Token:** a `token` from the page URL goes only to the page's origin and REST root. It travels in a form POST body, and a request that carries it never follows a redirect.
 
 ### 4.4 Security rules
@@ -703,7 +705,7 @@ The classifier therefore takes the type from the pathname and `document.contentT
 | QRY-12 | L | Stale distinct-values responses | 7 | Fix |
 | QRY-13 | L | "Up to 1000 examples" not enforced | 7 | Fix |
 | QRY-14 | L | Select Distinct preset incomplete | 7 | Fix |
-| QRY-15 | L | Auto-submit label, `nothing`/`donothing`, stale tab, submit buttons by index | 2, 4, 7 | Fix |
+| QRY-15 | L | Auto-submit label, `nothing`/`donothing`, stale tab, submit buttons by index | 4, 7 | Fix (`nothing`/`donothing` in 4, the rest in 7) |
 | QRY-16 | L | outStatistics text replaced when not valid JSON | 7 | Fix |
 | PRT-6 | L | New `<select>` has no label; focus not moved on "Other..." | 8 | Fix |
 | QRY-17 | L | `token` dropped (duplicate of INJ-16) | 2 | Fix |
