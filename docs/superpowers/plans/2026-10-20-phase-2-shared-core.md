@@ -3631,7 +3631,15 @@ End the body with `🤖 Generated with [Claude Code](https://claude.com/claude-c
 
 ## Open points
 
-Each of these needs the owner's decision.
+The owner answered points 1, 2, 3, 5 and 8 on 2026-10-20:
+
+- 1: yes, INJ-17 moves to Phase 2 (done in Part A).
+- 2: use the wording below, with the real status code.
+- 3: yes, `scopeOf` also returns null for `%25` and `%5c` in the instance path, case-insensitive.
+- 5: yes, the toolbar button is disabled on JSON views and other non-Services Directory pages from Phase 2.
+- 8: QRY-15 has no Phase 2 part. Part B changes its register row to Phases 4 and 7 (`nothing`/`donothing` in 4, the rest in 7) and doesn't list it.
+
+Points 4 and 9 stand as written unless review says otherwise. Points 6 and 7 need a check on a real server.
 
 1. **INJ-17 moves to Phase 2.** `SDT.guard.onLoad` replaces the `readyState` polling in Part A, because the guard needs one guarded entry point. The alternative is a guarded interval that clears itself, which keeps INJ-17 for Phase 5.
 2. **Server pushback note.** The wording "Not loaded: the server answered HTTP 503, so automatic requests stopped" is this plan's proposal. Only the cap note was decided.
