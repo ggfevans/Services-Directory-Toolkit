@@ -17,7 +17,7 @@
       x.open(data ? "POST" : "GET", u, 1);
       x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = () => {
+      x.onreadystatechange = SDT.guard.wrap(() => {
         if (x.readyState > 3 && callback) {
           try {
             // JSON.parse doesn't handle NaN values where numbers are supposed to go
@@ -27,7 +27,7 @@
             console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
           }
         }
-      };
+      });
       x.send(data);
     } catch (e) {
       window.console && console.log("Services Directory Toolkit: request failed", e);
@@ -298,7 +298,7 @@
       }
       
       ul.appendChild(dF);
-      div.addEventListener("click", () => {toggleCollapse(div);});
+      SDT.guard.listen(div, "click", () => { toggleCollapse(div); });
 
       return div;
     }
@@ -591,7 +591,7 @@
    * @param {function} callback - callback function when event occurs.
    */
   const listenAll = (node, selector, evt, callback) => {
-    [].forEach.call(node.querySelectorAll(selector), (el) => el.addEventListener(evt, callback));
+    [].forEach.call(node.querySelectorAll(selector), (el) => SDT.guard.listen(el, evt, callback));
   };
 
   /**
@@ -609,7 +609,7 @@
 
       // insert clear button
       const clearBtn = loadElement("BUTTON", {"type": "button"}, "Clear");
-      clearBtn.addEventListener("click", clearActive);
+      SDT.guard.listen(clearBtn, "click", clearActive);
       titlePanel.appendChild(clearBtn);
 
       this.node.appendChild(titlePanel);
@@ -713,7 +713,7 @@
       } else {
         df.appendChild(loadElement("SPAN", {}, "Layers:"));
         // on layerSelect change, update the fieldSelect list.
-        this.layerSelect.addEventListener("change", this.updateFields.bind(this, dataItems));
+        SDT.guard.listen(this.layerSelect, "change", this.updateFields.bind(this, dataItems));
       }
       df.appendChild(this.layerSelect);
       df.appendChild(loadElement("SPAN", {}, "Fields:"));
@@ -723,7 +723,7 @@
   
       this.parentNode.appendChild(df);
 
-      this.fieldSelect.addEventListener("change", this.updateValues.bind(this, this.url.replace(/\/\d*\/?$/, "")));
+      SDT.guard.listen(this.fieldSelect, "change", this.updateValues.bind(this, this.url.replace(/\/\d*\/?$/, "")));
     
       // apply double-click event listeners to fill in items.
       listenAll(this.parentNode, "select", "dblclick", function (evt) {
@@ -849,135 +849,131 @@
     document.body.className = bodyClasses.join(" ");
   };
 
-  let readyStateCheckInterval = setInterval(() => {
-    if (document.readyState === "complete") {
-      clearInterval(readyStateCheckInterval);
+  SDT.guard.onLoad(() => {
 
-      // collect the links on the web page to collect information about the content they link to.
-      const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0),
-        url = window.location.href.split("?")[0],
-        findTest = /\/find\/?$/i,
-        // search for map service links on the page
-        urls = tags.map((tag, i) => {
-          return Object.create({}, {
-            i: {
-              value: i
-            },
-            url: {
-              value: tag.href
-            }
-          });
-        }).filter((item) => {
-        // filter out links in the breadcrumbs section at the top of the page.
-          if (tags[item.i].parentNode.className === "breadcrumbs") {
-            return false;
+    // collect the links on the web page to collect information about the content they link to.
+    const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0),
+      url = window.location.href.split("?")[0],
+      findTest = /\/find\/?$/i,
+      // search for map service links on the page
+      urls = tags.map((tag, i) => {
+        return Object.create({}, {
+          i: {
+            value: i
+          },
+          url: {
+            value: tag.href
           }
-          return /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url);
         });
-        
-      /**
-       * collect and present service data based on a list of urls.
-       * @function collectMetaData
-       * @param {string[]} f - a list of urls to collect data on.
-       * @param {boolean} canCountFeatures - if true, count features.
-       */
-      const collectMetaData = (f, canCountFeatures) => {
-        if (!f || !f.length) {
-          notifyLoading(false, LOADING_METADATA_CSS);
-          return; 
+      }).filter((item) => {
+      // filter out links in the breadcrumbs section at the top of the page.
+        if (tags[item.i].parentNode.className === "breadcrumbs") {
+          return false;
         }
-        const data = f.shift();
-        ajax(data.url + "?f=json",
-          (response) => {
-            const spatialReferenceNode = showSpatialReferenceData(response),
-              metadata = showMetadata(response);
-            
-            if (spatialReferenceNode !== null) {
-              tags[data.i].parentNode.appendChild(spatialReferenceNode);  
-            }
-            
-            if (metadata !== null) {
-              tags[data.i].parentNode.appendChild(metadata);
-            }
-            
-            // if the service has fields, get the layer count
-            if (response.fields && response.fields.length && canCountFeatures) {
-              getLayerCount(data.url, response, (countList) => {
-                tags[data.i].parentNode.appendChild(countList);
-              });
-            }
-            collectMetaData(f, canCountFeatures);
-          });
-      };
-
-      chrome.storage.sync.get({
-        autoMetadata: true,
-        autoFeatureCounts: true
-      }, (items) => {
-        //console.log(urls, items);
-        if (urls && urls.length && items.autoMetadata) {
-          notifyLoading(true, LOADING_METADATA_CSS);
-          collectMetaData(urls, items.autoFeatureCounts);
-        }
+        return /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url);
       });
       
-      // field and domain data counting.
-      if (/(imageserver|\d+)\/?$/i.test(url)) {
-        ajax(url + "?f=json", (results) => {
-          if (results && results.fields && results.fields.length > 0) {
-            const fieldHTML = getFieldList();
-            const hasDomainTest = (field) => !!field && field.domain && field.domain.codedValues;
-
-            chrome.storage.sync.get({
-              autoFieldCounts: true,
-              autoDomainCounts: true
-            }, (items) => {
-              const domainFields = [];
-              let domainFieldHTML;
-              if (items.autoFieldCounts) {
-                notifyLoading(true, LOADING_NULLS_CSS);
-                checkForNulls(url, results.fields.slice(0), fieldHTML.slice(0));
-              }
-              if (items.autoDomainCounts && results.fields.some(hasDomainTest)) {
-                
-                domainFieldHTML = fieldHTML.slice(0);
-
-                results.fields.forEach((field, i) => {
-                  if (hasDomainTest(field)) {
-                    domainFields.push(field.domain.codedValues.map((item) => {
-                      // future reference: check if Object.assign supported by Chrome
-                      item.field = field.name;
-                      item.type = field.type;
-                      return item;
-                    }));
-                  } else {
-                    domainFieldHTML[i] = null;
-                  }
-                });
-
-                // filter out nulled out HTML nodes.
-                domainFieldHTML = domainFieldHTML.filter((item) => !!item );
-                notifyLoading(true, LOADING_DOMAINS_CSS);
-                checkDomains(url, domainFields, domainFieldHTML, null);
-              }
-            });
-
+    /**
+     * collect and present service data based on a list of urls.
+     * @function collectMetaData
+     * @param {string[]} f - a list of urls to collect data on.
+     * @param {boolean} canCountFeatures - if true, count features.
+     */
+    const collectMetaData = (f, canCountFeatures) => {
+      if (!f || !f.length) {
+        notifyLoading(false, LOADING_METADATA_CSS);
+        return; 
+      }
+      const data = f.shift();
+      ajax(data.url + "?f=json",
+        (response) => {
+          const spatialReferenceNode = showSpatialReferenceData(response),
+            metadata = showMetadata(response);
+          
+          if (spatialReferenceNode !== null) {
+            tags[data.i].parentNode.appendChild(spatialReferenceNode);  
           }
+          
+          if (metadata !== null) {
+            tags[data.i].parentNode.appendChild(metadata);
+          }
+          
+          // if the service has fields, get the layer count
+          if (response.fields && response.fields.length && canCountFeatures) {
+            getLayerCount(data.url, response, (countList) => {
+              tags[data.i].parentNode.appendChild(countList);
+            });
+          }
+          collectMetaData(f, canCountFeatures);
         });
+    };
+
+    chrome.storage.sync.get({
+      autoMetadata: true,
+      autoFeatureCounts: true
+    }, SDT.guard.wrap((items) => {
+      //console.log(urls, items);
+      if (urls && urls.length && items.autoMetadata) {
+        notifyLoading(true, LOADING_METADATA_CSS);
+        collectMetaData(urls, items.autoFeatureCounts);
       }
+    }));
+    
+    // field and domain data counting.
+    if (/(imageserver|\d+)\/?$/i.test(url)) {
+      ajax(url + "?f=json", (results) => {
+        if (results && results.fields && results.fields.length > 0) {
+          const fieldHTML = getFieldList();
+          const hasDomainTest = (field) => !!field && field.domain && field.domain.codedValues;
 
+          chrome.storage.sync.get({
+            autoFieldCounts: true,
+            autoDomainCounts: true
+          }, SDT.guard.wrap((items) => {
+            const domainFields = [];
+            let domainFieldHTML;
+            if (items.autoFieldCounts) {
+              notifyLoading(true, LOADING_NULLS_CSS);
+              checkForNulls(url, results.fields.slice(0), fieldHTML.slice(0));
+            }
+            if (items.autoDomainCounts && results.fields.some(hasDomainTest)) {
+              
+              domainFieldHTML = fieldHTML.slice(0);
 
-      // todo: find page helper
-      if (findTest.test(url)) {
-        findHelper(url.replace(findTest, ""));
-      }
+              results.fields.forEach((field, i) => {
+                if (hasDomainTest(field)) {
+                  domainFields.push(field.domain.codedValues.map((item) => {
+                    // future reference: check if Object.assign supported by Chrome
+                    item.field = field.name;
+                    item.type = field.type;
+                    return item;
+                  }));
+                } else {
+                  domainFieldHTML[i] = null;
+                }
+              });
 
-      // todo: identify page helper
+              // filter out nulled out HTML nodes.
+              domainFieldHTML = domainFieldHTML.filter((item) => !!item );
+              notifyLoading(true, LOADING_DOMAINS_CSS);
+              checkDomains(url, domainFields, domainFieldHTML, null);
+            }
+          }));
 
-      // todo: tile testing
-      // todo: geometry helper
-      
+        }
+      });
     }
-  }, 10);
+
+
+    // todo: find page helper
+    if (findTest.test(url)) {
+      findHelper(url.replace(findTest, ""));
+    }
+
+    // todo: identify page helper
+
+    // todo: tile testing
+    // todo: geometry helper
+  });
 
 }

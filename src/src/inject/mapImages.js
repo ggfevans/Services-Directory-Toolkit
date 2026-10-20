@@ -147,7 +147,7 @@
     chrome.storage.sync.get({
       mapImageWidth: 300,
       mapImageHeight: 200
-    }, (items) => {
+    }, SDT.guard.wrap((items) => {
       // update map image widht and height
       WIDTH_HEIGHT["width"] = items.mapImageWidth;
       WIDTH_HEIGHT["height"] = items.mapImageHeight;
@@ -165,7 +165,7 @@
       parentDiv.appendChild(mapDiv);
       parentDiv.appendChild(loadElement("P", {"style": "margin:2px 0;padding:0;"}, "Hover over a link to view."));
       document.body.appendChild(parentDiv);
-    });
+    }));
   };
 
   const setup = () => {
@@ -195,7 +195,7 @@
       urls.forEach((item) => {
         const tag = tags[item.i];
 
-        tag.addEventListener("mouseover", hoverGetMap);
+        SDT.guard.listen(tag, "mouseover", hoverGetMap);
       });
     }
   };
@@ -204,16 +204,12 @@
     // collect the links on the web page to collect information about the content they link to.
     chrome.storage.sync.get({
       showMapImages: true
-    }, (items) => {
+    }, SDT.guard.wrap((items) => {
       if (items.showMapImages) {
         setup();
       }
-    });
+    }));
   };
 
-  if (document.readyState === "complete") {
-    onPageLoaded();
-  } else {
-    window.addEventListener("load", onPageLoaded);
-  }
+  SDT.guard.onLoad(onPageLoaded);
 }

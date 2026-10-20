@@ -19,7 +19,7 @@
       x.open(data ? "POST" : "GET", u, 1);
       x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = () => {
+      x.onreadystatechange = SDT.guard.wrap(() => {
         if (x.readyState > 3 && callback) {
           try {
             // JSON.parse doesn't handle NaN values where numbers are supposed to go
@@ -29,7 +29,7 @@
             console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
           }
         }
-      };
+      });
       x.send(data);
     } catch (e) {
       window.console && console.log("Services Directory Toolkit: request failed", e);
@@ -115,7 +115,7 @@
    */
   const listenAll = (node, selector, evt, callback) => {
     [].forEach.call(node.querySelectorAll(selector), (el) => {
-      el.addEventListener(evt, callback);
+      SDT.guard.listen(el, evt, callback);
     });
   };
 
@@ -149,7 +149,7 @@
 
     chrome.storage.sync.get({
       queryHelperSelectAll: "get"
-    }, (item) => {
+    }, SDT.guard.wrap((item) => {
       const submitButtons = document.querySelectorAll("input[type='submit']");
       let submitButton;
       switch(item.queryHelperSelectAll) {
@@ -164,7 +164,7 @@
       if (submitButton) {
         submitButton.click();
       } 
-    });
+    }));
   }
   
   /**
@@ -182,7 +182,7 @@
       buttonConfig.title = "Clicking here will auto-submit your request (see options for details)";
     }
     let quickBtn = loadElement("BUTTON", buttonConfig, content);
-    quickBtn.addEventListener("click", quickFormFillin.bind(this, formData, !!clickSubmit));
+    SDT.guard.listen(quickBtn, "click", quickFormFillin.bind(this, formData, !!clickSubmit));
     parentElement.appendChild(quickBtn);
     parentElement.appendChild(document.createElement("br"));
   };
@@ -228,7 +228,7 @@
   function addStatisticsControl (parentNode) {
     ["Count", "Sum", "Min", "Max", "Avg", "StdDev", "Var"].forEach(function (stat) {
       const btn = loadElement("BUTTON", {"type":"button", "class": "statistic", "style": "display:none;"}, stat);
-      btn.addEventListener("click", addStatistic.bind(this, stat.toLowerCase()));
+      SDT.guard.listen(btn, "click", addStatistic.bind(this, stat.toLowerCase()));
       parentNode.appendChild(btn);
     });
 
@@ -282,7 +282,7 @@
 
       // insert clear button
       const clearBtn = loadElement("BUTTON", {"type": "button"}, "Clear");
-      clearBtn.addEventListener("click", clearActive);
+      SDT.guard.listen(clearBtn, "click", clearActive);
       titlePanel.appendChild(clearBtn);
 
       this.node.appendChild(titlePanel);
@@ -385,7 +385,7 @@
       } else {
         df.appendChild(loadElement("SPAN", {}, "Layers:"));
         // on layerSelect change, update the fieldSelect list.
-        this.layerSelect.addEventListener("change", this.updateFields.bind(this, dataItems));
+        SDT.guard.listen(this.layerSelect, "change", this.updateFields.bind(this, dataItems));
       }
       df.appendChild(this.layerSelect);
       df.appendChild(loadElement("SPAN", {}, "Fields:"));
@@ -395,7 +395,7 @@
   
       this.parentNode.appendChild(df);
 
-      this.fieldSelect.addEventListener("change", this.updateValues.bind(this, this.url.replace(/\/\d*\/?$/, "")));
+      SDT.guard.listen(this.fieldSelect, "change", this.updateValues.bind(this, this.url.replace(/\/\d*\/?$/, "")));
     
       // apply double-click event listeners to fill in items.
       listenAll(this.parentNode, "select", "dblclick", function (evt) {
@@ -488,13 +488,13 @@
   const insertDefaultWhereClause = () => {
     chrome.storage.sync.get({
       defaultWhereClause: ""
-    }, (items) => {
+    }, SDT.guard.wrap((items) => {
       const whereInput = document.querySelector("input[name = where]");
       // if the where clause input is empty and the defaultWhereClause is not, add it in.
       if (whereInput && !whereInput.value && items.defaultWhereClause) {
         whereInput.value = items.defaultWhereClause;
       }
-    });
+    }));
   };
 
   /**
@@ -536,9 +536,5 @@
     queryHelper(url.replace(/\/query\/?$/i, ""));
   };
 
-  if (document.readyState === "complete") {
-    onPageLoaded();
-  } else {
-    window.addEventListener("load", onPageLoaded);
-  }
+  SDT.guard.onLoad(onPageLoaded);
 }
