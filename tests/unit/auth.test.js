@@ -91,5 +91,8 @@ test("pageToken reads a non-empty token from a page with a scope", () => {
   assert.deepEqual(plain(auth.pageToken(page("?f=html&token=abc.1"))), { value: "abc.1", scope: ENTERPRISE });
   assert.equal(auth.pageToken(page("?token=")), null);
   assert.equal(auth.pageToken(page("?f=html")), null);
+  assert.deepEqual(plain(auth.pageToken(page("?Token=abc.1"))), { value: "abc.1", scope: ENTERPRISE });
+  assert.deepEqual(plain(auth.pageToken(page("?TOKEN=abc.1&f=html"))), { value: "abc.1", scope: ENTERPRISE });
+  assert.deepEqual(plain(auth.pageToken(page("?token=&Token=abc.1"))), { value: "abc.1", scope: ENTERPRISE });
   assert.equal(auth.pageToken({ search: "?token=abc", href: "https://gis.example.org/evil.html?token=abc" }), null);
 });

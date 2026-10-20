@@ -59,9 +59,13 @@ SDT.auth = {
     return `${parsed.protocol}//${parsed.host.toLowerCase()}${path.map((segment) => `/${segment}`).join("")}`;
   },
 
-  /** The page URL's token and the page's scope, or null. An empty token is never used. */
+  /**
+   * The page URL's token and the page's scope, or null. ArcGIS reads parameter names in any case, so
+   * Token= counts too; the first non-empty one wins. An empty token is never used.
+   */
   pageToken(location) {
-    const value = new URLSearchParams(location.search).get("token");
+    const entry = [...new URLSearchParams(location.search)].find(([key, token]) => /^token$/i.test(key) && token);
+    const value = entry?.[1];
     const scope = value ? SDT.auth.scopeOf(location.href) : null;
     return value && scope ? { value, scope } : null;
   }
