@@ -1880,7 +1880,10 @@ test("a network failure, a timeout and an abort are errors", async () => {
 
   const hanging = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)));
   const slow = withFetch(hanging);
+  // Node unrefs AbortSignal.timeout's timer, so hold the event loop open until it fires.
+  const keepAlive = setTimeout(() => {}, 5000);
   assert.equal(plain(await slow.net.fetchJson(BASE, { timeoutMs: 20 })).error.type, "timeout");
+  clearTimeout(keepAlive);
 
   const controller = new AbortController();
   const pending = slow.net.fetchJson(BASE, { signal: controller.signal });

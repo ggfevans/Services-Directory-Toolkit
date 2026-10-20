@@ -40,6 +40,7 @@
         "src/lib/guard.js",
         "src/lib/auth.js",
         "src/lib/url.js",
+        "src/lib/net.js",
         "src/inject/inject.js",
         "src/inject/status.js",
         "src/inject/mapImages.js"
@@ -55,6 +56,7 @@
         "src/lib/guard.js",
         "src/lib/auth.js",
         "src/lib/url.js",
+        "src/lib/net.js",
         "src/inject/queryTest.js"
       ]
     },
@@ -70,6 +72,7 @@
         "src/lib/guard.js",
         "src/lib/auth.js",
         "src/lib/url.js",
+        "src/lib/net.js",
         "src/inject/printTask.js"
       ]
     }
