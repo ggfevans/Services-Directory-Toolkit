@@ -78,6 +78,9 @@ test("content scripts add listeners and timers through SDT.guard", async () => {
   assert.deepEqual(await ruleIds("{\n  SDT.guard.listen(window, \"load\", () => {});\n}\n", INJECT), []);
   assert.deepEqual(await ruleIds("{\n  setTimeout(() => {}, 1);\n}\n", INJECT), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  setTimeout(SDT.guard.wrap(() => {}), 1);\n}\n", INJECT), []);
+  assert.deepEqual(await ruleIds("{\n  window.setTimeout(() => {}, 1);\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  setTimeout(SDT.dom.wrap(() => {}), 1);\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  window.setTimeout(SDT.guard.wrap(() => {}), 1);\n}\n", INJECT), []);
 });
 
 test("content scripts wrap chrome callbacks in SDT.guard.wrap", async () => {

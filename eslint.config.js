@@ -33,7 +33,10 @@ const BLOCK_SELECTORS = [{ selector: "Program > :not(BlockStatement)", message: 
 const GUARDED = "Content scripts can outlive their extension. Use SDT.guard.listen, SDT.guard.wrap or SDT.guard.onLoad.";
 const GUARD_SELECTORS = [
   { selector: "CallExpression[callee.property.name='addEventListener']", message: GUARDED },
-  { selector: "CallExpression[callee.name=/^set(Timeout|Interval)$/]:not([arguments.0.callee.property.name='wrap'])", message: GUARDED },
+  {
+    selector: "CallExpression:matches([callee.name=/^set(Timeout|Interval)$/], [callee.property.name=/^set(Timeout|Interval)$/]):not([arguments.0.callee.object.object.name='SDT'][arguments.0.callee.object.property.name='guard'][arguments.0.callee.property.name='wrap'])",
+    message: GUARDED
+  },
   {
     selector: "CallExpression:matches([callee.object.object.name='chrome'], [callee.object.object.object.name='chrome']) > :matches(ArrowFunctionExpression, FunctionExpression)",
     message: GUARDED
