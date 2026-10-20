@@ -1,4 +1,5 @@
 {
+  const { loadElement } = SDT.dom;
   const IMAGE_LOOKUP = {};
   const NO_IMAGE_SRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
   const WIDTH_HEIGHT = {
@@ -91,24 +92,6 @@
           reject(err);
         });
     });
-  };
-
-  /**
-   * Creates an HTML element.
-   * @function loadElement
-   * @param {string} tag - HTML tag name that you want to create.
-   * @param {object} attributes - name value object describing properties you want to assign to the object
-   * @param {string} [text] - if present, this is the content you should add to the HTML element.
-   */
-  const loadElement = (tag, attributes, text) => {
-    const el = document.createElement(tag);
-    for (let a in attributes) {
-      el.setAttribute(a, attributes[a]);
-    }
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    return el;
   };
 
   /**

@@ -1,4 +1,5 @@
 {
+  const { loadElement } = SDT.dom;
   const d = document, 
     txt = d.getElementById("searchblank"), 
     btn = d.getElementById("searchbtn"),
@@ -36,26 +37,6 @@
     } catch (e) {
       window.console && console.log("Services Directory Toolkit: request failed", e);
     }
-  };
-
-  /**
-   * Creates an HTML element.
-   * @function loadElement
-   * @param {string} tag - HTML tag name that you want to create.
-   * @param {object} attributes - name value object describing properties you want to assign to the object
-   * @param {string} [text] - if present, this is the content you should add to the HTML element.
-   */
-  const loadElement = (tag, attributes, text) => {
-    const el = document.createElement(tag);
-    if (attributes) {
-      for (let a in attributes) {
-        el.setAttribute(a, attributes[a]);
-      }
-    }
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    return el;
   };
 
   /**

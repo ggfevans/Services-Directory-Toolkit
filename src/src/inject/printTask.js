@@ -1,4 +1,5 @@
 {
+  const { loadElement } = SDT.dom;
   let url = window.location.href.split("?")[0];
  
   /**
@@ -30,24 +31,6 @@
     } catch (e) {
       window.console && console.log("Services Directory Toolkit: request failed", e);
     }
-  };
-
-  /**
-   * Creates an HTML element.
-   * @function loadElement
-   * @param {string} tag - HTML tag name that you want to create.
-   * @param {object} attributes - name value object describing properties you want to assign to the object
-   * @param {string} [text] - if present, this is the content you shoul add to the HTML element.
-   */
-  const loadElement = (tag, attributes, text) => {
-    let el = document.createElement(tag);
-    for (let a in attributes) {
-      el.setAttribute(a, attributes[a]);
-    }
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    return el;
   };
 
   /**

@@ -1,5 +1,6 @@
 {
   let active;
+  const { loadElement, clear: cleanElement } = SDT.dom;
   
   
 
@@ -49,31 +50,6 @@
       }
     }
     document.body.className = bodyClasses.join(" ");
-  };
-
-  /**
-   * Creates an HTML element.
-   * @function loadElement
-   * @param {string} tag - HTML tag name that you want to create.
-   * @param {object} attributes - name value object describing properties you want to assign to the object
-   * @param {string} [text] - if present, this is the content you shoul add to the HTML element.
-   */
-  const loadElement = (tag, attributes, text) => {
-    const el = document.createElement(tag);
-    for (let a in attributes) {
-      el.setAttribute(a, attributes[a]);
-    }
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    return el;
-  };
-
-  const cleanElement = myNode => {
-    while (myNode.firstChild) {
-      myNode.removeChild(myNode.lastChild);
-    }
-    return myNode;
   };
 
   /**

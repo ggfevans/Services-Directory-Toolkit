@@ -1,4 +1,5 @@
 {
+  const { loadElement, clear: cleanElement } = SDT.dom;
   const COLORHASH = {};
   let active = null;
   
@@ -41,31 +42,6 @@
    * @returns {string} - a string in title case form.
    */
   const unCamelCase = (value) => value.substr(0, 1).toUpperCase() + value.substr(1).replace(/([a-z])([A-Z])/g, "$1 $2");
-
-  /**
-   * Creates an HTML element.
-   * @function loadElement
-   * @param {string} tag - HTML tag name that you want to create.
-   * @param {object} attributes - name value object describing properties you want to assign to the object
-   * @param {string} [text] - if present, this is the content you should add to the HTML element.
-   */
-  const loadElement = (tag, attributes, text) => {
-    const el = document.createElement(tag);
-    for (let a in attributes) {
-      el.setAttribute(a, attributes[a]);
-    }
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    return el;
-  };
-
-  const cleanElement = myNode => {
-    while (myNode.firstChild) {
-      myNode.removeChild(myNode.lastChild);
-    }
-    return myNode;
-  };
 
   /**
    * Adds a list item to a node if the property is there and maybe if a property is true.
