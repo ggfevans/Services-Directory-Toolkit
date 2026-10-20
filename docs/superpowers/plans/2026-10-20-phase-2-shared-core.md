@@ -30,7 +30,7 @@ Read both specs, `CLAUDE.md`, and the comments at the top of `tests/e2e/fixtures
 The owner made these on 2026-10-20.
 
 1. **Two pull requests.** Part A holds the mechanism, the build check, the DOM helpers, the guard and the `loadElement` switch-over. Part B holds the rest. Each part ends with docs that match the code and a PR body that lists the finding IDs it closes and how.
-2. **Encoded separators.** `SDT.auth.scopeOf(url)` returns `null` (no scope, so no token) when the instance path, after `new URL()` has parsed it, still contains `%2f` or `%2e` in any case. `/restricted/rest/services` scopes to `/restricted`. Part B updates section 5.1 of the token spec to say so.
+2. **Encoded separators.** `SDT.auth.scopeOf(url)` returns `null` (no scope, so no token) when the instance path, after `new URL()` has parsed it, still contains `%2f` or `%2e` in any case (and, from open point 3, `%25` or `%5c`). `/restricted/rest/services` scopes to `/restricted`. Part B updates section 5.1 of the token spec to say so.
 3. **Rows past the cap.** Until Phase 5's Load more (#14), each row the 50-request budget leaves out shows an inline text note: `Not loaded: request limit reached (50)`, built with text nodes.
 4. **12.1 markup.** The research note from 2026-10-20 found no difference at the text level and couldn't check element classes (see Task B5). The classifier therefore confirms a page with any one of three markers, and no 12.x fixture variant is added. Task B5 records the source and date in the store-readiness spec.
 
@@ -113,7 +113,7 @@ Everything a later phase may call. Lib files in `src/src/lib/`, in load order.
 | `scopeOf(url)` | `string` or `null` | See below |
 | `pageToken(location)` | `{ value, scope }` or `null` | The page URL's `token` parameter and the page's scope. `null` when the token is missing or empty, or the page has no scope. Reads `location.search` and `location.href`. |
 
-`scopeOf(url)` parses with `new URL` (which resolves `.`, `..`, `%2e` and `%2e%2e` segments) and reads only the pathname. It returns `null` for a URL that doesn't parse, isn't `http:` or `https:`, has no whole-segment `rest/services`, or has an instance-path segment that still contains `%2f` or `%2e` (decision 2), or that is `admin`, `tokens` or `manager` in any case. Otherwise it returns `<protocol>//<host><instance path>`, such as `https://gis.example.org/server`, with the instance path lower-cased. On a hosted ArcGIS Online host only the `arcgis` and `tiles` segments are lower-cased. Two URLs are in the same scope exactly when their `scopeOf` strings are equal.
+`scopeOf(url)` parses with `new URL` (which resolves `.`, `..`, `%2e` and `%2e%2e` segments) and reads only the pathname. It returns `null` for a URL that doesn't parse, isn't `http:` or `https:`, has no whole-segment `rest/services`, or has an instance-path segment that still contains `%2f`, `%2e`, `%25` or `%5c` (decision 2 and open point 3), or that is `admin`, `tokens` or `manager` in any case. Otherwise it returns `<protocol>//<host><instance path>`, such as `https://gis.example.org/server`, with the instance path lower-cased. On a hosted ArcGIS Online host only the `arcgis` and `tiles` segments are lower-cased. Two URLs are in the same scope exactly when their `scopeOf` strings are equal.
 
 ### `SDT.url` (`url.js`, Part B)
 
@@ -1384,10 +1384,16 @@ test("%2e%2e segments are resolved before the check", () => {
   assert.equal(auth.scopeOf(`${ENTERPRISE}/rest/services/%2e%2e/%2E%2e/admin`), null);
 });
 
-test("an instance path that still holds %2f or %2e after parsing has no scope", () => {
-  assert.equal(auth.scopeOf("https://gis.example.org/a%2fb/rest/services"), null);
-  assert.equal(auth.scopeOf("https://gis.example.org/a%2Eb/rest/services"), null);
-  assert.equal(auth.scopeOf("https://gis.example.org/a%2Fb/rest/services"), null);
+test("an instance path that still holds %2f, %2e, %25 or %5c after parsing has no scope", () => {
+  for (const segment of ["a%2fb", "a%2Fb", "a%2Eb", "a%2eb", "%252e%252e", "a%25b", "a%5cb", "a%5Cb"]) {
+    assert.equal(auth.scopeOf(`https://gis.example.org/${segment}/rest/services`), null, segment);
+  }
+  // A backslash new URL turns into a slash is just a separator.
+  assert.equal(auth.scopeOf("https://gis.example.org\\server\\rest\\services"), ENTERPRISE);
+});
+
+test("encoded characters after rest/services don't affect the scope", () => {
+  assert.equal(auth.scopeOf(`${ENTERPRISE}/rest/services/Export%20Web%20Map%2FTask/GPServer`), ENTERPRISE);
 });
 
 test("/restricted/rest/services scopes to /restricted", () => {
@@ -1488,9 +1494,10 @@ SDT.auth = {
     if (!split) {
       return null;
     }
-    // new URL has resolved dot segments, %2e ones included. An encoded slash or dot that survives
-    // could mean something else to the server, so such a path gets no scope.
-    if (split.instance.some((segment) => /%2[ef]/i.test(segment))) {
+    // new URL has resolved dot segments, %2e ones included. An encoded slash, dot, percent sign or
+    // backslash that survives could mean something else to a server that decodes again, so such a
+    // path gets no scope (owner's decision on issue #44).
+    if (split.instance.some((segment) => /%(?:2[ef5]|5c)/i.test(segment))) 
       return null;
     }
     if (split.instance.some((segment) => SDT.auth.OUTSIDE.includes(segment.toLowerCase()))) {
@@ -1524,7 +1531,7 @@ In `docs/superpowers/specs/2026-10-13-token-support-design.md`, section 5.1, rep
 Replace the paragraph after the bullets ("A path such as `/restricted/rest/services` scopes to ... Issue #44 settles how encoded slashes and double-encoded dots that survive `new URL` are handled.") with:
 
 ```markdown
-A path such as `/restricted/rest/services` scopes to `/restricted`, as Phase 2 of the store-readiness spec says. `new URL` resolves `%2e`-encoded dot segments. If the instance path still contains `%2f` or `%2e` in any case after parsing, `scopeOf` returns null, so no token is attached (owner's decision on issue #44, 2026-10-20).
+A path such as `/restricted/rest/services` scopes to `/restricted`, as Phase 2 of the store-readiness spec says. `new URL` resolves `%2e`-encoded dot segments. If the instance path still contains `%2f`, `%2e`, `%25` or `%5c` in any case after parsing, `scopeOf` returns null, so no token is attached. That covers encoded slashes and dots, double-encoded ones such as `%252e%252e`, and encoded backslashes, which a server that decodes twice or reads `\` as `/` could treat as separators (owner's decision on issue #44, 2026-10-20).
 ```
 
 - [ ] **Step 5: Run the tests**
