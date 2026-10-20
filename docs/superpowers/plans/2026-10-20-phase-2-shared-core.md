@@ -3498,11 +3498,15 @@ test("scripts send requests through SDT.net, not fetch or XMLHttpRequest", async
   assert.deepEqual(await ruleIds("{\n  fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  fetch(\"/x\");\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  new XMLHttpRequest();\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  window.fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  new window.XMLHttpRequest();\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\");\n}\n", INJECT), []);
 });
 
 test("content scripts use await, not inline promise callbacks", async () => {
   assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\").then((r) => r);\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\").catch(function () {});\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  SDT.guard.run(async () => {\n    await SDT.net.fetchJson(\"/x\");\n  });\n}\n", INJECT), []);
 });
 ```
 
@@ -3560,18 +3564,23 @@ Expected: FAIL. `search.js` still has its `ajax` copy, the lint cases get `[]`, 
 The real popup's requests aren't routed, so the test sends them through the helper page. In `tests/e2e/action-popup.spec.js`, in "the real popup reads the tab's URL, which needs activeTab", replace the `popup.XMLHttpRequest = class {...};` block with:
 
 ```js
-    // The popup now uses fetch. Pass each request to the routed helper page. A signal or a body from
-    // the popup's realm can't cross over, so rebuild the body and leave the signal behind.
-    popup.fetch = (url, init = {}) => fetch(url, {
-      method: init.method,
-      body: init.body ? new URLSearchParams(String(init.body)) : undefined,
-      redirect: init.redirect,
-      credentials: init.credentials,
-      referrerPolicy: init.referrerPolicy
-    });
+    // The popup uses fetch (SDT.net.fetchJson). Pass each request to this routed page's fetch. A
+    // signal or a body from the popup's realm can't cross over, so rebuild the body as a string and
+    // leave the signal behind, and return a Response from the popup's realm.
+    popup.fetch = async (url, init = {}) => {
+      const response = await fetch(String(url), {
+        method: init.method,
+        body: init.body ? String(init.body) : undefined,
+        headers: init.body ? { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" } : undefined,
+        redirect: init.redirect,
+        credentials: init.credentials,
+        referrerPolicy: init.referrerPolicy
+      });
+      return new popup.Response(await response.text(), { status: response.status, statusText: response.statusText });
+    };
 ```
 
-This test runs only in CI. Read the change twice, and check the CI run.
+This test runs only in CI. Read the change twice, and check the CI run. Returning a `Response` built in the popup's realm keeps `fetchJson`'s `response.ok`, `response.type` and `text()` working there. The same stub, installed from the options page into the popup page opened as a tab, was checked locally with and without a token (a throwaway test, not committed).
 
 - [ ] **Step 5: Add the lint rules**
 
@@ -3581,6 +3590,7 @@ In `eslint.config.js`:
 const NETWORK = "Send requests with SDT.net.fetchJson (src/src/lib/net.js).";
 const NETWORK_SELECTORS = [
   { selector: "CallExpression[callee.name='fetch']", message: NETWORK },
+  { selector: "CallExpression[callee.property.name='fetch']", message: NETWORK },
   { selector: "NewExpression[callee.name='XMLHttpRequest']", message: NETWORK },
   { selector: "NewExpression[callee.property.name='XMLHttpRequest']", message: NETWORK }
 ];
