@@ -84,6 +84,15 @@ test("any one marker is enough, so markup without .breadcrumbs still works", () 
   assert.equal(page.classify(onlyPathname(`${ROOT}/Parcels/MapServer`), doc({ breadcrumbs: false, h2: "Parcels (MapServer)" })), "service");
 });
 
+test("the heading marker matches a page kind at the start or a service type at the end, nowhere else", () => {
+  for (const text of ["Folder: /", "Layer: Valves (ID: 0)", "Execute Task: X", "Execute Task (X)", "Parcels (MapServer)"]) {
+    assert.equal(page.HEADING.test(text), true, text);
+  }
+  for (const text of ["ArcGIS Server Login", "Login Folder: /", "Parcels (MapServer) help", "Taskbar"]) {
+    assert.equal(page.HEADING.test(text), false, text);
+  }
+});
+
 test("serviceType gives Esri's casing, and baseUrl drops the query and fragment", () => {
   assert.equal(page.serviceType(onlyPathname(`${ROOT}/A/mapserver/0`)), "MapServer");
   assert.equal(page.serviceType(onlyPathname(`${ROOT}/Elevation/ImageServer`)), "ImageServer");

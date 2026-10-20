@@ -12,8 +12,9 @@ SDT.page = {
 
   JSON_TYPES: ["application/json", "text/plain"],
 
-  // Headings and titles of Services Directory pages, in 10.9 to 12.1 and ArcGIS Online.
-  HEADING: /^(?:Folder|Layer|Table|Query|Find|Task|Execute Task|Submit Job)\b|\([A-Za-z]+Server\)$/,
+  // Headings and titles of Services Directory pages, in 10.9 to 12.1 and ArcGIS Online: one that starts
+  // with a page kind ("Folder: /", "Execute Task (X)"), or one that ends with a service type ("X (MapServer)").
+  HEADING: /^(?:(?:Folder|Layer|Table|Query|Find|Task|Execute Task|Submit Job)\b|[\s\S]*\([A-Za-z]+Server\)$)/,
 
   /** The service type a path segment names, in Esri's casing, or null. */
   typeOf(segment) {
