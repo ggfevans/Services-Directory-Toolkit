@@ -123,3 +123,21 @@ test("an error never repeats a token from the URL it was given", async () => {
   assert.doesNotMatch(JSON.stringify(error), /abc/);
   assert.equal(calls.length, 0);
 });
+
+test("an answer that arrives after the extension context is gone never settles", async () => {
+  const chrome = { runtime: { id: "sdt-test-extension" } };
+  let answer;
+  const fetch = () => new Promise((resolve) => {
+    answer = resolve;
+  });
+  const { SDT } = loadLib({ chrome, globals: { fetch } });
+  let settled = false;
+  SDT.net.fetchJson(BASE, { params: { f: "json" } }).then(() => {
+    settled = true;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  chrome.runtime.id = undefined;
+  answer(reply("{\"name\":\"Parcels\"}"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(settled, false);
+});

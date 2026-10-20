@@ -10,7 +10,7 @@ import { SRC } from "./helpers/sdt.js";
 const scripts = listFiles(SRC).filter((file) => file.endsWith(".js") && !file.startsWith("src/lib/"));
 
 for (const [name, pattern] of [
-  ["an ajax helper", /\bajax\s*=/],
+  ["an ajax helper", /\bajax\s*=|\bfunction\s+ajax\b/],
   ["XMLHttpRequest", /XMLHttpRequest/],
   ["MSXML2", /MSXML2/],
   ["document.selection", /document\.selection/],

@@ -53,9 +53,17 @@ SDT.net = {
 
   /**
    * Sends one request and resolves to { data } or { error }; it never rejects. See the Public API in
-   * docs/superpowers/plans/2026-10-20-phase-2-shared-core.md for the error types.
+   * docs/superpowers/plans/2026-10-20-phase-2-shared-core.md for the error types. If an extension
+   * update cuts the script off while the request is out, it never settles, so no code that awaits
+   * it runs in the cut-off script.
    */
-  async fetchJson(url, { params = {}, token = null, method = "GET", timeoutMs = SDT.net.TIMEOUT_MS, signal, credentials, referrerPolicy } = {}) {
+  async fetchJson(url, options) {
+    const result = await SDT.net.send(url, options);
+    return SDT.guard.alive() ? result : new Promise(() => {});
+  },
+
+  /** fetchJson without the guard. */
+  async send(url, { params = {}, token = null, method = "GET", timeoutMs = SDT.net.TIMEOUT_MS, signal, credentials, referrerPolicy } = {}) {
     const request = SDT.url.build(url, params, token, { method });
     if (!request) {
       return { error: { type: "url", message: "Not an http(s) URL.", url: SDT.url.withoutToken(url) } };
