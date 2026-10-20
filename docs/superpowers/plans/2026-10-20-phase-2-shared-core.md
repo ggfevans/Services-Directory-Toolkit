@@ -1622,6 +1622,15 @@ test("a token already in the base URL is dropped, not forwarded", () => {
   assert.equal(url.build(`${BASE}?token=from-a-link`, { f: "json" }, TOKEN).body.toString(), "f=json&token=tok.en-1");
 });
 
+test("a token in the base URL is dropped whatever its case", () => {
+  for (const name of ["Token", "TOKEN"]) {
+    assert.equal(url.build(`${BASE}?${name}=from-a-link`, { f: "json" }).url, `${BASE}?f=json`, name);
+    const request = url.build(`${BASE}?${name}=from-a-link`, { f: "json" }, TOKEN);
+    assert.equal(request.url, BASE, name);
+    assert.equal(request.body.toString(), "f=json&token=tok.en-1", name);
+  }
+});
+
 test("method POST without a token puts the params in the body", () => {
   assert.deepEqual(summary(url.build(BASE, { f: "json" }, null, { method: "POST" })), { url: BASE, method: "POST", body: "f=json", carriesToken: false });
 });
@@ -1684,13 +1693,19 @@ SDT.url = {
       return null;
     }
     url.hash = "";
-    url.searchParams.delete("token");
+    // ArcGIS reads parameter names without regard to case, so Token= and TOKEN= are tokens too.
+    [...url.searchParams.keys()]
+      .filter((key) => /^token$/i.test(key))
+      .forEach((key) => url.searchParams.delete(key));
     const entries = Object.entries(params ?? {})
       .filter(([, value]) => value !== undefined && value !== null)
       .map(([key, value]) => [key, String(value)]);
     const carriesToken = Boolean(token && token.value && token.scope) && SDT.auth.scopeOf(url.href) === token.scope;
     if (carriesToken || method === "POST") {
-      entries.forEach(([key]) => url.searchParams.delete(key));
+      const moved = new Set(entries.map(([key]) => key.toLowerCase()));
+      [...url.searchParams.keys()]
+        .filter((key) => moved.has(key.toLowerCase()))
+        .forEach((key) => url.searchParams.delete(key));
       const body = new URLSearchParams(entries);
       if (carriesToken) {
         body.set("token", token.value);
