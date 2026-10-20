@@ -616,7 +616,7 @@ The classifier therefore takes the type from the pathname and `document.contentT
 - Upload only after the performance and bug review (#8) has run on the merged Phase 9 code and every Critical and High finding is fixed. That review measures against the section 4.3 request budget and adds `npm run perf`.
 
 **Acceptance:**
-- The POP-1, POP-2 and POP-3 `test.fail()` cases pass.
+- The POP-2 and POP-3 `test.fail()` cases pass. (POP-1's case passes from Phase 2.)
 - Crawl tests cover the cap, the visited set and a failed folder.
 - URL-trimming table tests pass.
 - A unit test checks that each popup switch's key exists in the schema and is a boolean.
@@ -738,7 +738,7 @@ The classifier therefore takes the type from the pathname and `document.contentT
 
 | ID | Sev | Summary | Phase | Resolution |
 |---|---|---|---|---|
-| POP-1 | H | One bad response ends the crawl and leaves the button stuck | 9 | Fix |
+| POP-1 | H | One bad response ends the crawl and leaves the button stuck | 2, 9 | Fix (the crawl skips a failed location in 2, so the `test.fail()` case passes there; counting and showing failures in 9) |
 | POP-2 | H | Invalid regex locks the button; regex is the default | 9 | Fix |
 | POP-3 | H | Number-only searches never match | 9 | Fix |
 | POP-4 | H | Crawl has no visited set, cap, timeout or limit | 9 | Fix; Stop button won't fix (closing the popup stops the crawl) |

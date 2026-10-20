@@ -115,20 +115,7 @@
    * @param {object|null} token - the tab's token, from SDT.auth.pageToken
    */
   const queryMe = async (list, myTest, token) => {
-    if (!list.length) { return; }
-    const url = list.shift();
-    const data = SDT.net.legacyResponse(await SDT.net.fetchJson(url, { params: { f: "json" }, token }));
-    if (data === null) {
-      return; // POP-1: Phase 9 counts the failure and carries on.
-    }
-    locs++;
-    responseSearch(url, data, myTest);
-    list = list.concat(subUrls(url, data));
-    searchCount.firstChild.nodeValue = locs.toString();
-    resultCount.firstChild.nodeValue = hits.toString();
-    if (list.length) {
-      queryMe(list, myTest, token);
-    } else {
+    if (!list.length) {
       btn.removeAttribute("disabled");
       btn.firstChild.nodeValue = "Search";
       Array.prototype.forEach.call(d.getElementsByTagName("a"), (ln) => {
@@ -137,7 +124,19 @@
           chrome.tabs.create({active: true, url: location});
         });
       });
+      return;
     }
+    const url = list.shift();
+    const data = SDT.net.legacyResponse(await SDT.net.fetchJson(url, { params: { f: "json" }, token }));
+    // POP-1: a location that fails is skipped, and the search carries on. Phase 9 counts and shows failures.
+    if (data !== null) {
+      locs++;
+      responseSearch(url, data, myTest);
+      list = list.concat(subUrls(url, data));
+      searchCount.firstChild.nodeValue = locs.toString();
+      resultCount.firstChild.nodeValue = hits.toString();
+    }
+    queryMe(list, myTest, token);
   };
 
   // function called on mouse click, parses searches, sets up tests, and queries the current REST service.

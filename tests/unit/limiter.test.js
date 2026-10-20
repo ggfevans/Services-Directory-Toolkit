@@ -146,3 +146,21 @@ test("a refused request's error never repeats a token from its URL", async () =>
   }
   assert.equal(fake.sent(), 0);
 });
+
+test("once the extension context is gone, pagehide settles none of the queued or finished jobs", async () => {
+  const chrome = { runtime: { id: "sdt-test-extension" } };
+  const lib = loadLib({ chrome }).SDT.net;
+  const fake = fakeFetch();
+  const target = pageTarget();
+  const limiter = lib.createLimiter({ scope: SCOPE, target, fetchJson: fake.fetchJson });
+  let settled = 0;
+  Array.from({ length: 6 }, (_, i) => limiter.fetchJson(at(i)).then(() => {
+    settled += 1;
+  }));
+  await flush();
+  chrome.runtime.id = undefined;
+  target.fire("pagehide");
+  await flush();
+  await flush();
+  assert.equal(settled, 0);
+});

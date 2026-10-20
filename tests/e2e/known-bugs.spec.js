@@ -104,7 +104,7 @@ knownBug("SET-3", "a blank number is rejected, not saved", async ({ page, extens
   expect(await readStorage(["mapImageWidth"])).toEqual({});
 });
 
-knownBug("POP-1", "a location that fails does not stop the search", async ({ openPopupTab, fakeServer, expectedErrors }) => {
+test("POP-1: a location that fails does not stop the search", async ({ openPopupTab, fakeServer, expectedErrors }) => {
   fakeServer.override(/^\/arcgis\/rest\/services\/Transport\?f=json$/, BAD_GATEWAY);
   expectedErrors.push(/status of 502/);
   const popup = await openPopupTab(REST_ROOT);

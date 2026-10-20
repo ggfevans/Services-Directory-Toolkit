@@ -182,7 +182,7 @@ At most `concurrency` requests are in flight. `stats()` returns `{ accepted, act
 | `isServicesDirectory(document)` | `boolean` | Any one marker: a `.breadcrumbs` element; a `.titlecell` whose text has "ArcGIS REST Services Directory"; or a `document.title` or first `h2` that matches `HEADING` |
 | `baseUrl(location)` | `string` | `location.origin + location.pathname` |
 | `SERVICE_TYPES` | `string[]` | `MapServer`, `FeatureServer`, `ImageServer`, `GPServer`, `GeocodeServer`, `GeometryServer`, `GeoDataServer`, `GlobeServer`, `NAServer`, `SceneServer`, `StreamServer`, `VectorTileServer`, `MobileServer`, `SchematicsServer`, `KnowledgeGraphServer`, `UtilityNetworkServer`, `VersionManagementServer`, `NetworkDiagramServer`, `ParcelFabricServer`, `ValidationServer`, `WorkflowManagerServer` |
-| `HEADING` | `RegExp` | `/^(?:Folder\|Layer\|Table\|Query\|Find\|Task\|Execute Task\|Submit Job)\b\|\([A-Za-z]+Server\)$/` |
+| `HEADING` | `RegExp` | `/^(?:(?:Folder\|Layer\|Table\|Query\|Find\|Task\|Execute Task\|Submit Job)\b\|[\s\S]*\([A-Za-z]+Server\)$)/` |
 
 `classify` works in this order:
 1. No whole-segment `rest/services` in the pathname: `other`.

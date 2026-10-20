@@ -157,11 +157,17 @@ SDT.net = {
     const halted = (url) => (state.stopped
       ? refusal("stopped", SDT.net.stoppedNote(state.stopped), url, { status: state.stopped })
       : refusal("aborted", "Not loaded: the page was left.", url));
+    // Like SDT.net.fetchJson: once an update has cut the script off, a job never settles.
+    const settle = (job, result) => {
+      if (SDT.guard.alive()) {
+        job.resolve(result);
+      }
+    };
     const halt = () => {
       controller.abort();
       while (queue.length) {
         const job = queue.shift();
-        job.resolve(halted(job.url));
+        settle(job, halted(job.url));
       }
     };
     const finish = (job, result) => {
@@ -171,7 +177,7 @@ SDT.net = {
         state.stopped = status;
         halt();
       }
-      job.resolve(state.stopped && result?.error ? halted(job.url) : result);
+      settle(job, state.stopped && result?.error ? halted(job.url) : result);
       pump();
     };
     const pump = () => {
