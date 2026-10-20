@@ -118,5 +118,96 @@ SDT.net = {
       return result.data;
     }
     return result.error.arcgis ? { error: result.error.arcgis } : null;
+  },
+
+  // Section 4.3 of the store-readiness spec: automatic requests per page view, and at once.
+  BUDGET: { max: 50, concurrency: 4 },
+
+  limitNote(max) {
+    return `Not loaded: request limit reached (${max})`;
+  },
+
+  stoppedNote(status) {
+    return `Not loaded: the server answered HTTP ${status}, so automatic requests stopped`;
+  },
+
+  /** True when a row was left out by the budget or after server pushback; show result.error.message. */
+  isSkipped(result) {
+    return result?.error?.type === "limit" || result?.error?.type === "stopped";
+  },
+
+  /**
+   * A queue for automatic requests. It sends only to URLs in scope, accepts at most max, keeps at
+   * most concurrency in flight, cancels everything on target's pagehide, and stops for good after an
+   * HTTP 429 or 503. fetchJson(url, options) takes SDT.net.fetchJson's options and never rejects.
+   */
+  createLimiter({ max = SDT.net.BUDGET.max, concurrency = SDT.net.BUDGET.concurrency, scope = null, target = null, fetchJson = (url, options) => SDT.net.fetchJson(url, options) } = {}) {
+    const controller = new AbortController();
+    const queue = [];
+    const state = { accepted: 0, active: 0, peak: 0, stopped: null };
+    const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: String(url), ...extra } });
+    const halted = (url) => (state.stopped
+      ? refusal("stopped", SDT.net.stoppedNote(state.stopped), url, { status: state.stopped })
+      : refusal("aborted", "Not loaded: the page was left.", url));
+    const halt = () => {
+      controller.abort();
+      while (queue.length) {
+        const job = queue.shift();
+        job.resolve(halted(job.url));
+      }
+    };
+    const finish = (job, result) => {
+      state.active -= 1;
+      const status = result?.error?.status;
+      if ((status === 429 || status === 503) && !state.stopped) {
+        state.stopped = status;
+        halt();
+      }
+      job.resolve(state.stopped && result?.error ? halted(job.url) : result);
+      pump();
+    };
+    const pump = () => {
+      while (state.active < concurrency && queue.length) {
+        const job = queue.shift();
+        state.active += 1;
+        state.peak = Math.max(state.peak, state.active);
+        const signal = job.options.signal ? AbortSignal.any([job.options.signal, controller.signal]) : controller.signal;
+        Promise.resolve(fetchJson(job.url, { ...job.options, signal })).then(
+          (result) => finish(job, result),
+          () => finish(job, refusal("network", "The request failed before the server answered.", job.url))
+        );
+      }
+    };
+    if (target) {
+      target.addEventListener("pagehide", halt);
+    }
+    return {
+      fetchJson(url, options = {}) {
+        if (state.stopped || controller.signal.aborted) {
+          return Promise.resolve(halted(url));
+        }
+        if (!scope || SDT.auth.scopeOf(url) !== scope) {
+          return Promise.resolve(refusal("destination", "Not requested: the link is on another server.", url));
+        }
+        if (state.accepted >= max) {
+          return Promise.resolve(refusal("limit", SDT.net.limitNote(max), url, { max }));
+        }
+        state.accepted += 1;
+        return new Promise((resolve) => {
+          queue.push({ url, options, resolve });
+          pump();
+        });
+      },
+      stats() {
+        return { ...state };
+      }
+    };
+  },
+
+  /** The page's limiter, shared by every content script in the isolated world. */
+  pageLimiter() {
+    SDT.state ??= {};
+    SDT.state.pageLimiter ??= SDT.net.createLimiter({ scope: SDT.auth.scopeOf(location.href), target: window });
+    return SDT.state.pageLimiter;
   }
 };
