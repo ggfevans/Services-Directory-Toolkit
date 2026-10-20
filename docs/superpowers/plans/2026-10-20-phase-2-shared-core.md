@@ -67,11 +67,7 @@ This plan also settles points the specs leave open. The owner can overrule any o
 - **Test data is synthetic.** Never commit HTML or JSON captured from an Esri server.
 - **Known bugs.** A change that fixes a `knownBug()` case turns it into `test()` in the same commit. After the class-prefix sweep, run the known bugs with `SHOW_KNOWN_BUGS=1` and record where each fails.
 - **Code style:** 2-space indent, double quotes, semicolons, `--max-warnings=0`. If lint flags only formatting in code copied from this plan, run `npx eslint --fix <file>`. Don't change the logic to satisfy it.
-- **Commit messages:** imperative subject, plain-English body, ending with the attribution lines your session gives, at least:
-
-  ```
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-  ```
+- **Commit messages:** imperative subject, plain-English body, ending with the attribution lines your session gives. The examples below leave them out.
 
 ## Review Focus
 
@@ -466,8 +462,6 @@ Add src/src/lib/ with the shared DOM helpers
 SDT.dom.loadElement keeps 0 and false as text (QRY-11). Every
 content-script group and the popup load the lib first, and unit tests
 load it in Node through vm. This commit also adds the Phase 2 plan.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -519,8 +513,6 @@ Use the shared loadElement in every script
 
 The six copies of loadElement and the two of cleanElement give way to
 SDT.dom, so text 0 and false now show in the Query Helper's lists.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -685,8 +677,6 @@ Fail the build when a script uses SDT before the lib loads
 
 Each content-script group and extension page must load the file that
 defines an SDT namespace before any script that uses it.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -918,8 +908,6 @@ Add SDT.guard for content scripts cut off by an update
 
 alive(), run(), wrap(), listen() and onLoad() stop a content script's
 entry points quietly once chrome.runtime.id is gone.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -1130,8 +1118,6 @@ Each script's top level now only declares names. Its start, listeners,
 timers and chrome callbacks go through the guard, so a script cut off
 by an extension update stops without errors (BG-1). inject.js waits for
 load with onLoad instead of polling readyState (INJ-17).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -1251,8 +1237,6 @@ Lint content scripts for guarded entry points and bare blocks
 Content scripts must add listeners, timers and chrome callbacks through
 SDT.guard, every content and popup script stays one bare block, and lib
 files declare no top-level names.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -1320,8 +1304,6 @@ Expected: everything passes, the known bugs are expected failures, and only the 
 git add CLAUDE.md CONTRIBUTING.md .coderabbit.yaml
 git commit -F - <<'EOF'
 Describe the shared lib and the guard in the docs
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 git push -u origin claude/confident-einstein-4pr58r
 ```
@@ -1561,8 +1543,6 @@ The scope comes from the parsed pathname, up to the first whole-segment
 rest/services. Host and instance path match in any case except an
 ArcGIS Online org ID. Paths under admin, tokens or manager, and
 instance paths that keep an encoded slash or dot, have no scope.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -1758,8 +1738,6 @@ The builder attaches a token only inside its scope, in a POST body,
 never sends an empty one, and drops any token already in the URL. The
 stripper removes token, f and the fragment from a link before the link
 filters test it.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -2050,8 +2028,6 @@ bare NaN to null only outside strings (INJ-12), times out, sends no
 headers of its own on GET (POP-9) and keeps default credentials
 (TOK-5). A token goes in a form POST body (TOK-4), and a request that
 carries one doesn't follow redirects (TOK-1).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -2332,8 +2308,6 @@ Add the request limiter for automatic requests
 At most 50 requests per page view and 4 in flight, only inside the
 page's scope, cancelled on pagehide, and stopped after an HTTP 429 or
 503. Rows it leaves out get a note to show.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -2579,8 +2553,6 @@ It reads only location.pathname and the document's content type, and
 confirms a Services Directory page with any one of three markers,
 because 12.1's element classes are unverified. The spec records the
 12.1 check.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -2670,8 +2642,6 @@ A page's own classes, such as error, hidden or open, no longer pick up
 the extension's styles, and the extension no longer finds the page's
 elements by those names (SEC-11, INJ-19). The INJ-1 and PRT-1 cases now
 check form bodies for f=json as well as URLs.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -2850,8 +2820,6 @@ JSON views, JSON results (PRT-1) and pages whose REST path is only in
 the query string (TOK-6) get nothing. Their requests go through
 fetchJson with the page's token, the Query Helper says when it can't
 load the fields (QRY-5), and its IE-only branches are gone.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -3206,8 +3174,6 @@ links to other servers get none, at most 50 are sent, and rows past
 the cap say so. A page's token goes in the POST body, only inside its
 scope, and never across a redirect (INJ-16, ADV-6, TOK-1, TOK-2,
 TOK-4). Links that carry token or f now pass the link filter (TOK-3).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -3352,8 +3318,6 @@ Send map preview requests through fetchJson, to this server only
 Previews skip links to other servers and JSON views, and test each
 link without its token, f and fragment (TOK-3). They never send the
 page's token, which Phase 6 keeps.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -3540,8 +3504,6 @@ Send the popup search through fetchJson, with the tab's token
 The crawl sends a token from the tab's URL in each POST body, only
 inside the tab's scope (POP-6, token part). No script keeps an ajax
 copy or an IE-only branch, which a unit test and lint now check.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 ```
 
@@ -3620,8 +3582,6 @@ Expected: everything passes, and only this task's files are uncommitted. Then un
 git add CLAUDE.md README.md CONTRIBUTING.md .coderabbit.yaml docs/superpowers/specs/2026-10-09-store-readiness-design.md
 git commit -F - <<'EOF'
 Describe the network helpers, the classifier and the token rules
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 git push
 ```
