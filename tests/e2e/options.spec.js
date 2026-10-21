@@ -261,6 +261,25 @@ test.describe("the options page", () => {
     expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
   });
 
+  test("keeps what the user typed while a save was writing, instead of showing the re-read", async ({ page, extensionId, readStorage }) => {
+    // Hold the sync write until the test lets it go.
+    await page.addInitScript(() => {
+      const set = chrome.storage.sync.set.bind(chrome.storage.sync);
+      chrome.storage.sync.set = (items) => new Promise((resolve, reject) => {
+        window.sdtFinishWrite = () => set(items).then(resolve, reject);
+      });
+    });
+    await openOptions(page, extensionId);
+    await page.getByLabel("Preview image width (px)").fill("640");
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForFunction(() => typeof window.sdtFinishWrite === "function");
+    await page.getByLabel("Preview image width (px)").fill("700");
+    await page.evaluate(() => window.sdtFinishWrite());
+    await expect(page.getByRole("status")).toHaveText(SAVED);
+    expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
+  });
+
   test("keeps Save off until the settings have loaded", async ({ page, extensionId }) => {
     // Hold the first read until the test lets it go.
     await page.addInitScript(() => {

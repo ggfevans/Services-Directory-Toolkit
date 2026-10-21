@@ -65,6 +65,12 @@
     return { values, errors };
   };
 
+  /** True when every control still holds the value submitted in values. */
+  const unchangedSince = (values) => {
+    const now = collect();
+    return keys.every((key) => Object.hasOwn(now.values, key) && now.values[key] === values[key]);
+  };
+
   const showInvalid = (errors) => {
     const invalid = keys.filter((key) => Object.hasOwn(errors, key));
     invalid.forEach((key) => markError(key, errors[key]));
@@ -98,11 +104,14 @@
         : `Not saved: ${result.error}. Nothing was changed.`;
     } else {
       status.textContent = result.written.length ? SAVED : "No changes to save.";
-      // Show what storage now holds, including changes made in another window to keys left alone here.
-      // If that read fails, the writes still succeeded, and storage holds what the form shows.
+      // Show what storage now holds, including changes made in another window to keys left alone here,
+      // unless the user has edited the form since pressing Save. If that read fails, the writes still
+      // succeeded, and storage holds what was submitted.
       try {
         loaded = await SDT.settings.read();
-        show(loaded);
+        if (unchangedSince(values)) {
+          show(loaded);
+        }
       } catch {
         loaded = values;
       }

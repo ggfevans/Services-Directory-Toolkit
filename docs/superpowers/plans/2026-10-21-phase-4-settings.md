@@ -1929,6 +1929,25 @@ test.describe("the options page", () => {
     expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
   });
 
+  test("keeps what the user typed while a save was writing, instead of showing the re-read", async ({ page, extensionId, readStorage }) => {
+    // Hold the sync write until the test lets it go.
+    await page.addInitScript(() => {
+      const set = chrome.storage.sync.set.bind(chrome.storage.sync);
+      chrome.storage.sync.set = (items) => new Promise((resolve, reject) => {
+        window.sdtFinishWrite = () => set(items).then(resolve, reject);
+      });
+    });
+    await openOptions(page, extensionId);
+    await page.getByLabel("Preview image width (px)").fill("640");
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForFunction(() => typeof window.sdtFinishWrite === "function");
+    await page.getByLabel("Preview image width (px)").fill("700");
+    await page.evaluate(() => window.sdtFinishWrite());
+    await expect(page.getByRole("status")).toHaveText(SAVED);
+    expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
+  });
+
   test("keeps Save off until the settings have loaded", async ({ page, extensionId }) => {
     // Hold the first read until the test lets it go.
     await page.addInitScript(() => {
@@ -2256,6 +2275,12 @@ Replace `src/src/options/options.js` with:
     return { values, errors };
   };
 
+  /** True when every control still holds the value submitted in values. */
+  const unchangedSince = (values) => {
+    const now = collect();
+    return keys.every((key) => Object.hasOwn(now.values, key) && now.values[key] === values[key]);
+  };
+
   const showInvalid = (errors) => {
     const invalid = keys.filter((key) => Object.hasOwn(errors, key));
     invalid.forEach((key) => markError(key, errors[key]));
@@ -2289,11 +2314,14 @@ Replace `src/src/options/options.js` with:
         : `Not saved: ${result.error}. Nothing was changed.`;
     } else {
       status.textContent = result.written.length ? SAVED : "No changes to save.";
-      // Show what storage now holds, including changes made in another window to keys left alone here.
-      // If that read fails, the writes still succeeded, and storage holds what the form shows.
+      // Show what storage now holds, including changes made in another window to keys left alone here,
+      // unless the user has edited the form since pressing Save. If that read fails, the writes still
+      // succeeded, and storage holds what was submitted.
       try {
         loaded = await SDT.settings.read();
-        show(loaded);
+        if (unchangedSince(values)) {
+          show(loaded);
+        }
       } catch {
         loaded = values;
       }
@@ -2640,3 +2668,7 @@ The code blocks above now show the code after these fixes. Each fix started with
 - **The page says when it can't load the settings, and Save waits for them.** If the first read rejected, the controls stayed blank and every Save was ignored without a word, and a Save before the first read finished was ignored too. Save is now off until the first read finishes, and if that read fails it stays off and the status line says "Settings couldn't be loaded: <error>. Reload this page to try again." New browser tests: one holds the first read and checks Save is off until it finishes, and one makes it fail and checks the message.
 - **The "root page asks for none" test now waits for the scripts to run.** It waited a fixed second and then checked that nothing happened, so it would pass if the content scripts never ran. It now waits for `status.js`'s indicator, which the same content-script group shows, before the second's wait and the checks. With `inject.js`'s group taken out of the manifest, the test now fails.
 - **Counts.** Unit tests: 298 (one new test; the total-quota test gained two cases). Browser tests without `@cdp`: 126 (four new in `options.spec.js`), all passing with the six known bugs as expected failures, against the unzipped build and against `src/` in Chromium 141. Chrome for Testing 120 wasn't re-run; `String.prototype.toWellFormed`, which `itemBytes` uses, arrived in Chrome 111.
+
+### After review of PR #63
+
+- **The re-read after a save no longer overwrites what the user typed meanwhile** (CodeAnt). `save()` refreshes the form from storage only if every control still holds the submitted value (`unchangedSince`). `options.spec.js` gains "keeps what the user typed while a save was writing, instead of showing the re-read", which holds the sync write, edits a field, and failed before the fix.
