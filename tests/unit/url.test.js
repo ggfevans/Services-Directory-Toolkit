@@ -101,3 +101,12 @@ test("withoutToken drops every token parameter and the fragment, and gives up on
   assert.equal(url.withoutToken("ftp://gis.example.org/x?token=abc"), "ftp://gis.example.org/x");
   assert.equal(url.withoutToken("not a url ?token=abc"), "");
 });
+
+test("a token passed in params is dropped, whatever its case", () => {
+  for (const name of ["token", "Token", "TOKEN"]) {
+    assert.equal(url.build(BASE, { f: "json", [name]: "from-params" }).url, `${BASE}?f=json`, name);
+    const request = url.build(BASE, { f: "json", [name]: "from-params" }, TOKEN);
+    assert.equal(request.url, BASE, name);
+    assert.equal(request.body.toString(), "f=json&token=tok.en-1", name);
+  }
+});

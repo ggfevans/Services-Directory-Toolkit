@@ -39,8 +39,9 @@ SDT.url = {
     }
     url.hash = "";
     SDT.url.dropParams(url, ["token"]);
+    // A token only ever comes in through the token argument, never through params.
     const entries = Object.entries(params ?? {})
-      .filter(([, value]) => value !== undefined && value !== null)
+      .filter(([key, value]) => value !== undefined && value !== null && !/^token$/i.test(key))
       .map(([key, value]) => [key, String(value)]);
     const carriesToken = Boolean(token && token.value && token.scope) && SDT.auth.scopeOf(url.href) === token.scope;
     // A param replaces any parameter of the same name in base, whatever its case.
