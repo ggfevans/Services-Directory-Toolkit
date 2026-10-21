@@ -84,16 +84,5 @@
   "permissions": [
     "activeTab",
     "storage"
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "src/images/*",
-        "src/config/*"
-      ],
-      "matches": [
-        "*://*/*"
-      ]
-    }
   ]
 }

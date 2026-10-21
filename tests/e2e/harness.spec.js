@@ -15,7 +15,7 @@ test("the extension loads with no manifest errors", async ({ page, extensionId }
 
 test("content scripts run on a Services Directory page served by the fake server", async ({ page }) => {
   await page.goto(REST_ROOT);
-  await expect(page.locator("img.sdt-status-icon")).toBeAttached();
+  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeAttached();
 });
 
 // Each test below provokes one violation on purpose, asserts that the fixture recorded it in the right
@@ -249,7 +249,7 @@ test.describe("signing in", () => {
 test.describe("the ArcGIS Online stand-ins", () => {
   test("a hosted service page loads and runs the content scripts", async ({ page }) => {
     await page.goto(`${ONLINE_REST_ROOT}/Parcels/FeatureServer`);
-    await expect(page.locator("img.sdt-status-icon")).toBeAttached();
+    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeAttached();
   });
 
   test("community/self answers a page on another origin", async ({ page }) => {
