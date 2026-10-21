@@ -1147,7 +1147,7 @@ In `scripts/lib/extension-files.js`, replace the `for (const entry of manifest.w
   }
 ```
 
-Delete `globToRegExp`, which nothing uses now. At the end of the JSDoc's `problems` sentence, add ", and any web_accessible_resources key".
+Delete `globToRegExp`, which nothing uses now. Make the JSDoc's `problems` sentence read: "problems lists missing files, files nothing references, getURL and importScripts calls that can't be checked, scripts that use an SDT namespace before a file that defines it, and any web_accessible_resources key".
 
 - [ ] **Step 4: Run the tests**
 
@@ -1940,7 +1940,8 @@ Expected: the eight `knownBug()` cases fail on these lines of `known-bugs.spec.j
 - **Architecture, the namespaces paragraph:** after the list of namespaces, add: "`src/src/lib/sender.js` (`SDT.sender`, the service worker's sender check) is in no content-script group: the service worker loads it with `importScripts`, and the build checks that load order too. `SDT.guard.whenActive` runs a function now, or once a prerendered page is shown."
 - **Architecture, the MAN-2 paragraph:** replace "The content-script patterns match the path and the query string together, and none of them matches ... Tests open it as `.../rest/services/?token=`." with: "The content-script patterns match the path and the query string together, and are case-sensitive, so they follow Esri's casing. They also match pages that aren't Services Directory pages, such as `/docs/rest/services/overview` or `/page?x=/rest/services`, which the classifier turns away. A Query Helper pattern ends in `/query` or `/query?*`, so `queryDomains` and `query/` don't get it, and the GP patterns name `GPServer/*/execute` and `GPServer/*/submitJob`."
 - **Architecture, Background:** replace the paragraph's first two sentences with: "**Background** (`src/src/bg/background.js`) is a classic service worker that loads `src/src/lib/sender.js` with `importScripts`. The toolbar button starts disabled (`action.default_state: "disabled"`, with `chrome.action.disable()` on install and browser start as a fallback). `status.js` sends an `enableAction` message on Services Directory pages, through `SDT.guard.whenActive` (so a prerendered page sends it once shown) and again after a back/forward cache restore, but not on JSON views or other pages the patterns match. The service worker acts on it only when `SDT.sender.accepts(sender, chrome.runtime.id)`: this extension, a tab, its top frame and `documentLifecycle` `"active"`. It then enables the button for that tab, and logs a failed `enable()` with `console.debug`." Keep the rest of the paragraph.
-- **Settings:** delete item 2 (`src/src/config/options.json`) and renumber. Replace the first "already disagree" bullet with: "For "do nothing", the options page stores `donothing`. The in-page form, removed in Phase 3, stored `nothing`, and the options page still breaks on a stored `nothing` (SET-1)."
+- **Architecture, Page action popup:** after "`url_shortener.js` strips unneeded query parameters.", add: "`options_link.js` makes the Options link at the foot of the popup open the options page with `chrome.runtime.openOptionsPage()`." and change the next sentence's "Both read" to "The search and the shortener read".
+- **Settings:** delete item 2 (`src/src/config/options.json`) and renumber. Replace the first "already disagree" bullet with: "For "do nothing", the options page stores `donothing`. The in-page form, removed in Phase 3, stored `nothing`, and the options page still breaks on a stored `nothing` (SET-1)." In the second bullet, change "while both settings UIs show a web map" to "while the options page shows a web map".
 
 - [ ] **Step 3: Update `README.md`**
 
@@ -2086,3 +2087,11 @@ End the body with `🤖 Generated with [Claude Code](https://claude.com/claude-c
 5. **#13 and `tests/e2e/axe.js`.** If #13 merges first, use its helper instead and keep this plan's tests. If this phase merges first, #13 extends this file rather than adding a second one.
 6. **The JSON view of the root now gets the main group** (`*://*/rest/services?*` matches `?f=json`), so `inject.css` is injected into it and the scripts run their classifier and stop. That was already true of every JSON view below the root, and the matrix pins that nothing visible happens.
 7. **Case.** Patterns are case-sensitive and follow Esri's casing (Decision 1), so `/ARCGIS/rest/services` works (the instance path is a `*`) but `/arcgis/REST/services` and a hand-typed `.../submitjob` get nothing. Services Directory pages never link that way.
+
+## Changes made while implementing
+
+Every code block above went in as written. These instructions changed, and the steps above now say what was done:
+
+1. **Task 5, the `referencedFiles` JSDoc.** Adding ", and any web_accessible_resources key" to the end of the `problems` sentence, which already ended "and scripts that use an SDT namespace ...", gave it two "and"s. The sentence now lists the kinds of problem with one "and" before the last.
+2. **Task 10, `CLAUDE.md`'s settings section.** Its second "already disagree" bullet said "both settings UIs show a web map". With the in-page form gone there is one settings UI, so it now says "the options page shows a web map".
+3. **Task 10, `CLAUDE.md`'s popup paragraph.** It listed the popup's scripts as `search.js` and `url_shortener.js` ("Both read the active tab's URL"). It now also names `options_link.js`, which Task 8 adds, so the doc matches the code.

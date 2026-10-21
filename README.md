@@ -51,6 +51,10 @@ Ken Doman wrote Map Services Enhanced between 2016 and 2020 to bundle the bookma
 Changes made on top of Ken's last commit:
 
 - Moved to Manifest V3. The toolbar button now turns on only on ArcGIS REST pages.
+- Replaced the gear and its in-page settings form with a small status indicator that takes no clicks. It spins while the extension loads data and tells screen readers when it has finished. Settings are on the options page, which the popup's new Options link opens.
+- Ran on the services root when its URL has a query string, such as `?f=html` or `?token=`, and on geoprocessing `submitJob` pages. The Query Helper now appears only on query pages.
+- Turned the toolbar button on only from the top frame of the page in the tab, not from frames, prerendered pages or pages in the back/forward cache.
+- Removed the extension's web-accessible files, which let any site detect that it was installed.
 - Replaced the Grunt build, which no longer installs, with npm scripts and ESLint 10.
 - Fixed error reporting, which crashed on any HTTP 400 from a service.
 - Fixed print task pages, where inputs the extension should hide stayed visible.

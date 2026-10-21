@@ -320,6 +320,6 @@ The probe covers most of these. The owner runs it on their Enterprise servers, s
 | TR-19 | U | The harness's tab-id stub, single origin, and no CDP permission grant | Section 6 |
 | TR-20 | U | Esri changes cookie attributes between releases | The probe runs before each release |
 | TR-21 | S | Store policy on authentication information and encryption | Section 5.8; v2 refuses `http:` |
-| TR-22 | S | A root page with `?token=` matches neither manifest pattern | Already MAN-2 |
+| TR-22 | S | A root page with `?token=` matches neither manifest pattern | Already MAN-2; closed in Phase 3 by the `?`-query patterns |
 | TR-23 | Pr | `agstoken` is HttpOnly on 10.9.1 | Session copy moves to v2; v1 offers Get a token |
 | TR-24 | Pr | An empty `token=` makes a request anonymous | Never sent (section 5.2) |

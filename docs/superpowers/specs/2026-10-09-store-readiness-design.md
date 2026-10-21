@@ -75,6 +75,12 @@ These were established by experiment and the design depends on them.
   - Chrome turns the content-script `matches` into host access per origin, so the extension's pages can make cross-origin requests to every site. The path part of each pattern is dropped (Chromium `cors_util.cc` keeps only scheme, host and port).
   - The path does still limit where the content scripts run.
   - These patterns don't expose `tab.url`. That needs `activeTab`.
+- **Phase 3 checks (2026-10-21), in Chromium 141 and Chrome for Testing 120:**
+  - `action.default_state: "disabled"` keeps the button disabled with no `chrome.action.disable()` call, and raises no manifest warning.
+  - Both browsers run the same content-script groups for the Phase 3 patterns on every probed URL.
+  - A content script's message carries `frameId: 0` and `documentLifecycle: "active"` at load and after a back/forward cache restore.
+  - Chrome reports an unrecognised manifest key only in Developer mode, after a reload, and never an unknown key inside `action`.
+  - CDP `DOMDebugger.getEventListeners` lists listeners added in an extension's isolated world.
 
 ## 4. Requirements for every phase
 
@@ -387,7 +393,7 @@ The classifier therefore takes the type from the pathname and `document.contentT
 
 **Popup:** add an Options link that calls `chrome.runtime.openOptionsPage()`. Phase 9 replaces it with All settings beside three quick switches.
 
-**Manifest metadata:** `short_name` "SD Toolkit". The toolbar icon becomes a size dictionary once the Track S artwork exists.
+**Manifest metadata:** `short_name` "SD Toolkit". The toolbar icon becomes a size dictionary once the Track S artwork exists. That waits for #55, because the artwork (#50) doesn't exist yet (owner, 2026-10-21).
 
 **Acceptance:**
 - The URL-pattern matrix test covers root, `?f=html`, `submitJob`, `queryDomains`, a non-ArcGIS `/rest/services` page and a JSON view.
