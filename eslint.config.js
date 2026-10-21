@@ -82,6 +82,11 @@ export default [
       "no-restricted-syntax": ["error", ...BASE_SELECTORS]
     }
   },
+  {
+    // The service worker is a classic worker script: it has importScripts, and no DOM.
+    files: ["src/src/bg/**/*.js"],
+    languageOptions: { globals: globals.serviceworker }
+  },
   // A later entry replaces the rule's whole option list for the files it matches, so each of these
   // repeats BASE_SELECTORS.
   {

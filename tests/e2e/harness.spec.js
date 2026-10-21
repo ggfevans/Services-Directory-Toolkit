@@ -2,9 +2,15 @@ import { test, expect, FAKE_ORIGIN, html, ONLINE_REST_ROOT, ONLINE_TOKENS, PORTA
 
 test("the extension loads with no manifest errors", async ({ page, extensionId }) => {
   await page.goto("chrome://extensions");
+  // Chrome records manifest warnings, such as an unrecognised key, only in Developer mode, so turn it
+  // on and reload the extension first. Unknown keys inside a known key, such as action, aren't reported.
+  await page.evaluate(() => new Promise((resolve) => chrome.developerPrivate.updateProfileConfiguration({ inDeveloperMode: true }, resolve)));
+  await page.evaluate((id) => new Promise((resolve) => chrome.developerPrivate.reload(id, { failQuietly: true }, resolve)), extensionId);
+  await expect.poll(() => page.evaluate((id) => new Promise((resolve) => chrome.developerPrivate.getExtensionInfo(id, resolve)), extensionId)
+    .then((info) => info.state)).toBe("ENABLED");
   const info = await page.evaluate((id) => new Promise((resolve) => chrome.developerPrivate.getExtensionInfo(id, resolve)), extensionId);
-  expect(info.state).toBe("ENABLED");
-  expect(info.manifestErrors).toEqual([]);
+  expect(info.manifestErrors.map((error) => error.message)).toEqual([]);
+  expect(info.installWarnings).toEqual([]);
 });
 
 test("content scripts run on a Services Directory page served by the fake server", async ({ page }) => {

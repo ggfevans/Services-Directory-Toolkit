@@ -41,3 +41,7 @@ test("the popup loads the lib files first, in the manifest's order", () => {
     .map((file) => `../lib/${file.slice(LIB.length)}`);
   assert.deepEqual(scripts.slice(0, libs.length), libs);
 });
+
+test("the toolbar button starts disabled, before the service worker runs (BG-1)", () => {
+  assert.equal(manifest.action.default_state, "disabled");
+});
