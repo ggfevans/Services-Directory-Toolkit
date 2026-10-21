@@ -275,7 +275,7 @@ test.describe("the options page", () => {
     await page.waitForFunction(() => typeof window.sdtFinishWrite === "function");
     await page.getByLabel("Preview image width (px)").fill("700");
     await page.evaluate(() => window.sdtFinishWrite());
-    await expect(page.getByRole("status")).toHaveText(SAVED);
+    await expect(page.getByRole("status")).toHaveText("Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes.");
     expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
     await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
   });

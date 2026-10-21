@@ -170,7 +170,7 @@ test("parse accepts an empty web map or a JSON object of at most 100 KB", () => 
 });
 
 test("parse counts a web map's size in UTF-8 bytes", () => {
-  // 51,200 two-byte characters are 102,400 bytes, plus 8 for the braces, key and quotes.
+  // 51,196 two-byte characters are 102,392 bytes, and the braces, key and quotes add 8: 102,400 in all.
   assert.deepEqual(plain(settings.parse("defaultWebMapAsJSON", `{"a":"${"é".repeat(51196)}"}`)), { value: `{"a":"${"é".repeat(51196)}"}` });
   assert.match(settings.parse("defaultWebMapAsJSON", `{"a":"${"é".repeat(51197)}"}`).error, /^This web map is 101 KB\./);
 });

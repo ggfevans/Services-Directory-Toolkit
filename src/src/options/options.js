@@ -3,6 +3,7 @@
 // Values are read and validated by SDT.settings and saved by SDT.writer.
 {
   const SAVED = "Saved. Changes apply when you reload a page.";
+  const EDITED_WHILE_SAVING = "Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes.";
   const form = document.getElementById("settings");
   const status = document.getElementById("status");
   const saveButton = document.getElementById("save");
@@ -109,11 +110,13 @@
       // succeeded, and storage holds what was submitted.
       try {
         loaded = await SDT.settings.read();
-        if (unchangedSince(values)) {
-          show(loaded);
-        }
       } catch {
         loaded = values;
+      }
+      if (unchangedSince(values)) {
+        show(loaded);
+      } else if (result.written.length) {
+        status.textContent = EDITED_WHILE_SAVING;
       }
     }
   };

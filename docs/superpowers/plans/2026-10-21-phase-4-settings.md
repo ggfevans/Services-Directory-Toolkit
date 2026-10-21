@@ -422,7 +422,7 @@ test("parse accepts an empty web map or a JSON object of at most 100 KB", () => 
 });
 
 test("parse counts a web map's size in UTF-8 bytes", () => {
-  // 51,200 two-byte characters are 102,400 bytes, plus 8 for the braces, key and quotes.
+  // 51,196 two-byte characters are 102,392 bytes, and the braces, key and quotes add 8: 102,400 in all.
   assert.deepEqual(plain(settings.parse("defaultWebMapAsJSON", `{"a":"${"é".repeat(51196)}"}`)), { value: `{"a":"${"é".repeat(51196)}"}` });
   assert.match(settings.parse("defaultWebMapAsJSON", `{"a":"${"é".repeat(51197)}"}`).error, /^This web map is 101 KB\./);
 });
@@ -1943,7 +1943,7 @@ test.describe("the options page", () => {
     await page.waitForFunction(() => typeof window.sdtFinishWrite === "function");
     await page.getByLabel("Preview image width (px)").fill("700");
     await page.evaluate(() => window.sdtFinishWrite());
-    await expect(page.getByRole("status")).toHaveText(SAVED);
+    await expect(page.getByRole("status")).toHaveText("Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes.");
     expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
     await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
   });
@@ -2213,6 +2213,7 @@ Replace `src/src/options/options.js` with:
 // Values are read and validated by SDT.settings and saved by SDT.writer.
 {
   const SAVED = "Saved. Changes apply when you reload a page.";
+  const EDITED_WHILE_SAVING = "Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes.";
   const form = document.getElementById("settings");
   const status = document.getElementById("status");
   const saveButton = document.getElementById("save");
@@ -2319,11 +2320,13 @@ Replace `src/src/options/options.js` with:
       // succeeded, and storage holds what was submitted.
       try {
         loaded = await SDT.settings.read();
-        if (unchangedSince(values)) {
-          show(loaded);
-        }
       } catch {
         loaded = values;
+      }
+      if (unchangedSince(values)) {
+        show(loaded);
+      } else if (result.written.length) {
+        status.textContent = EDITED_WHILE_SAVING;
       }
     }
   };
@@ -2672,3 +2675,5 @@ The code blocks above now show the code after these fixes. Each fix started with
 ### After review of PR #63
 
 - **The re-read after a save no longer overwrites what the user typed meanwhile** (CodeAnt). `save()` refreshes the form from storage only if every control still holds the submitted value (`unchangedSince`). `options.spec.js` gains "keeps what the user typed while a save was writing, instead of showing the re-read", which holds the sync write, edits a field, and failed before the fix.
+- **A save the user edited during says so** (CodeRabbit). When the form changed while the write was pending, the status reads "Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes." instead of "Saved", because the form then shows values storage doesn't hold. The same browser test asserts it.
+- **The byte comment in `settings.test.js`** now gives 51,196 characters, which matches its data (CodeAnt).
