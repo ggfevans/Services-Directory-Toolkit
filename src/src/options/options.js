@@ -4,6 +4,7 @@
 {
   const SAVED = "Saved. Changes apply when you reload a page.";
   const EDITED_WHILE_SAVING = "Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes.";
+  const EDITED_WITH_NOTHING_SAVED = "Nothing needed saving when you pressed Save. You've changed the form since, so press Save again to keep those changes.";
   const form = document.getElementById("settings");
   const status = document.getElementById("status");
   const saveButton = document.getElementById("save");
@@ -115,8 +116,8 @@
       }
       if (unchangedSince(values)) {
         show(loaded);
-      } else if (result.written.length) {
-        status.textContent = EDITED_WHILE_SAVING;
+      } else {
+        status.textContent = result.written.length ? EDITED_WHILE_SAVING : EDITED_WITH_NOTHING_SAVED;
       }
     }
   };

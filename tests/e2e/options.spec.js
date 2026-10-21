@@ -280,6 +280,30 @@ test.describe("the options page", () => {
     await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
   });
 
+  test("asks for another Save when the form changed during a save that had nothing to write", async ({ page, extensionId }) => {
+    // Hold the save's read of storage (the page's second sync read) until the test lets it go.
+    await page.addInitScript(() => {
+      const get = chrome.storage.sync.get.bind(chrome.storage.sync);
+      let reads = 0;
+      chrome.storage.sync.get = (keys) => {
+        reads += 1;
+        if (reads !== 2) {
+          return get(keys);
+        }
+        return new Promise((resolve, reject) => {
+          window.sdtFinishRead = () => get(keys).then(resolve, reject);
+        });
+      };
+    });
+    await openOptions(page, extensionId);
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForFunction(() => typeof window.sdtFinishRead === "function");
+    await page.getByLabel("Preview image width (px)").fill("700");
+    await page.evaluate(() => window.sdtFinishRead());
+    await expect(page.getByRole("status")).toHaveText("Nothing needed saving when you pressed Save. You've changed the form since, so press Save again to keep those changes.");
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
+  });
+
   test("keeps Save off until the settings have loaded", async ({ page, extensionId }) => {
     // Hold the first read until the test lets it go.
     await page.addInitScript(() => {

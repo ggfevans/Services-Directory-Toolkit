@@ -1948,6 +1948,30 @@ test.describe("the options page", () => {
     await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
   });
 
+  test("asks for another Save when the form changed during a save that had nothing to write", async ({ page, extensionId }) => {
+    // Hold the save's read of storage (the page's second sync read) until the test lets it go.
+    await page.addInitScript(() => {
+      const get = chrome.storage.sync.get.bind(chrome.storage.sync);
+      let reads = 0;
+      chrome.storage.sync.get = (keys) => {
+        reads += 1;
+        if (reads !== 2) {
+          return get(keys);
+        }
+        return new Promise((resolve, reject) => {
+          window.sdtFinishRead = () => get(keys).then(resolve, reject);
+        });
+      };
+    });
+    await openOptions(page, extensionId);
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForFunction(() => typeof window.sdtFinishRead === "function");
+    await page.getByLabel("Preview image width (px)").fill("700");
+    await page.evaluate(() => window.sdtFinishRead());
+    await expect(page.getByRole("status")).toHaveText("Nothing needed saving when you pressed Save. You've changed the form since, so press Save again to keep those changes.");
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("700");
+  });
+
   test("keeps Save off until the settings have loaded", async ({ page, extensionId }) => {
     // Hold the first read until the test lets it go.
     await page.addInitScript(() => {
@@ -2214,6 +2238,7 @@ Replace `src/src/options/options.js` with:
 {
   const SAVED = "Saved. Changes apply when you reload a page.";
   const EDITED_WHILE_SAVING = "Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes.";
+  const EDITED_WITH_NOTHING_SAVED = "Nothing needed saving when you pressed Save. You've changed the form since, so press Save again to keep those changes.";
   const form = document.getElementById("settings");
   const status = document.getElementById("status");
   const saveButton = document.getElementById("save");
@@ -2325,8 +2350,8 @@ Replace `src/src/options/options.js` with:
       }
       if (unchangedSince(values)) {
         show(loaded);
-      } else if (result.written.length) {
-        status.textContent = EDITED_WHILE_SAVING;
+      } else {
+        status.textContent = result.written.length ? EDITED_WHILE_SAVING : EDITED_WITH_NOTHING_SAVED;
       }
     }
   };
@@ -2677,3 +2702,4 @@ The code blocks above now show the code after these fixes. Each fix started with
 - **The re-read after a save no longer overwrites what the user typed meanwhile** (CodeAnt). `save()` refreshes the form from storage only if every control still holds the submitted value (`unchangedSince`). `options.spec.js` gains "keeps what the user typed while a save was writing, instead of showing the re-read", which holds the sync write, edits a field, and failed before the fix.
 - **A save the user edited during says so** (CodeRabbit). When the form changed while the write was pending, the status reads "Saved the values from when you pressed Save. You've changed the form since, so press Save again to keep those changes." instead of "Saved", because the form then shows values storage doesn't hold. The same browser test asserts it.
 - **The byte comment in `settings.test.js`** now gives 51,196 characters, which matches its data (CodeAnt).
+- **A save with nothing to write also asks for another Save after an edit** (CodeRabbit). If the form changed while a save that had nothing to write was reading storage, the status reads "Nothing needed saving when you pressed Save. You've changed the form since, so press Save again to keep those changes." instead of "No changes to save.". `options.spec.js` gains "asks for another Save when the form changed during a save that had nothing to write", which failed before the fix.
