@@ -56,7 +56,8 @@ reviews:
         message from status.js, which the service worker accepts only through SDT.sender; flag
         any declarativeContent rule. Flag web_accessible_resources, which the build refuses.
         Content-script patterns follow Esri's casing: the Query Helper group matches only
-        .../query, and the GP group only GPServer/*/execute and GPServer/*/submitJob. The
+        .../query, and the GP group only GPServer/*/execute and GPServer/*/submitJob, each with
+        or without a trailing slash and a query string. The
         version must match package.json. Every content_scripts group lists the lib files
         first, in the order dom, guard, auth, url, net, page, settings.
     - path: "src/src/options/**"
