@@ -5,8 +5,10 @@
   const SAVED = "Saved. Changes apply when you reload a page.";
   const form = document.getElementById("settings");
   const status = document.getElementById("status");
+  const saveButton = document.getElementById("save");
   const keys = SDT.settings.keys();
-  // The values the form shows, as last read from storage. null until the first read.
+  // The values the form shows, as last read from storage. null until the first read, while the Save
+  // button stays off.
   let loaded = null;
   let saving = false;
 
@@ -95,10 +97,15 @@
         ? `Not saved: ${result.error}. Only ${kept} changed.`
         : `Not saved: ${result.error}. Nothing was changed.`;
     } else {
-      // Show what storage now holds, including changes made in another window to keys left alone here.
-      loaded = await SDT.settings.read();
-      show(loaded);
       status.textContent = result.written.length ? SAVED : "No changes to save.";
+      // Show what storage now holds, including changes made in another window to keys left alone here.
+      // If that read fails, the writes still succeeded, and storage holds what the form shows.
+      try {
+        loaded = await SDT.settings.read();
+        show(loaded);
+      } catch {
+        loaded = values;
+      }
     }
   };
 
@@ -118,8 +125,15 @@
   control("autoMetadata").addEventListener("change", updateFeatureCountCheck);
 
   const start = async () => {
-    loaded = await SDT.settings.read();
+    saveButton.disabled = true;
+    try {
+      loaded = await SDT.settings.read();
+    } catch (error) {
+      status.textContent = `Settings couldn't be loaded: ${SDT.writer.message(error)}. Reload this page to try again.`;
+      return;
+    }
     show(loaded);
+    saveButton.disabled = false;
   };
   start();
 }

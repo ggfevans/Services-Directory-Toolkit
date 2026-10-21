@@ -22,7 +22,8 @@ export const stubChrome = ({ id = "sdt-test-extension" } = {}) => ({ runtime: { 
  * A chrome.storage area in memory, with Chrome's promise API and quota constants. items holds what
  * it stores, and calls records each call as [method, argument]. fail.<method>, if set, is called with
  * the call's argument and returns an Error for the call to reject with, or undefined to let it run.
- * getBytesInUse counts each item as Chrome does: the key plus the value as JSON, in UTF-8 bytes.
+ * getBytesInUse counts each item as the key plus JSON.stringify of the value, in UTF-8 bytes. Chrome
+ * also escapes "<", U+2028 and U+2029 (see SDT.writer.itemBytes); no test stores them here.
  */
 export const stubArea = (items = {}, constants = {}) => {
   const copy = (value) => JSON.parse(JSON.stringify(value));

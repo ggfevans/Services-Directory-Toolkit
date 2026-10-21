@@ -172,6 +172,19 @@ test.describe("the options page", () => {
     expect(await readStorage()).toEqual({});
   });
 
+  test("counts a where clause's \"<\" as Chrome does, and refuses it with the page's own error (SET-4)", async ({ page, extensionId, readStorage }) => {
+    // 7,200 characters, but Chrome writes each "<" as \u003C: 10,220 bytes with the key and quotes.
+    await recordWrites(page);
+    await openOptions(page, extensionId);
+    const where = page.getByLabel("Default where clause");
+    await where.fill("POP < 1 AND ".repeat(600));
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("status")).toHaveText("Not saved. Fix the field marked below.");
+    await expect(where).toHaveAccessibleDescription(/Too long to sync: this needs 10,220 bytes, and Chrome allows 8,192 per setting\.$/);
+    expect(await writes(page)).toEqual([]);
+    expect(await readStorage()).toEqual({});
+  });
+
   test("refuses a save that would take Chrome sync over its total quota, and writes nothing (SET-4)", async ({ page, extensionId, seedStorage, readStorage }) => {
     // 12 items of 8,006 bytes: 96,096 of sync's 102,400 bytes.
     const junk = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`junk${String(i).padStart(2, "0")}`, "x".repeat(8000)]));
@@ -222,6 +235,62 @@ test.describe("the options page", () => {
     await page.evaluate(() => window.sdtFinishWrite());
     await expect(page.getByRole("status")).toHaveText(SAVED);
     expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
+  });
+
+  test("says \"Saved\" when the write succeeded but reading storage again failed", async ({ page, extensionId, readStorage }) => {
+    // Once a sync write has finished, every read fails.
+    await page.addInitScript(() => {
+      const set = chrome.storage.sync.set.bind(chrome.storage.sync);
+      chrome.storage.sync.set = async (items) => {
+        await set(items);
+        window.sdtFailReads = true;
+      };
+      for (const area of ["sync", "local"]) {
+        const get = chrome.storage[area].get.bind(chrome.storage[area]);
+        chrome.storage[area].get = (keys) => (window.sdtFailReads ? Promise.reject(new Error("Test read failure")) : get(keys));
+      }
+    });
+    await openOptions(page, extensionId);
+    await page.getByLabel("Preview image width (px)").fill("640");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("status")).toHaveText(SAVED);
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("640");
+    await page.evaluate(() => {
+      window.sdtFailReads = false;
+    });
+    expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
+  });
+
+  test("keeps Save off until the settings have loaded", async ({ page, extensionId }) => {
+    // Hold the first read until the test lets it go.
+    await page.addInitScript(() => {
+      const get = chrome.storage.sync.get.bind(chrome.storage.sync);
+      let held = false;
+      chrome.storage.sync.get = (keys) => {
+        if (held) {
+          return get(keys);
+        }
+        held = true;
+        return new Promise((resolve) => {
+          window.sdtFinishRead = () => resolve(get(keys));
+        });
+      };
+    });
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await page.waitForFunction(() => typeof window.sdtFinishRead === "function");
+    await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+    await page.evaluate(() => window.sdtFinishRead());
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("300");
+  });
+
+  test("says so when the settings can't be loaded, and keeps Save off", async ({ page, extensionId }) => {
+    await page.addInitScript(() => {
+      chrome.storage.sync.get = () => Promise.reject(new Error("Test read failure"));
+    });
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await expect(page.getByRole("status")).toHaveText("Settings couldn't be loaded: Test read failure. Reload this page to try again.");
+    await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   test("turns feature counts off while service details are off", async ({ page, extensionId }) => {

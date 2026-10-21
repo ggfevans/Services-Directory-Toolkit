@@ -80,11 +80,12 @@ This plan also settles points the specs and the owner left open. The owner can o
 In Chromium 141.0.7390.37 (the local Playwright build), from the options page of the unpacked extension in a signed-out profile, and where noted in Chrome for Testing 120.0.6099.109 (from `storage.googleapis.com/chrome-for-testing-public`):
 
 - **Constants.** `chrome.storage.sync.QUOTA_BYTES` 102,400, `QUOTA_BYTES_PER_ITEM` 8,192, `MAX_ITEMS` 512, `MAX_WRITE_OPERATIONS_PER_MINUTE` 120, `MAX_WRITE_OPERATIONS_PER_HOUR` 1,800. `chrome.storage.local.QUOTA_BYTES` 10,485,760. A 200,000-character local item saves.
-- **How the per-item quota counts.** The key's length plus the value's `JSON.stringify`, in UTF-8 bytes. For `defaultWhereClause` (18 characters):
+- **How the per-item quota counts.** The key's length plus the value as Chrome's own JSON writer writes it, in UTF-8 bytes. That is the value's `JSON.stringify`, except that Chrome writes `<` as `\u003C`, and U+2028 and U+2029 as `\u2028` and `\u2029` (six bytes each, where `JSON.stringify` leaves one or three), and stores a lone surrogate as U+FFFD (three bytes, where `JSON.stringify` writes a six-byte escape). Found by the independent review, and checked against `getBytesInUse` for one-character values with the key `k` (below). For `defaultWhereClause` (18 characters):
   - 8,172 `a`s save and 8,173 fail;
   - 4,086 `é`s (two bytes each) save and 4,087 fail;
-  - 4,086 `"`s (each escaped as `\"`) save and 4,087 fail.
-  `getBytesInUse` agrees: `autoMetadata: true` is 16 bytes, `mapImageWidth: 300` is 16, and twelve 8,000-character items with six-character keys are 96,096.
+  - 4,086 `"`s (each escaped as `\"`) save and 4,087 fail;
+  - 1,362 `<`s (each written as `\u003C`) save and 1,363 fail.
+  `getBytesInUse` agrees: `autoMetadata: true` is 16 bytes, `mapImageWidth: 300` is 16, and twelve 8,000-character items with six-character keys are 96,096. For `k` and a one-character value it reports 9 for `<`, U+2028, U+2029, U+0000, U+0001 and U+001F; 7 for 😀; 6 for a lone U+D800 (read back as U+FFFD), U+2027, U+FEFF and U+FFFE; 5 for `"`, `\`, tab, newline, U+0080, U+009F and `é`; and 4 for `>`, `&`, `'`, `/`, U+007F and `a`. Fifty random 40-character mixes of those characters matched `SDT.writer.itemBytes` too.
 - **A `set` with several items is all or nothing.** `set({ autoMetadata: false, defaultWhereClause: <9,000 a's> })` fails and stores neither.
 - **Error messages.** Chromium 141 rejects with "Resource::kQuotaBytesPerItem quota exceeded" and "Resource::kQuotaBytes quota exceeded". The 121st write in a minute rejects with "This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota." (with a full stop, which the page drops before adding its own), in Chromium 141 and in Chrome for Testing 120. In Chromium 141 a callback-style `set` sees the same text in `chrome.runtime.lastError`, and local writes still succeed then.
 - **Test hooks.** `page.addInitScript` can replace `chrome.storage.sync.set` and `local.set` on an extension page before the page's scripts run.
@@ -194,7 +195,8 @@ In `tests/unit/helpers/sdt.js`, in `loadLib`, add `TextEncoder,` after `clearTim
  * A chrome.storage area in memory, with Chrome's promise API and quota constants. items holds what
  * it stores, and calls records each call as [method, argument]. fail.<method>, if set, is called with
  * the call's argument and returns an Error for the call to reject with, or undefined to let it run.
- * getBytesInUse counts each item as Chrome does: the key plus the value as JSON, in UTF-8 bytes.
+ * getBytesInUse counts each item as the key plus JSON.stringify of the value, in UTF-8 bytes. Chrome
+ * also escapes "<", U+2028 and U+2029 (see SDT.writer.itemBytes); no test stores them here.
  */
 export const stubArea = (items = {}, constants = {}) => {
   const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -775,6 +777,26 @@ test("itemBytes counts the key plus the value as JSON, in UTF-8, as Chrome does"
   assert.equal(writer.itemBytes("defaultWhereClause", "\"".repeat(4086)), 8192);
 });
 
+test("itemBytes counts the escapes Chrome's JSON writer adds, which JSON.stringify doesn't", () => {
+  // Each figure was read from Chromium 141's chrome.storage.sync.getBytesInUse. Chrome writes "<"
+  // as \u003C and U+2028 and U+2029 as \u2028 and \u2029, and stores a lone surrogate as U+FFFD.
+  assert.equal(writer.itemBytes("k", "<"), 9);
+  assert.equal(writer.itemBytes("k", "\u2028"), 9);
+  assert.equal(writer.itemBytes("k", "\u2029"), 9);
+  assert.equal(writer.itemBytes("k", "\ud800"), 6);
+  assert.equal(writer.itemBytes("defaultWhereClause", "<".repeat(1362)), 8192);
+  // These agree with JSON.stringify.
+  assert.equal(writer.itemBytes("k", ">"), 4);
+  assert.equal(writer.itemBytes("k", "&"), 4);
+  assert.equal(writer.itemBytes("k", "'"), 4);
+  assert.equal(writer.itemBytes("k", "\\"), 5);
+  assert.equal(writer.itemBytes("k", "\u007f"), 4);
+  assert.equal(writer.itemBytes("k", "\u0001"), 9);
+  assert.equal(writer.itemBytes("k", "\n"), 5);
+  assert.equal(writer.itemBytes("k", "\u009f"), 5);
+  assert.equal(writer.itemBytes("k", "\u{1F600}"), 7);
+});
+
 test("changes: what to write, given the form, what the page loaded and what is stored now", () => {
   const cases = [
     // [what, values, loaded, stored sync, expected sync]
@@ -821,6 +843,9 @@ test("quotaProblem finds a write that would take the area over its total quota",
   const nearlyFull = { ...QUOTA, inUse: 96096 + 16, replaced: 16 };
   assert.deepEqual(plain(writer.quotaProblem({ defaultWhereClause: "a".repeat(6285) }, nearlyFull)), { key: null, bytes: 102401, limit: 102400 });
   assert.equal(writer.quotaProblem({ defaultWhereClause: "a".repeat(6284) }, nearlyFull), null);
+  // The total counts each "<" as Chrome does, six bytes.
+  assert.deepEqual(plain(writer.quotaProblem({ defaultWhereClause: "<".repeat(1048) }, nearlyFull)), { key: null, bytes: 102404, limit: 102400 });
+  assert.equal(writer.quotaProblem({ defaultWhereClause: "<".repeat(1047) }, nearlyFull), null);
 });
 
 test("message drops the full stop at the end of Chrome's message", () => {
@@ -917,9 +942,15 @@ Create `src/src/lib/writer.js`:
 globalThis.SDT ??= {};
 
 SDT.writer = {
-  /** The bytes Chrome's sync quota counts for one item: the key plus the value as JSON, in UTF-8. */
+  /**
+   * The bytes Chrome's sync quota counts for one item: the key plus the value as JSON, in UTF-8.
+   * Chrome's JSON writer differs from JSON.stringify in three ways: it writes "<" as \u003C, and
+   * U+2028 and U+2029 as \u2028 and \u2029, six bytes each, and it stores a lone surrogate as U+FFFD.
+   */
   itemBytes(key, value) {
-    return SDT.settings.byteLength(key) + SDT.settings.byteLength(JSON.stringify(value));
+    const json = JSON.stringify(typeof value === "string" ? value.toWellFormed() : value)
+      .replace(/[<\u2028\u2029]/g, (char) => `\\u${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
+    return SDT.settings.byteLength(key) + SDT.settings.byteLength(json);
   },
 
   /**
@@ -1165,6 +1196,8 @@ test.describe("content scripts read validated settings", () => {
   test("with service details off, the root page asks for none", async ({ page, fakeServer, seedStorage }) => {
     await seedStorage({ autoMetadata: false });
     await page.goto(REST_ROOT);
+    // status.js shows its indicator once the content-script group, inject.js included, has run.
+    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
     await page.waitForTimeout(1000);
     await expect(page.locator(".sdt-datablock")).toHaveCount(0);
     expect(fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json")).toEqual([]);
@@ -1807,6 +1840,19 @@ test.describe("the options page", () => {
     expect(await readStorage()).toEqual({});
   });
 
+  test("counts a where clause's \"<\" as Chrome does, and refuses it with the page's own error (SET-4)", async ({ page, extensionId, readStorage }) => {
+    // 7,200 characters, but Chrome writes each "<" as \u003C: 10,220 bytes with the key and quotes.
+    await recordWrites(page);
+    await openOptions(page, extensionId);
+    const where = page.getByLabel("Default where clause");
+    await where.fill("POP < 1 AND ".repeat(600));
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("status")).toHaveText("Not saved. Fix the field marked below.");
+    await expect(where).toHaveAccessibleDescription(/Too long to sync: this needs 10,220 bytes, and Chrome allows 8,192 per setting\.$/);
+    expect(await writes(page)).toEqual([]);
+    expect(await readStorage()).toEqual({});
+  });
+
   test("refuses a save that would take Chrome sync over its total quota, and writes nothing (SET-4)", async ({ page, extensionId, seedStorage, readStorage }) => {
     // 12 items of 8,006 bytes: 96,096 of sync's 102,400 bytes.
     const junk = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`junk${String(i).padStart(2, "0")}`, "x".repeat(8000)]));
@@ -1857,6 +1903,62 @@ test.describe("the options page", () => {
     await page.evaluate(() => window.sdtFinishWrite());
     await expect(page.getByRole("status")).toHaveText(SAVED);
     expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
+  });
+
+  test("says \"Saved\" when the write succeeded but reading storage again failed", async ({ page, extensionId, readStorage }) => {
+    // Once a sync write has finished, every read fails.
+    await page.addInitScript(() => {
+      const set = chrome.storage.sync.set.bind(chrome.storage.sync);
+      chrome.storage.sync.set = async (items) => {
+        await set(items);
+        window.sdtFailReads = true;
+      };
+      for (const area of ["sync", "local"]) {
+        const get = chrome.storage[area].get.bind(chrome.storage[area]);
+        chrome.storage[area].get = (keys) => (window.sdtFailReads ? Promise.reject(new Error("Test read failure")) : get(keys));
+      }
+    });
+    await openOptions(page, extensionId);
+    await page.getByLabel("Preview image width (px)").fill("640");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("status")).toHaveText(SAVED);
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("640");
+    await page.evaluate(() => {
+      window.sdtFailReads = false;
+    });
+    expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 640 });
+  });
+
+  test("keeps Save off until the settings have loaded", async ({ page, extensionId }) => {
+    // Hold the first read until the test lets it go.
+    await page.addInitScript(() => {
+      const get = chrome.storage.sync.get.bind(chrome.storage.sync);
+      let held = false;
+      chrome.storage.sync.get = (keys) => {
+        if (held) {
+          return get(keys);
+        }
+        held = true;
+        return new Promise((resolve) => {
+          window.sdtFinishRead = () => resolve(get(keys));
+        });
+      };
+    });
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await page.waitForFunction(() => typeof window.sdtFinishRead === "function");
+    await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+    await page.evaluate(() => window.sdtFinishRead());
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await expect(page.getByLabel("Preview image width (px)")).toHaveValue("300");
+  });
+
+  test("says so when the settings can't be loaded, and keeps Save off", async ({ page, extensionId }) => {
+    await page.addInitScript(() => {
+      chrome.storage.sync.get = () => Promise.reject(new Error("Test read failure"));
+    });
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await expect(page.getByRole("status")).toHaveText("Settings couldn't be loaded: Test read failure. Reload this page to try again.");
+    await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   test("turns feature counts off while service details are off", async ({ page, extensionId }) => {
@@ -2094,8 +2196,10 @@ Replace `src/src/options/options.js` with:
   const SAVED = "Saved. Changes apply when you reload a page.";
   const form = document.getElementById("settings");
   const status = document.getElementById("status");
+  const saveButton = document.getElementById("save");
   const keys = SDT.settings.keys();
-  // The values the form shows, as last read from storage. null until the first read.
+  // The values the form shows, as last read from storage. null until the first read, while the Save
+  // button stays off.
   let loaded = null;
   let saving = false;
 
@@ -2184,10 +2288,15 @@ Replace `src/src/options/options.js` with:
         ? `Not saved: ${result.error}. Only ${kept} changed.`
         : `Not saved: ${result.error}. Nothing was changed.`;
     } else {
-      // Show what storage now holds, including changes made in another window to keys left alone here.
-      loaded = await SDT.settings.read();
-      show(loaded);
       status.textContent = result.written.length ? SAVED : "No changes to save.";
+      // Show what storage now holds, including changes made in another window to keys left alone here.
+      // If that read fails, the writes still succeeded, and storage holds what the form shows.
+      try {
+        loaded = await SDT.settings.read();
+        show(loaded);
+      } catch {
+        loaded = values;
+      }
     }
   };
 
@@ -2207,8 +2316,15 @@ Replace `src/src/options/options.js` with:
   control("autoMetadata").addEventListener("change", updateFeatureCountCheck);
 
   const start = async () => {
-    loaded = await SDT.settings.read();
+    saveButton.disabled = true;
+    try {
+      loaded = await SDT.settings.read();
+    } catch (error) {
+      status.textContent = `Settings couldn't be loaded: ${SDT.writer.message(error)}. Reload this page to try again.`;
+      return;
+    }
     show(loaded);
+    saveButton.disabled = false;
   };
   start();
 }
@@ -2362,8 +2478,8 @@ Expected: the six remaining `knownBug()` cases fail on these lines of `known-bug
   ```markdown
   **Settings** are defined once, in `SDT.settings.schema` (`src/src/lib/settings.js`): each entry's key, type, default, allowed values or range, label and storage area. The keys are `autoMetadata`, `autoFeatureCounts`, `showMapImages`, `mapImageWidth` and `mapImageHeight` (whole numbers from 50 to 2000), `queryHelperSelectAll` (`get`, `post` or `donothing`), `defaultWhereClause`, and `defaultWebMapAsJSON` (empty, or a JSON object of at most 100 KB). The web map lives in `chrome.storage.local` and starts empty; the rest are in `chrome.storage.sync`.
   - **Reading.** `SDT.settings.read(keys)` resolves to validated values: a missing or invalid stored value reads as its default, and a stored `nothing`, from the in-page form that Phase 3 removed, reads as `donothing`. Content scripts read settings only this way and never write them (lint enforces both), and code outside `src/src/lib/` may not pass a defaults object to `chrome.storage.*.get`.
-  - **The options page** (`src/src/options/`) is static HTML with one control per schema key, whose `name` is the key. `tests/unit/options-page.test.js` checks each control's type, values, range, label and error line against the schema. `options.js` checks each field with `SDT.settings.parse`, shows errors under the fields with `aria-invalid`, and saves with `SDT.writer.save`.
-  - **Saving** (`src/src/lib/writer.js`). A key is written when its new value differs from what is stored and the user changed it on the page or the stored value is invalid, so a change made in another window survives. Sync items are checked against Chrome's per-item and total quotas first. `storage.local` is written before `storage.sync`, and put back if the sync write fails. The page says "Saved" only after both writes succeed.
+  - **The options page** (`src/src/options/`) is static HTML with one control per schema key, whose `name` is the key. `tests/unit/options-page.test.js` checks each control's type, values, range, label and error line against the schema. `options.js` checks each field with `SDT.settings.parse`, shows errors under the fields with `aria-invalid`, and saves with `SDT.writer.save`. Save stays off until the first read has finished, and stays off with an error in the status line if that read fails.
+  - **Saving** (`src/src/lib/writer.js`). A key is written when its new value differs from what is stored and the user changed it on the page or the stored value is invalid, so a change made in another window survives. Sync items are checked against Chrome's per-item and total quotas first, counted as Chrome counts them: `SDT.writer.itemBytes` adds the escapes Chrome's JSON writer makes and `JSON.stringify` doesn't (`<`, U+2028, U+2029). `storage.local` is written before `storage.sync`, and put back if the sync write fails. The page says "Saved" only after both writes succeed, even if reading storage again afterwards fails.
   - Field and coded-value counts have no setting: `inject.js` runs them on every layer page, on two constants, until Phase 5's Count values button (#45). Changes apply when a page is reloaded (SET-11); open tabs don't update.
   ```
 
@@ -2410,7 +2526,7 @@ In `docs/superpowers/specs/2026-10-09-store-readiness-design.md`:
 
   ```markdown
   - **Phase 4 checks (2026-10-21), in Chromium 141, and in Chrome for Testing 120 where noted:**
-    - `chrome.storage.sync` counts an item as its key plus the value's `JSON.stringify`, in UTF-8 bytes, against `QUOTA_BYTES_PER_ITEM` (8,192), and `getBytesInUse` reports the same figure.
+    - `chrome.storage.sync` counts an item as its key plus the value as Chrome's JSON writer writes it, in UTF-8 bytes, against `QUOTA_BYTES_PER_ITEM` (8,192), and `getBytesInUse` reports the same figure. That is the value's `JSON.stringify`, except that Chrome writes `<` as `\u003C` and U+2028 and U+2029 as `\u2028` and `\u2029`, and stores a lone surrogate as U+FFFD.
     - A `set` with several items is all or nothing: one item over the limit stores none of them.
     - Chromium 141 reports quota failures with internal names ("Resource::kQuotaBytesPerItem quota exceeded"), so the options page checks the quotas itself first.
     - The 121st sync write in a minute fails with "This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota.", in both browsers, in a signed-out profile. Local writes are unaffected.
@@ -2498,7 +2614,7 @@ End the body with `🤖 Generated with [Claude Code](https://claude.com/claude-c
 ## Open points
 
 1. **Local first, then sync, with an undo** (confirmed by the owner, Decision 5). The decision above makes "Nothing was changed" true whenever the sync write fails, at the cost of a second local write. Only the unit tests reach the path where the undo itself fails, since a browser test can't make `storage.local` fail without stubbing it. Writing sync first instead would put the more likely failure first, but then a local failure would need an undo of sync, which uses up the 120 writes a minute.
-2. **Wording the owner didn't give.** The owner confirmed the two quota messages, "No changes to save." and "Choose one of the options." (Decision 5). Still open: "Not saved: <error>. Only "Saved web map (JSON)" changed.", the hints under the web map, the where clause and the feature-count checkbox, and the page's `<h1>` "Services Directory Toolkit settings" (from design review section 6.10).
+2. **Wording the owner didn't give.** The owner confirmed the two quota messages, "No changes to save." and "Choose one of the options." (Decision 5). Still open: "Not saved: <error>. Only "Saved web map (JSON)" changed.", "Settings couldn't be loaded: <error>. Reload this page to try again." (added after the independent review), the hints under the web map, the where clause and the feature-count checkbox, and the page's `<h1>` "Services Directory Toolkit settings" (from design review section 6.10).
 3. **The `nothing` alias stays** until someone removes it. Phase 3 removed the only writer of `nothing`, and the extension is unpublished, so only development profiles hold it. Removing the alias later would make such a profile read `get`.
 4. **Old keys stay in sync storage.** A profile that saved before this phase keeps `autoFieldCounts` and `autoDomainCounts` in `storage.sync`, and an old web map there too. Nothing reads them, and the options page never writes or removes them. They count toward the total quota, at a few dozen bytes for the flags; an old web map there can be up to 8 KB.
 5. **Content scripts still fill the stored where clause and web map automatically.** That is today's behaviour; Phases 7 and 8 replace it with Insert buttons that ignore synthetic clicks (spec section 3).
@@ -2514,3 +2630,13 @@ The plan was written on Phase 3's branch before that phase's review round, which
 - **Known bugs** (Task 6, Step 1) fail on the lines the plan gives: INJ-2 at 46, INJ-3 at 59, INJ-11 at 65, QRY-1 at 87, POP-2 at 122 and POP-3 at 131.
 - **Final runs** (Task 6, Step 7): lint clean; 297 unit tests pass; the zip holds `src/lib/settings.js` and `src/lib/writer.js`; the browser suite without `@cdp` passes 122 tests, with the six known bugs as expected failures, against the unzipped build and against `src/` in Chromium 141, and against `src/` in Chrome for Testing 120.0.6099.109.
 - **The `@cdp` tests** weren't run locally (Chromium 141 has no `Extensions.triggerAction`). The popup now loads `settings.js`, which only defines `SDT.settings` and runs nothing at load, and the popup tests that open the same page through `openPopupTab` pass.
+
+### After the independent review
+
+The code blocks above now show the code after these fixes. Each fix started with a test that was run and seen to fail.
+
+- **The quota check now counts as Chrome does.** `SDT.writer.itemBytes` counted the key plus the value's `JSON.stringify`, but Chrome's own JSON writer writes `<` as `\u003C`, and U+2028 and U+2029 as `\u2028` and `\u2029`, and stores a lone surrogate as U+FFFD. A where clause such as `"POP < 1 AND "` repeated 600 times (7,200 characters, 10,220 bytes in Chrome's count) passed the pre-check, and Chrome then refused it with "Resource::kQuotaBytesPerItem quota exceeded". `itemBytes` now makes the same changes before counting, and the total check uses it too. A probe of the unpacked extension in Chromium 141 compared `getBytesInUse` with `itemBytes` for 24 one-character values and 50 random mixes, and all agreed (Facts). New tests: a unit case for the escapes and the lone surrogate, two `<` cases in the total-quota unit test, and a browser test in which a `<`-heavy where clause gets the page's own "Too long to sync: this needs 10,220 bytes" error. Before the fix, the unit cases got 4 for `<` and the browser test got Chrome's message. The Facts, the spec's Phase 4 bullet, the `stubArea` comment and `CLAUDE.md` now describe the count this way.
+- **"Saved" no longer depends on reading storage again.** After both writes succeeded, `save` read storage again to show what it holds, and if that read rejected, the rejection escaped and the status line stayed empty. The page now says "Saved" first, and if the read fails, keeps the values it just wrote as what it loaded. New browser test: reads fail once a sync write has finished; before the fix the status line stayed empty and the page logged an unhandled rejection.
+- **The page says when it can't load the settings, and Save waits for them.** If the first read rejected, the controls stayed blank and every Save was ignored without a word, and a Save before the first read finished was ignored too. Save is now off until the first read finishes, and if that read fails it stays off and the status line says "Settings couldn't be loaded: <error>. Reload this page to try again." New browser tests: one holds the first read and checks Save is off until it finishes, and one makes it fail and checks the message.
+- **The "root page asks for none" test now waits for the scripts to run.** It waited a fixed second and then checked that nothing happened, so it would pass if the content scripts never ran. It now waits for `status.js`'s indicator, which the same content-script group shows, before the second's wait and the checks. With `inject.js`'s group taken out of the manifest, the test now fails.
+- **Counts.** Unit tests: 298 (one new test; the total-quota test gained two cases). Browser tests without `@cdp`: 126 (four new in `options.spec.js`), all passing with the six known bugs as expected failures, against the unzipped build and against `src/` in Chromium 141. Chrome for Testing 120 wasn't re-run; `String.prototype.toWellFormed`, which `itemBytes` uses, arrived in Chrome 111.

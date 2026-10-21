@@ -5,9 +5,15 @@
 globalThis.SDT ??= {};
 
 SDT.writer = {
-  /** The bytes Chrome's sync quota counts for one item: the key plus the value as JSON, in UTF-8. */
+  /**
+   * The bytes Chrome's sync quota counts for one item: the key plus the value as JSON, in UTF-8.
+   * Chrome's JSON writer differs from JSON.stringify in three ways: it writes "<" as \u003C, and
+   * U+2028 and U+2029 as \u2028 and \u2029, six bytes each, and it stores a lone surrogate as U+FFFD.
+   */
   itemBytes(key, value) {
-    return SDT.settings.byteLength(key) + SDT.settings.byteLength(JSON.stringify(value));
+    const json = JSON.stringify(typeof value === "string" ? value.toWellFormed() : value)
+      .replace(/[<\u2028\u2029]/g, (char) => `\\u${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
+    return SDT.settings.byteLength(key) + SDT.settings.byteLength(json);
   },
 
   /**

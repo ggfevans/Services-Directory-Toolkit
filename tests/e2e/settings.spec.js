@@ -46,6 +46,8 @@ test.describe("content scripts read validated settings", () => {
   test("with service details off, the root page asks for none", async ({ page, fakeServer, seedStorage }) => {
     await seedStorage({ autoMetadata: false });
     await page.goto(REST_ROOT);
+    // status.js shows its indicator once the content-script group, inject.js included, has run.
+    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
     await page.waitForTimeout(1000);
     await expect(page.locator(".sdt-datablock")).toHaveCount(0);
     expect(fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json")).toEqual([]);

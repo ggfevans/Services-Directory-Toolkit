@@ -28,6 +28,26 @@ test("itemBytes counts the key plus the value as JSON, in UTF-8, as Chrome does"
   assert.equal(writer.itemBytes("defaultWhereClause", "\"".repeat(4086)), 8192);
 });
 
+test("itemBytes counts the escapes Chrome's JSON writer adds, which JSON.stringify doesn't", () => {
+  // Each figure was read from Chromium 141's chrome.storage.sync.getBytesInUse. Chrome writes "<"
+  // as \u003C and U+2028 and U+2029 as \u2028 and \u2029, and stores a lone surrogate as U+FFFD.
+  assert.equal(writer.itemBytes("k", "<"), 9);
+  assert.equal(writer.itemBytes("k", "\u2028"), 9);
+  assert.equal(writer.itemBytes("k", "\u2029"), 9);
+  assert.equal(writer.itemBytes("k", "\ud800"), 6);
+  assert.equal(writer.itemBytes("defaultWhereClause", "<".repeat(1362)), 8192);
+  // These agree with JSON.stringify.
+  assert.equal(writer.itemBytes("k", ">"), 4);
+  assert.equal(writer.itemBytes("k", "&"), 4);
+  assert.equal(writer.itemBytes("k", "'"), 4);
+  assert.equal(writer.itemBytes("k", "\\"), 5);
+  assert.equal(writer.itemBytes("k", "\u007f"), 4);
+  assert.equal(writer.itemBytes("k", "\u0001"), 9);
+  assert.equal(writer.itemBytes("k", "\n"), 5);
+  assert.equal(writer.itemBytes("k", "\u009f"), 5);
+  assert.equal(writer.itemBytes("k", "\u{1F600}"), 7);
+});
+
 test("changes: what to write, given the form, what the page loaded and what is stored now", () => {
   const cases = [
     // [what, values, loaded, stored sync, expected sync]
@@ -74,6 +94,9 @@ test("quotaProblem finds a write that would take the area over its total quota",
   const nearlyFull = { ...QUOTA, inUse: 96096 + 16, replaced: 16 };
   assert.deepEqual(plain(writer.quotaProblem({ defaultWhereClause: "a".repeat(6285) }, nearlyFull)), { key: null, bytes: 102401, limit: 102400 });
   assert.equal(writer.quotaProblem({ defaultWhereClause: "a".repeat(6284) }, nearlyFull), null);
+  // The total counts each "<" as Chrome does, six bytes.
+  assert.deepEqual(plain(writer.quotaProblem({ defaultWhereClause: "<".repeat(1048) }, nearlyFull)), { key: null, bytes: 102404, limit: 102400 });
+  assert.equal(writer.quotaProblem({ defaultWhereClause: "<".repeat(1047) }, nearlyFull), null);
 });
 
 test("message drops the full stop at the end of Chrome's message", () => {
