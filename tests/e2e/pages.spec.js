@@ -87,7 +87,8 @@ test("the options page shows the defaults and saves changes", async ({ page, ext
   await expect(page.locator("#mapimagewidth")).toHaveValue("300");
   await page.locator("#mapimagewidth").fill("321");
   await page.locator("#save").click();
-  await expect.poll(() => readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 321 });
+  await expect(page.getByRole("status")).toHaveText("Saved. Changes apply when you reload a page.");
+  expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 321 });
 });
 
 // The extension's own requests: those with f=json, in the query string or in a form body. On a page
