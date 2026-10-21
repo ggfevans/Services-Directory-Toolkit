@@ -57,6 +57,14 @@ const AWAIT_SELECTORS = [
   { selector: "CallExpression[callee.property.name=/^(then|catch|finally)$/] > :matches(ArrowFunctionExpression, FunctionExpression)", message: GUARDED }
 ];
 
+// Content scripts run on pages the extension doesn't control, so they only read settings. Settings
+// change on the options page (store-readiness spec, section 4.4).
+const STORAGE_WRITE = "Content scripts never write to chrome.storage. Change settings on the options page.";
+const STORAGE_SELECTORS = [{
+  selector: "CallExpression[callee.object.object.property.name='storage']:matches([callee.property.name=/^(set|remove|clear)$/], [callee.property.value=/^(set|remove|clear)$/])",
+  message: STORAGE_WRITE
+}];
+
 // Lib files are classic scripts that may run twice in one world (store-readiness spec, section 5).
 const LIB_FILE = "Lib files may run twice. Add to the SDT namespace instead of declaring top-level names.";
 const LIB_SELECTORS = [{ selector: "Program > :matches(VariableDeclaration, FunctionDeclaration, ClassDeclaration)", message: LIB_FILE }];
@@ -91,7 +99,7 @@ export default [
   // repeats BASE_SELECTORS.
   {
     files: ["src/src/inject/**/*.js"],
-    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...GUARD_SELECTORS, ...NETWORK_SELECTORS, ...AWAIT_SELECTORS] }
+    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...GUARD_SELECTORS, ...NETWORK_SELECTORS, ...AWAIT_SELECTORS, ...STORAGE_SELECTORS] }
   },
   {
     files: ["src/src/page_action/**/*.js"],

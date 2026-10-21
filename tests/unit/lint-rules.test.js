@@ -113,3 +113,20 @@ test("content scripts use await, not inline promise callbacks", async () => {
   assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\").catch(function () {});\n}\n", INJECT), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  SDT.guard.run(async () => {\n    await SDT.net.fetchJson(\"/x\");\n  });\n}\n", INJECT), []);
 });
+
+test("content scripts never write to chrome.storage (spec section 4.4)", async () => {
+  for (const call of [
+    "chrome.storage.sync.set({ a: 1 })",
+    "chrome.storage.local.remove(\"a\")",
+    "chrome.storage.session.clear()",
+    "chrome.storage.sync[\"set\"]({ a: 1 })",
+    "globalThis.chrome.storage.local.set({ a: 1 })"
+  ]) {
+    assert.deepEqual(await ruleIds(`{\n  ${call};\n}\n`, INJECT), ["no-restricted-syntax"], call);
+  }
+  assert.deepEqual(await ruleIds("{\n  chrome.storage.sync.get({ a: 1 }, SDT.guard.wrap((items) => items));\n}\n", INJECT), []);
+});
+
+test("the options page may write to chrome.storage", async () => {
+  assert.deepEqual(await ruleIds("chrome.storage.sync.set({ a: 1 });\n", "src/src/options/example.js"), []);
+});
