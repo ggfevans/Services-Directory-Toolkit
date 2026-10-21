@@ -24,7 +24,11 @@
   "content_scripts": [
     {
       "matches": [
+        "*://*/rest/services",
+        "*://*/rest/services?*",
+        "*://*/rest/services/*",
         "*://*/*/rest/services",
+        "*://*/*/rest/services?*",
         "*://*/*/rest/services/*"
       ],
       "css": [
@@ -33,7 +37,11 @@
     },
     {
       "matches": [
+        "*://*/rest/services",
+        "*://*/rest/services?*",
+        "*://*/rest/services/*",
         "*://*/*/rest/services",
+        "*://*/*/rest/services?*",
         "*://*/*/rest/services/*"
       ],
       "js": [
@@ -50,8 +58,10 @@
     },
     {
       "matches": [
+        "*://*/rest/services/*/query",
+        "*://*/rest/services/*/query?*",
         "*://*/*/rest/services/*/query",
-        "*://*/*/rest/services/*/query*"
+        "*://*/*/rest/services/*/query?*"
       ],
       "js": [
         "src/lib/dom.js",
@@ -65,10 +75,14 @@
     },
     {
       "matches": [
-        "*://*/*/rest/services*execute",
-        "*://*/*/rest/services*execute*",
-        "*://*/*/rest/services*submitjob",
-        "*://*/*/rest/services*submitjob*"
+        "*://*/rest/services/*/GPServer/*/execute",
+        "*://*/rest/services/*/GPServer/*/execute?*",
+        "*://*/rest/services/*/GPServer/*/submitJob",
+        "*://*/rest/services/*/GPServer/*/submitJob?*",
+        "*://*/*/rest/services/*/GPServer/*/execute",
+        "*://*/*/rest/services/*/GPServer/*/execute?*",
+        "*://*/*/rest/services/*/GPServer/*/submitJob",
+        "*://*/*/rest/services/*/GPServer/*/submitJob?*"
       ],
       "js": [
         "src/lib/dom.js",

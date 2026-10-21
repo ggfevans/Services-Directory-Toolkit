@@ -191,10 +191,14 @@ ${submitRow("Find")}
 </form>`
   });
 
-  const executePage = (service, task, params) => shell({
-    title: `Execute Task: ${task.name}`,
-    breadcrumbs: crumbs(serviceCrumb(service), [task.name, `${servicePath(service)}/${encodeURIComponent(task.name)}`], ["execute", `${servicePath(service)}/${encodeURIComponent(task.name)}/execute`]),
-    body: `<form name="sdform" action="${restPath}${servicePath(service)}/${encodeURIComponent(task.name)}/execute">
+  // A task's form: execute for a synchronous task, submitJob for an asynchronous one.
+  const executePage = (service, task, params, operation = "execute") => {
+    const taskPath = `${servicePath(service)}/${encodeURIComponent(task.name)}`;
+    const verb = operation === "submitJob" ? "Submit Job" : "Execute Task";
+    return shell({
+      title: `${verb}: ${task.name}`,
+      breadcrumbs: crumbs(serviceCrumb(service), [task.name, taskPath], [operation, `${taskPath}/${operation}`]),
+      body: `<form name="sdform" action="${restPath}${taskPath}/${operation}">
 <table class="formTable">
 ${task.json.parameters
   .filter((parameter) => parameter.direction === "esriGPParameterDirectionInput")
@@ -204,19 +208,40 @@ ${task.json.parameters
 ${textRow("env:outSR", "Output Spatial Reference", params)}
 ${radioRow("returnZ", "ReturnZ", params, "false")}
 ${formatRow}
-${submitRow("Execute Task")}
+${submitRow(verb)}
+</table>
+</form>`
+    });
+  };
+
+  const queryDomainsPage = (service, params) => shell({
+    title: `Query Domains: ${service.name} (${service.type})`,
+    breadcrumbs: crumbs(serviceCrumb(service), ["queryDomains", `${servicePath(service)}/queryDomains`]),
+    body: `<form name="sdform" action="${restPath}${servicePath(service)}/queryDomains">
+<table class="formTable">
+${textRow("layers", "Layers", params)}
+${formatRow}
+${submitRow("Query Domains")}
 </table>
 </form>`
   });
 
-  return { folderPage, servicePage, layerPage, queryPage, findPage, executePage };
+  return { folderPage, servicePage, layerPage, queryPage, findPage, executePage, queryDomainsPage };
 };
 
-export const { folderPage, servicePage, layerPage, queryPage, findPage, executePage } = createPages();
+export const { folderPage, servicePage, layerPage, queryPage, findPage, executePage, queryDomainsPage } = createPages();
 
 export const otherPage = () => `<html lang="en">
 <head><title>Not a Services Directory page</title></head>
 <body><p>An ordinary page on the same host. It is not a Services Directory page.</p></body>
+</html>
+`;
+
+// A page outside ArcGIS Server whose path holds /rest/services, such as a site's own API notes. The
+// content-script patterns match it, and the scripts must leave it alone.
+export const docsPage = () => `<html lang="en">
+<head><title>Our REST services</title></head>
+<body><h1>Our REST services</h1><p>Invented notes about a web site's own REST services. It is not a Services Directory page.</p></body>
 </html>
 `;
 
