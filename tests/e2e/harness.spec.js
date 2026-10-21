@@ -85,8 +85,10 @@ test.describe("the fixture records", () => {
     harness.forgive();
   });
 
-  test("an error in the real toolbar popup", { tag: "@cdp" }, async ({ page, popupView, clickAction, harness }) => {
+  test("an error in the real toolbar popup", { tag: "@cdp" }, async ({ page, actionEnabled, popupView, clickAction, harness }) => {
     await page.goto(`${REST_ROOT}/Parcels/MapServer`);
+    // The button starts disabled, so wait for status.js to enable it before clicking.
+    await expect.poll(() => actionEnabled(page)).toBe(true);
     await clickAction(page);
     await popupView.waitForOpen();
     // Each call reaches one relay hook. The error event and the rejection are created in the popup's own
