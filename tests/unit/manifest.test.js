@@ -49,3 +49,8 @@ test("the toolbar button starts disabled, before the service worker runs (BG-1)"
 test("the manifest declares no web-accessible resources (MAN-1, SEC-4, SET-8)", () => {
   assert.equal(Object.hasOwn(manifest, "web_accessible_resources"), false);
 });
+
+test("short_name is SD Toolkit, within the 12 characters Chrome shows (CWS-4, MAN-4)", () => {
+  assert.equal(manifest.short_name, "SD Toolkit");
+  assert.ok(manifest.short_name.length <= 12);
+});
