@@ -75,7 +75,7 @@ test("a query page gets the Query Helper with SQL and quick-fill buttons", async
 
 test("a print task's execute page gets dropdowns and the saved web map", async ({ page, seedStorage }) => {
   const webMap = "{\"operationalLayers\":[]}";
-  await seedStorage({ defaultWebMapAsJSON: webMap });
+  await seedStorage({ defaultWebMapAsJSON: webMap }, "local");
   await page.goto(`${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute`);
   await expect(page.locator("select:has(option[value='PNG32'])")).toHaveCount(1);
   await expect(page.locator("select:has(option[value='A4 Portrait'])")).toHaveCount(1);
@@ -87,7 +87,8 @@ test("the options page shows the defaults and saves changes", async ({ page, ext
   await expect(page.locator("#mapimagewidth")).toHaveValue("300");
   await page.locator("#mapimagewidth").fill("321");
   await page.locator("#save").click();
-  await expect.poll(() => readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 321 });
+  await expect(page.getByRole("status")).toHaveText("Saved. Changes apply when you reload a page.");
+  expect(await readStorage(["mapImageWidth"])).toEqual({ mapImageWidth: 321 });
 });
 
 // The extension's own requests: those with f=json, in the query string or in a form body. On a page

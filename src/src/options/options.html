@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Services Directory Toolkit Options</title>
+  <meta charset="utf-8">
+  <title>Services Directory Toolkit settings</title>
   <style>
     textarea {
       display: block;
@@ -15,90 +16,113 @@
       line-height: 1.5em;
     }
     fieldset {
-      padding: 0 5px;
+      padding: 0 5px 5px;
       border-radius: 6px;
+      margin-bottom: 0.5em;
     }
-    button {  
+    .row {
+      min-height: 24px;
+      margin: 0.2em 0;
+    }
+    .hint {
+      margin: 0.2em 0 0.4em;
+    }
+    .error {
+      margin: 0.2em 0 0.4em;
+      color: #b3261e;
+      font-weight: bold;
+    }
+    [aria-invalid="true"] {
+      border: 2px solid #b3261e;
+    }
+    button {
       font-size: 1.0em;
+      min-height: 24px;
       border: 0;
       border-radius: 4px;
       padding: 0.4em 0.8em;
-      margin:  0.2em 0.4em 0.2em 0;
+      margin: 0.2em 0.4em 0.2em 0;
       background-color: #336;
       color: White;
       font-weight: bold;
-      z-index: 100;
     }
   </style>
 </head>
 <body>
 
+<h1>Services Directory Toolkit settings</h1>
+<p>Changes apply when you reload a page.</p>
+
+<form id="settings" novalidate>
+
 <fieldset>
-<legend>Service Metadata</legend>
-
-<label>
-  <input type="checkbox" id="metadata">
-  Auto-collect metadata on page load.
-</label>
-
+  <legend>Automatic requests</legend>
+  <div class="row">
+    <input type="checkbox" id="metadata" name="autoMetadata">
+    <label for="metadata">Load service details and spatial references</label>
+  </div>
+  <div class="row">
+    <input type="checkbox" id="featurecounts" name="autoFeatureCounts" aria-describedby="featurecounts-hint">
+    <label for="featurecounts">Count features in each layer</label>
+    <p class="hint" id="featurecounts-hint">Needs "Load service details and spatial references".</p>
+  </div>
 </fieldset>
 
 <fieldset>
-<legend>Feature Counts</legend>
-
-<label>
-  <input type="checkbox" id="featurecounts">
-  Auto-collect feature counts on page load. <span><b>Warning:</b> Requires "Auto-collect metadata on page load" to be checked</span>
-</label>
-<br />
-<label>
-  <input type="checkbox" id="fieldcounts">
-  Auto-collect field value counts on page load.
-</label>
-<br />
-<label>
-  <input type="checkbox" id="domaincounts">
-  Auto-collect domain counts on page load.
-</label>
-
-</fieldset>
-
-<fieldset>
-<legend>Print Task</legend>
-<label for="defaultwebmapasjson">Default Print Task WebMapAsJSON</label>
-<textarea rows="5" id="defaultwebmapasjson"></textarea>
+  <legend>Print tasks</legend>
+  <label for="defaultwebmapasjson">Saved web map (JSON)</label>
+  <p class="hint" id="defaultwebmapasjson-hint">Filled into an empty Web_Map_as_JSON box. It stays on this computer and isn't synced. Leave it empty for none.</p>
+  <textarea rows="5" id="defaultwebmapasjson" name="defaultWebMapAsJSON" aria-describedby="defaultwebmapasjson-hint defaultwebmapasjson-error"></textarea>
+  <p class="error" id="defaultwebmapasjson-error"></p>
 </fieldset>
 
 <fieldset>
   <legend>Query Helper</legend>
-  <label for="defaultwhereclause">Default where clause in query statements if space is blank</label>
-  <input type="text" id="defaultwhereclause" placeholder="Leave blank for no default" /><br />
-  <p>On clicking <b>Select All</b> or <b>Select all but Geometry</b>...</p>
-  <input type="radio" name="queryhelperselectall" id="qhget" value="get" />
-  <label for="qhget">Query (GET)</label><br />
-  <input type="radio" name="queryhelperselectall" id="qhpost" value="post" />
-  <label for="qhpost">Query (POST)</label><br />
-  <input type="radio" name="queryhelperselectall" id="qhnothing" value="donothing" />
-  <label for="qhnothing">Do Nothing</label>
+  <label for="defaultwhereclause">Default where clause</label>
+  <p class="hint" id="defaultwhereclause-hint">Filled into an empty where box. Leave it empty for none.</p>
+  <input type="text" id="defaultwhereclause" name="defaultWhereClause" aria-describedby="defaultwhereclause-hint defaultwhereclause-error">
+  <p class="error" id="defaultwhereclause-error"></p>
+  <fieldset>
+    <legend>Quick queries that fill and run the form</legend>
+    <div class="row">
+      <input type="radio" id="qhget" name="queryHelperSelectAll" value="get">
+      <label for="qhget">Run the query with GET</label>
+    </div>
+    <div class="row">
+      <input type="radio" id="qhpost" name="queryHelperSelectAll" value="post">
+      <label for="qhpost">Run the query with POST, for long where clauses</label>
+    </div>
+    <div class="row">
+      <input type="radio" id="qhnothing" name="queryHelperSelectAll" value="donothing">
+      <label for="qhnothing">Fill the form only</label>
+    </div>
+  </fieldset>
 </fieldset>
 
 <fieldset>
-  <legend>Map Images</legend>
-  <label>
-    <input type="checkbox" id="showmapimages">
-    Show Map Images when hovering over links
-  </label><br />
-  <label for="mapimagewidth">Minimum Map Image Width</label>
-  <input type="number" id="mapimagewidth" /><br />
-  <label for="mapimageheight">Minimum Map Image Height</label>
-  <input type="number" id="mapimageheight" /><br />
-  
+  <legend>Map previews</legend>
+  <div class="row">
+    <input type="checkbox" id="showmapimages" name="showMapImages">
+    <label for="showmapimages">Show map previews on hover</label>
+  </div>
+  <label for="mapimagewidth">Preview image width (px)</label>
+  <input type="number" id="mapimagewidth" name="mapImageWidth" min="50" max="2000" step="1" aria-describedby="mapimagewidth-error">
+  <p class="error" id="mapimagewidth-error"></p>
+  <label for="mapimageheight">Preview image height (px)</label>
+  <input type="number" id="mapimageheight" name="mapImageHeight" min="50" max="2000" step="1" aria-describedby="mapimageheight-error">
+  <p class="error" id="mapimageheight-error"></p>
 </fieldset>
 
-<button id="save">Save</button>
+<button id="save" type="submit">Save</button>
+<p id="status" role="status"></p>
+
+</form>
 
 <p><small>Based on <a href="https://github.com/raykendo/Map-Services-Enhanced" target="_blank" rel="noopener">Map Services Enhanced</a> by Ken Doman.</small></p>
 
+<script src="../lib/guard.js"></script>
+<script src="../lib/settings.js"></script>
+<script src="../lib/writer.js"></script>
 <script src="options.js"></script>
 </body>
 </html>

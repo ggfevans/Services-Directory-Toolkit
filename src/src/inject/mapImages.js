@@ -100,32 +100,29 @@
     document.body.className = bodyClasses.join(" ");
   };
 
-  const constructImageContainer = () => {    
-    chrome.storage.sync.get({
-      mapImageWidth: 300,
-      mapImageHeight: 200
-    }, SDT.guard.wrap((items) => {
-      // update map image widht and height
-      WIDTH_HEIGHT["width"] = items.mapImageWidth;
-      WIDTH_HEIGHT["height"] = items.mapImageHeight;
-      // construct parent container.
-      let parentDiv = loadElement("DIV", {
-        "class": "sdt-map-image-panel",
-        "style": "min-width:" + items.mapImageWidth + "px;min-height:" + (items.mapImageHeight + 30) + "px;"
-      });
-      let mapDiv = loadElement("IMG", {
-        id: "mapimage",
-        src: NO_IMAGE_SRC,
-        alt: "Map image goes here",
-        "class": "sdt-none"
-      });
-      parentDiv.appendChild(mapDiv);
-      parentDiv.appendChild(loadElement("P", {"style": "margin:2px 0;padding:0;"}, "Hover over a link to view."));
-      document.body.appendChild(parentDiv);
-    }));
+  // The sizes come from SDT.settings, so they are whole numbers from 50 to 2000 (SEC-3). Phase 6
+  // sets them through style properties instead.
+  const constructImageContainer = (settings) => {
+    // update map image width and height
+    WIDTH_HEIGHT["width"] = settings.mapImageWidth;
+    WIDTH_HEIGHT["height"] = settings.mapImageHeight;
+    // construct parent container.
+    let parentDiv = loadElement("DIV", {
+      "class": "sdt-map-image-panel",
+      "style": "min-width:" + settings.mapImageWidth + "px;min-height:" + (settings.mapImageHeight + 30) + "px;"
+    });
+    let mapDiv = loadElement("IMG", {
+      id: "mapimage",
+      src: NO_IMAGE_SRC,
+      alt: "Map image goes here",
+      "class": "sdt-none"
+    });
+    parentDiv.appendChild(mapDiv);
+    parentDiv.appendChild(loadElement("P", {"style": "margin:2px 0;padding:0;"}, "Hover over a link to view."));
+    document.body.appendChild(parentDiv);
   };
 
-  const setup = () => {
+  const setup = (settings) => {
     // Links to map and image services on this server, outside the breadcrumbs. Each href loses its
     // token, f and fragment before the test (TOK-3). The page's own JSON link then points at the
     // page itself, so links to the page are left out.
@@ -142,7 +139,7 @@
 
     if (urls.length > 0) {
       // construct 
-      constructImageContainer();
+      constructImageContainer(settings);
 
       // map display on hover
       urls.forEach((item) => {
@@ -153,18 +150,15 @@
     }
   };
 
-  const onPageLoaded = () => {
+  const onPageLoaded = async () => {
     const type = SDT.page.classify(location, document);
     if (type === "jsonView" || type === "other") {
       return;
     }
-    chrome.storage.sync.get({
-      showMapImages: true
-    }, SDT.guard.wrap((items) => {
-      if (items.showMapImages) {
-        setup();
-      }
-    }));
+    const settings = await SDT.settings.read(["showMapImages", "mapImageWidth", "mapImageHeight"]);
+    if (settings.showMapImages) {
+      setup(settings);
+    }
   };
 
   SDT.guard.onLoad(onPageLoaded);

@@ -54,3 +54,18 @@ test("short_name is SD Toolkit, within the 12 characters Chrome shows (CWS-4, MA
   assert.equal(manifest.short_name, "SD Toolkit");
   assert.ok(manifest.short_name.length <= 12);
 });
+
+test("every content-script group loads the settings schema, and none loads the writer (spec section 4.4)", () => {
+  for (const [index, group] of manifest.content_scripts.entries()) {
+    if (group.js) {
+      assert.ok(group.js.includes("src/lib/settings.js"), `group ${index}`);
+      assert.equal(group.js.includes("src/lib/writer.js"), false, `group ${index}`);
+    }
+  }
+});
+
+test("the options page loads the guard, the settings schema and the writer before its own script", () => {
+  const page = readFileSync(join(ROOT, "src/src/options/options.html"), "utf8");
+  const scripts = [...page.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(([, src]) => src);
+  assert.deepEqual(scripts, ["../lib/guard.js", "../lib/settings.js", "../lib/writer.js", "options.js"]);
+});

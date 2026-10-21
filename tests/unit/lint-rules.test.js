@@ -84,8 +84,8 @@ test("content scripts add listeners and timers through SDT.guard", async () => {
 });
 
 test("content scripts wrap chrome callbacks in SDT.guard.wrap", async () => {
-  assert.deepEqual(await ruleIds("{\n  chrome.storage.sync.get({ a: 1 }, (items) => items);\n}\n", INJECT), ["no-restricted-syntax"]);
-  assert.deepEqual(await ruleIds("{\n  chrome.storage.sync.get({ a: 1 }, SDT.guard.wrap((items) => items));\n}\n", INJECT), []);
+  assert.deepEqual(await ruleIds("{\n  chrome.runtime.sendMessage({ a: 1 }, (reply) => reply);\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  chrome.runtime.sendMessage({ a: 1 }, SDT.guard.wrap((reply) => reply));\n}\n", INJECT), []);
 });
 
 test("content scripts still get the base rules", async () => {
@@ -124,7 +124,28 @@ test("content scripts never write to chrome.storage (spec section 4.4)", async (
   ]) {
     assert.deepEqual(await ruleIds(`{\n  ${call};\n}\n`, INJECT), ["no-restricted-syntax"], call);
   }
-  assert.deepEqual(await ruleIds("{\n  chrome.storage.sync.get({ a: 1 }, SDT.guard.wrap((items) => items));\n}\n", INJECT), []);
+  assert.deepEqual(await ruleIds("{\n  SDT.guard.run(async () => {\n    await SDT.settings.read([\"autoMetadata\"]);\n  });\n}\n", INJECT), []);
+});
+
+test("content scripts read settings only through SDT.settings", async () => {
+  for (const call of [
+    "chrome.storage.sync.get([\"autoMetadata\"])",
+    "chrome.storage.local.get(\"defaultWebMapAsJSON\", SDT.guard.wrap((items) => items))",
+    "chrome.storage.sync[\"get\"](null)",
+    "chrome.storage.sync.get({ autoMetadata: true }, SDT.guard.wrap((items) => items))"
+  ]) {
+    assert.deepEqual(await ruleIds(`{\n  ${call};\n}\n`, INJECT), ["no-restricted-syntax"], call);
+  }
+});
+
+test("only lib files pass defaults to chrome.storage.*.get", async () => {
+  for (const file of ["src/src/options/example.js", "src/src/bg/example.js"]) {
+    assert.deepEqual(await ruleIds("chrome.storage.sync.get({ autoMetadata: true });\n", file), ["no-restricted-syntax"], file);
+    assert.deepEqual(await ruleIds("chrome.storage.local[\"get\"]({ defaultWebMapAsJSON: \"\" });\n", file), ["no-restricted-syntax"], file);
+    assert.deepEqual(await ruleIds("chrome.storage.sync.get([\"autoMetadata\"]);\n", file), [], file);
+  }
+  assert.deepEqual(await ruleIds("{\n  chrome.storage.sync.get({ autoMetadata: true });\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("globalThis.SDT ??= {};\nSDT.example = { read: () => chrome.storage.sync.get({ a: 1 }) };\n", "src/src/lib/example.js"), []);
 });
 
 test("the options page may write to chrome.storage", async () => {

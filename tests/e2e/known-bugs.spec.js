@@ -87,7 +87,7 @@ knownBug("QRY-1", "quick-fill buttons keep the visible True/False choice matchin
   expect(returnGeometry).toEqual({ shown: "False", submitted: "false" });
 });
 
-knownBug("SET-1", "the options page loads normally when \"nothing\" is stored", async ({ page, extensionId, seedStorage }) => {
+test("SET-1: the options page loads normally when \"nothing\" is stored", async ({ page, extensionId, seedStorage }) => {
   await seedStorage({ queryHelperSelectAll: "nothing" });
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
   await expect(page.locator("#mapimagewidth")).toHaveValue("300");
@@ -95,7 +95,7 @@ knownBug("SET-1", "the options page loads normally when \"nothing\" is stored", 
   await expect(page.locator("#qhnothing")).toBeChecked();
 });
 
-knownBug("SET-3", "a blank number is rejected, not saved", async ({ page, extensionId, readStorage }) => {
+test("SET-3: a blank number is rejected, not saved", async ({ page, extensionId, readStorage }) => {
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
   await expect(page.locator("#mapimagewidth")).toHaveValue("300");
   await page.locator("#mapimagewidth").fill("");

@@ -81,7 +81,7 @@
    * @param {object} formData - JSON of name, value pairs to insert in the form
    * @param {boolean} clickSubmit - if true, click the submit button
    */
-  function quickFormFillin (formData, clickSubmit) {
+  async function quickFormFillin (formData, clickSubmit) {
     let formFields = Array.prototype.slice.call(document.getElementsByTagName("INPUT"), 0);
   
     formFields = formFields.concat(Array.prototype.slice.call(document.getElementsByTagName("TEXTAREA"), 0));
@@ -103,24 +103,21 @@
     if (!clickSubmit) 
       return;
 
-    chrome.storage.sync.get({
-      queryHelperSelectAll: "get"
-    }, SDT.guard.wrap((item) => {
-      const submitButtons = document.querySelectorAll("input[type='submit']");
-      let submitButton;
-      switch(item.queryHelperSelectAll) {
-        case "get":
-          submitButton = submitButtons[0];
-          break;
-        case "post":
-          submitButton = submitButtons[1];
-          break;
-      }
+    const { queryHelperSelectAll } = await SDT.settings.read(["queryHelperSelectAll"]);
+    const submitButtons = document.querySelectorAll("input[type='submit']");
+    let submitButton;
+    switch(queryHelperSelectAll) {
+      case "get":
+        submitButton = submitButtons[0];
+        break;
+      case "post":
+        submitButton = submitButtons[1];
+        break;
+    }
 
-      if (submitButton) {
-        submitButton.click();
-      } 
-    }));
+    if (submitButton) {
+      submitButton.click();
+    }
   }
   
   /**
@@ -457,16 +454,13 @@
   /** 
    * Inserts a default where clause
    */
-  const insertDefaultWhereClause = () => {
-    chrome.storage.sync.get({
-      defaultWhereClause: ""
-    }, SDT.guard.wrap((items) => {
-      const whereInput = document.querySelector("input[name = where]");
-      // if the where clause input is empty and the defaultWhereClause is not, add it in.
-      if (whereInput && !whereInput.value && items.defaultWhereClause) {
-        whereInput.value = items.defaultWhereClause;
-      }
-    }));
+  const insertDefaultWhereClause = async () => {
+    const { defaultWhereClause } = await SDT.settings.read(["defaultWhereClause"]);
+    const whereInput = document.querySelector("input[name = where]");
+    // if the where clause input is empty and the defaultWhereClause is not, add it in.
+    if (whereInput && !whereInput.value && defaultWhereClause) {
+      whereInput.value = defaultWhereClause;
+    }
   };
 
   /**

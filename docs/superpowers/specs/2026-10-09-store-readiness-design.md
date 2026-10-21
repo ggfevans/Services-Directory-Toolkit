@@ -81,6 +81,11 @@ These were established by experiment and the design depends on them.
   - A content script's message carries `frameId: 0` and `documentLifecycle: "active"` at load and after a back/forward cache restore.
   - Chrome reports an unrecognised manifest key only in Developer mode, after a reload, and never an unknown key inside `action`.
   - CDP `DOMDebugger.getEventListeners` lists listeners added in an extension's isolated world.
+- **Phase 4 checks (2026-10-21), in Chromium 141, and in Chrome for Testing 120 where noted:**
+  - `chrome.storage.sync` counts an item as its key plus the value as Chrome's JSON writer writes it, in UTF-8 bytes, against `QUOTA_BYTES_PER_ITEM` (8,192), and `getBytesInUse` reports the same figure. That is the value's `JSON.stringify`, except that Chrome writes `<` as `\u003C` and U+2028 and U+2029 as `\u2028` and `\u2029`, and stores a lone surrogate as U+FFFD.
+  - A `set` with several items is all or nothing: one item over the limit stores none of them.
+  - Chromium 141 reports quota failures with internal names ("Resource::kQuotaBytesPerItem quota exceeded"), so the options page checks the quotas itself first.
+  - The 121st sync write in a minute fails with "This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota.", in both browsers, in a signed-out profile. Local writes are unaffected.
 
 ## 4. Requirements for every phase
 
@@ -143,7 +148,7 @@ Introduced in Phase 2.
   | Phase | Adds |
   |---|---|
   | 2 | DOM helpers, network helpers (`fetchJson`, request limiter, URL builder, token scope), page classifier, extension-context guard |
-  | 4 | Settings schema |
+  | 4 | Settings schema (`SDT.settings`), and the writer (`SDT.writer`), which only extension pages load |
   | 7 | Field picker |
 
 ## 6. Phases
