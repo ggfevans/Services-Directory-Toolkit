@@ -43,6 +43,20 @@ const GUARD_SELECTORS = [
   }
 ];
 
+// Every request goes through SDT.net.fetchJson, which checks the status, times out and keeps a token
+// out of the URL.
+const NETWORK = "Send requests with SDT.net.fetchJson (src/src/lib/net.js).";
+const NETWORK_SELECTORS = [
+  { selector: "CallExpression[callee.name='fetch']", message: NETWORK },
+  { selector: "CallExpression[callee.property.name='fetch']", message: NETWORK },
+  { selector: "NewExpression[callee.name='XMLHttpRequest']", message: NETWORK },
+  { selector: "NewExpression[callee.property.name='XMLHttpRequest']", message: NETWORK }
+];
+// A promise callback runs later, outside the guard. Use await inside a guarded function instead.
+const AWAIT_SELECTORS = [
+  { selector: "CallExpression[callee.property.name=/^(then|catch|finally)$/] > :matches(ArrowFunctionExpression, FunctionExpression)", message: GUARDED }
+];
+
 // Lib files are classic scripts that may run twice in one world (store-readiness spec, section 5).
 const LIB_FILE = "Lib files may run twice. Add to the SDT namespace instead of declaring top-level names.";
 const LIB_SELECTORS = [{ selector: "Program > :matches(VariableDeclaration, FunctionDeclaration, ClassDeclaration)", message: LIB_FILE }];
@@ -72,11 +86,11 @@ export default [
   // repeats BASE_SELECTORS.
   {
     files: ["src/src/inject/**/*.js"],
-    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...GUARD_SELECTORS] }
+    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...GUARD_SELECTORS, ...NETWORK_SELECTORS, ...AWAIT_SELECTORS] }
   },
   {
     files: ["src/src/page_action/**/*.js"],
-    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS] }
+    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...NETWORK_SELECTORS] }
   },
   {
     files: ["src/src/lib/**/*.js"],

@@ -99,3 +99,17 @@ test("a lib file declares no top-level names", async () => {
   assert.deepEqual(await ruleIds("class A {}\nSDT.a = new A();\n", LIB), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("globalThis.SDT ??= {};\nSDT.example = { a: 1 };\n", LIB), []);
 });
+test("scripts send requests through SDT.net, not fetch or XMLHttpRequest", async () => {
+  assert.deepEqual(await ruleIds("{\n  fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  fetch(\"/x\");\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  new XMLHttpRequest();\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  window.fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  new window.XMLHttpRequest();\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\");\n}\n", INJECT), []);
+});
+
+test("content scripts use await, not inline promise callbacks", async () => {
+  assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\").then((r) => r);\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\").catch(function () {});\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  SDT.guard.run(async () => {\n    await SDT.net.fetchJson(\"/x\");\n  });\n}\n", INJECT), []);
+});

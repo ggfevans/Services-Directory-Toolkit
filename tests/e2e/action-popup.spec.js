@@ -1,4 +1,4 @@
-import { test, expect, FAKE_ORIGIN, REST_ROOT } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, REST_ROOT, SERVER_TOKENS } from "./fixtures.js";
 
 const SERVICE_PAGE = `${REST_ROOT}/Parcels/MapServer`;
 const OTHER_PAGE = `${FAKE_ORIGIN}/other/page`;
@@ -8,8 +8,12 @@ test("the toolbar button is enabled on Services Directory pages and disabled els
   await rest.goto(SERVICE_PAGE);
   const other = await context.newPage();
   await other.goto(OTHER_PAGE);
+  // The content scripts run on a JSON view, but leave the button disabled there.
+  const jsonView = await context.newPage();
+  await jsonView.goto(`${SERVICE_PAGE}?f=pjson`);
   await expect.poll(() => actionEnabled(rest)).toBe(true);
   await expect.poll(() => actionEnabled(other)).toBe(false);
+  expect(await actionEnabled(jsonView)).toBe(false);
 });
 
 test.describe("with the back/forward cache on", () => {
@@ -65,20 +69,19 @@ test("the real popup reads the tab's URL, which needs activeTab", { tag: "@cdp" 
   // routing, so they never reach the fake server. Send them through this routed page instead.
   await popupView.page.evaluate(() => {
     const popup = chrome.extension.getViews({ type: "popup" })[0];
-    popup.XMLHttpRequest = class {
-      open(method, url) {
-        this.method = method;
-        this.url = url;
-      }
-      setRequestHeader() {}
-      async send(body) {
-        try {
-          this.responseText = await (await fetch(this.url, { method: this.method, body })).text();
-        } finally {
-          this.readyState = 4;
-          this.onreadystatechange();
-        }
-      }
+    // The popup uses fetch (SDT.net.fetchJson). Pass each request to this routed page's fetch. A
+    // signal or a body from the popup's realm can't cross over, so rebuild the body as a string and
+    // leave the signal behind, and return a Response from the popup's realm.
+    popup.fetch = async (url, init = {}) => {
+      const response = await fetch(String(url), {
+        method: init.method,
+        body: init.body ? String(init.body) : undefined,
+        headers: init.body ? { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" } : undefined,
+        redirect: init.redirect,
+        credentials: init.credentials,
+        referrerPolicy: init.referrerPolicy
+      });
+      return new popup.Response(await response.text(), { status: response.status, statusText: response.statusText });
     };
     popup.document.getElementById("searchblank").value = "Parcels";
     popup.document.getElementById("searchbtn").click();
@@ -108,4 +111,21 @@ test("the URL shortener drops query defaults only from query URLs", async ({ ope
   // On query, esriGeometryEnvelope is the default, so it goes.
   const query = await openPopupTab(`${SERVICE_PAGE}/0/query?${envelope}&where=1%3D1&f=html`);
   await expect(query.locator("#urlshortblank")).toHaveValue(`${SERVICE_PAGE}/0/query?geometry=0,0,10,10&where=1%3D1`);
+});
+
+test("the popup search sends the tab's token in the POST body, never in a URL (POP-6)", async ({ openPopupTab, fakeServer }) => {
+  const token = SERVER_TOKENS.jsmith;
+  const popup = await openPopupTab(`${REST_ROOT}/Utilities?token=${token}`);
+  await popup.locator("#searchblank").fill("Valves");
+  await popup.locator("#searchbtn").click();
+  await expect(popup.locator("#searchbtn")).toHaveText("Search");
+  // Valves is secured: an anonymous listing leaves it out.
+  await expect(popup.locator("#searchresults a")).not.toHaveCount(0);
+  const crawl = fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json");
+  expect(crawl.length).toBeGreaterThan(0);
+  for (const call of crawl) {
+    expect(call.method).toBe("POST");
+    expect(call.query).toEqual({});
+    expect(call.body.token).toBe(token);
+  }
 });

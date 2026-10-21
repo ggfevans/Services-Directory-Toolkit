@@ -1,35 +1,5 @@
 {
   const { loadElement } = SDT.dom;
-  /**
-   * requests data from a URL and returns it in JSON format
-   * @function ajax
-   * @param {string} u - URL to send the requests
-   * @param {function} callback - function to call when results are returned
-   * @param {object} [data] - optional information to send, triggers a post instead of a get requests
-   * @param {object} [x] - state of the application
-   */
-  const ajax = (u, callback, data, x) => {
-    try {
-      x = new(this.XMLHttpRequest)("MSXML2.XMLHTTP.3.0");
-      x.open(data ? "POST" : "GET", u, 1);
-      x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-      x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = SDT.guard.wrap(() => {
-        if (x.readyState > 3 && callback) {
-          try {
-            // JSON.parse doesn't handle NaN values where numbers are supposed to go
-            let processedResponseText = (x.responseText || "{}").replace(/:\s*NaN,/ig, ":\"NaN\",");
-            callback(JSON.parse(processedResponseText), x);
-          } catch (err) {
-            console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
-          }
-        }
-      });
-      x.send(data);
-    } catch (e) {
-      window.console && console.log("Services Directory Toolkit: request failed", e);
-    }
-  };
 
   // Enable the toolbar button for this tab (see src/src/bg/background.js). Re-send when the page is
   // restored from the back/forward cache, because Chrome clears the tab's action state on navigation.
@@ -42,18 +12,14 @@
     if (!statusNode) {
       return;
     }
-    if (!/open/i.test(statusNode.className)) {
-      statusNode.className += " open";
-    }
+    statusNode.classList.add("sdt-open");
   };
 
   const closeOptionsForm = () => {
     if (!statusNode) {
       return;
     }
-    if (/open/i.test(statusNode.className)) {
-      statusNode.className = statusNode.className.replace(" open", "");
-    }
+    statusNode.classList.remove("sdt-open");
   };
 
   class OptionsForm {
@@ -63,10 +29,15 @@
       this.domNode = loadElement("DIV");
       df.appendChild(this.domNode);
 
-      let configUrl = chrome.runtime.getURL("src/config/options.json");
-      ajax(configUrl, response => this.renderForm(response));
+      this.load();
 
       parentNode.appendChild(df);
+    }
+
+    async load() {
+      const result = await SDT.net.fetchJson(chrome.runtime.getURL("src/config/options.json"));
+      // The answer can arrive after an update has cut this script off.
+      SDT.guard.run(() => this.renderForm(SDT.net.legacyResponse(result) ?? {}));
     }
 
     renderForm(config) {
@@ -287,10 +258,15 @@
   }
 
   const start = () => {
+    // JSON views and pages that aren't Services Directory pages get nothing, not even the button.
+    const type = SDT.page.classify(location, document);
+    if (type === "jsonView" || type === "other") {
+      return;
+    }
     enableAction();
     SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
-    statusNode = loadElement("DIV", { "class": "status" });
-    const settingsImg = loadElement("IMG", { "class": "status-icon" });
+    statusNode = loadElement("DIV", { "class": "sdt-status" });
+    const settingsImg = loadElement("IMG", { "class": "sdt-status-icon" });
     statusNode.appendChild(settingsImg);
     settingsImg.src = chrome.runtime.getURL("src/images/settings.svg");
     SDT.guard.listen(statusNode, "click", openOptionsForm);

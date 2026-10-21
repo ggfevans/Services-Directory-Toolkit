@@ -2,38 +2,13 @@
   const { loadElement, clear: cleanElement } = SDT.dom;
   const COLORHASH = {};
   let active = null;
-  
-  /**
-   * requests data from a URL and returns it in JSON format
-   * @function ajax
-   * @param {string} u - URL to send the requests
-   * @param {function} callback - function to call when results are returned
-   * @param {object} [data] - optional information to send, triggers a post instead of a get requests
-   * @param {object} [x] - state of the application
-   */
-  const ajax = (u, callback, data, x) => {
-    try {
-      x = new(this.XMLHttpRequest)("MSXML2.XMLHTTP.3.0");
-      x.open(data ? "POST" : "GET", u, 1);
-      x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-      x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = SDT.guard.wrap(() => {
-        if (x.readyState > 3 && callback) {
-          try {
-            // JSON.parse doesn't handle NaN values where numbers are supposed to go
-            let processedResponseText = (x.responseText || "{}").replace(/:\s*NaN,/ig, ":\"NaN\",");
-            callback(JSON.parse(processedResponseText), x);
-          } catch (err) {
-            console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
-          }
-        }
-      });
-      x.send(data);
-    } catch (e) {
-      window.console && console.log("Services Directory Toolkit: request failed", e);
-    }
-  };
+  // Set in the load handler: the page's token, and the limiter every automatic request goes through.
+  let token = null;
+  let limiter = null;
 
+  // A row that the request budget left out, or that automatic work skipped after server pushback.
+  const skippedNote = (error, tag) => loadElement(tag, { "class": "sdt-note" }, tag === "span" ? ` ${error.message}` : error.message);
+  
 
   /**
    * Changes a text value from camel-case to title case
@@ -189,7 +164,7 @@
         }
     }
 
-    return addSubList("Error", err0r, "error");
+    return addSubList("Error", err0r, "sdt-error");
   };
 
   /**
@@ -203,7 +178,7 @@
       boolPreCheck = ["defaultVisibility", "isDataVersioned"];
     if (data) {
       const div = loadElement("DIV", {
-        "class": "datablock collapsed"
+        "class": "sdt-datablock sdt-collapsed"
       });
       div.appendChild(document.createElement("br"));
       const ul = document.createElement("ul");
@@ -313,18 +288,12 @@
    * @param {function} callback - callback function once the query is complete.
    */
   const getLayerCount = (url, data, callback) => {
-    const queryUrl = url + "/query?where=not+field+is+null&returnGeometry=false&returnCountOnly=true&f=json",
-      ul = document.createElement("ul");
+    const ul = document.createElement("ul");
     let oid, shape;
 
     if (data && Object.hasOwn(data, "objectIdField") && data.objectIdField) {
       oid = data.objectIdField;
     }
-    /*
-    if (data && Object.hasOwn(data, "globalIdField") && data.globalIdField) {
-      oid = data.globalIdField;
-    }
-    */
     if (data && Object.hasOwn(data, "fields") && data.fields.length) {
       data.fields.some((field) => {
         switch(field.type) {
@@ -336,33 +305,38 @@
             shape = field.name;
             break;
         }
-
         return oid && shape;
       });
     }
 
-    if (oid) {
-      ajax(queryUrl.replace(/\+field\+/g, ["+","+"].join(oid) ), (response) => {
-        if (response.count !== undefined && response.count !== null) {
-          ul.appendChild(li("Number of features", response.count ));
-        }
-        if (Object.hasOwn(response, "error") && response.error) {
-          ul.appendChild(reportError(response.error, {"type": "esriFieldTypeOID"}));
-        }
+    const count = async (field, label, fieldType) => {
+      const result = await limiter.fetchJson(`${url}/query`, {
+        params: { where: `not ${field} is null`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
+        token
       });
+      if (SDT.net.isSkipped(result)) {
+        ul.appendChild(skippedNote(result.error, "li"));
+        return;
+      }
+      const response = SDT.net.legacyResponse(result);
+      if (response === null) {
+        return; // INJ-2: Phase 5 shows an error line here.
+      }
+      if (response.count !== undefined && response.count !== null) {
+        ul.appendChild(li(label, response.count));
+      }
+      if (Object.hasOwn(response, "error") && response.error) {
+        ul.appendChild(reportError(response.error, { "type": fieldType }));
+      }
+    };
+
+    if (oid) {
+      count(oid, "Number of features", "esriFieldTypeOID");
     } else {
       ul.appendChild(li("No way to query features."));
     }
-    
     if (shape) {
-      ajax(queryUrl.replace(/\+field\+/g, ["+", "+"].join(shape)), (response) => {
-        if (response.count !== undefined && response.count !== null) {
-          ul.appendChild(li("Features with shapes", response.count ));
-        }
-        if (Object.hasOwn(response, "error") && response.error) {
-          ul.appendChild(reportError(response.error, {"type": "esriFieldTypeGeometry"}));
-        }
-      });
+      count(shape, "Features with shapes", "esriFieldTypeGeometry");
     } else if (!/\/featureserver\//i.test(url) && (data.type && data.type !== "Table")) {
       ul.appendChild(li("No visible shape field available."));
     }
@@ -376,11 +350,7 @@
    * @param {HTML} div
    */
   const toggleCollapse = (div) => {
-    if (div.className.indexOf("collapsed") > -1) {
-      div.className = div.className.replace(" collapsed", "");
-    } else {
-      div.className += " collapsed";
-    }
+    div.classList.toggle("sdt-collapsed");
   };
 
   /**
@@ -434,58 +404,51 @@
    * @param {object[]} fields - list of JSON field data on that map service
    * @param {object[]} nodes - HTML DOM nodes corresponding to the fields in the other list.
    */
-  const checkForNulls = (url, fields, nodes) => {
+  const checkForNulls = async (url, fields, nodes) => {
     if (!fields.length) {
       notifyLoading(false, LOADING_NULLS_CSS);
-      return; 
+      return;
     }
     const field = fields.shift(),
       node = nodes.shift(),
-      params = "/query?where=not+field+is+null&returnGeometry=false&returnCountOnly=true&f=json".replace("field", field.name),
       resultList = document.createElement("ul");
     node.appendChild(resultList);
-    const timeCheck = Date.now();
-    ajax(url + params, (response) => {
+    const countRow = async (where, label) => {
+      const timeCheck = Date.now();
+      const result = await limiter.fetchJson(`${url}/query`, { params: { where, returnGeometry: "false", returnCountOnly: "true", f: "json" }, token });
+      if (SDT.net.isSkipped(result)) {
+        resultList.appendChild(skippedNote(result.error, "li"));
+        return "skipped";
+      }
+      const response = SDT.net.legacyResponse(result);
+      if (response === null) {
+        return "failed"; // INJ-2: today's chain stops here; Phase 5 carries on with an error line.
+      }
       const hasError = Object.hasOwn(response, "error") && !!response.error;
       let item = document.createElement("li");
       if (response.count !== undefined && response.count !== null) {
-        item.appendChild(loadElement("b", {}, "Features with values:"));
+        item.appendChild(loadElement("b", {}, label));
         item.appendChild(document.createTextNode(` ${response.count} `));
         if (response.count === 0) {
           item.appendChild(loadElement("b", {"style": "color:#f00;"}, "!!! "));
         }
         item.appendChild(loadElement("i", {}, `Response time: ${responseTime(timeCheck)}`));
       } else if (hasError) {
-        item = reportError(response.error, field);
+        item = reportError(response.error, label === "Features with values:" ? field : undefined);
       }
       resultList.appendChild(item);
-      if (!hasError && field.type === "esriFieldTypeString") {
-        const newTimeCheck = Date.now();
-
-        ajax(url + "/query?where=not+field+is+null+and+field+<>%27%27&returnGeometry=false&returnCountOnly=true&f=json".replace(/field/g, field.name), 
-          (response2) => {
-            let item2 = document.createElement("li");
-            const hasError = Object.hasOwn(response2, "error") && !!response2.error;
-            if (response2.count !== undefined && response2.count !== null) {
-              item2.appendChild(loadElement("b", {}, "Features without empty values:"));
-              item2.appendChild(document.createTextNode(` ${response2.count} `));
-              if (response2.count === 0) {
-                item2.appendChild(loadElement("b", {"style": "color:#f00;"}, "!!! "));
-              }
-              item2.appendChild(loadElement("i", {}, `Response time: ${responseTime(newTimeCheck)}`));
-            } else if (hasError) {
-              item2 = reportError(response2.error);
-            }
-            resultList.appendChild(item2);
-
-            checkForNulls(url, fields, nodes);
-          }
-        );
-      } else {
-        checkForNulls(url, fields, nodes); 
+      return hasError ? "error" : "counted";
+    };
+    const first = await countRow(`not ${field.name} is null`, "Features with values:");
+    if (first === "failed") {
+      return;
+    }
+    if (first === "counted" && field.type === "esriFieldTypeString") {
+      if (await countRow(`not ${field.name} is null and ${field.name} <> ''`, "Features without empty values:") === "failed") {
+        return;
       }
     }
-    );
+    checkForNulls(url, fields, nodes);
   };
 
   /**
@@ -496,10 +459,10 @@
    * @param {object[]} nodes - list of HTML DOM nodes corresponding to the fields list
    * @param {object} [tr] - possible list to attach domain search results to.
    */
-  const checkDomains = (url, fields, nodes, tr) => {
-    if (!fields.length) { 
+  const checkDomains = async (url, fields, nodes, tr) => {
+    if (!fields.length) {
       notifyLoading(false, LOADING_DOMAINS_CSS);
-      return; 
+      return;
     }
     if (!tr) {
       const node = nodes.shift();
@@ -508,9 +471,18 @@
     }
     if (fields[0].length) {
       const item = fields[0].shift(),
-        value = item.type === "esriFieldTypeString" ? "'" + item.code + "'" : item.code,
-        params = "/query?where=field+%3D+value&returnGeometry=false&returnCountOnly=true&f=json".replace("field", item.field).replace("value", value);
-      ajax(url + params, (response) => {
+        value = item.type === "esriFieldTypeString" ? "'" + item.code + "'" : item.code;
+      const result = await limiter.fetchJson(`${url}/query`, {
+        params: { where: `${item.field} = ${value}`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
+        token
+      });
+      if (SDT.net.isSkipped(result)) {
+        tr.appendChild(skippedNote(result.error, "li"));
+      } else {
+        const response = SDT.net.legacyResponse(result);
+        if (response === null) {
+          return; // INJ-2: today's chain stops here; Phase 5 carries on with an error line.
+        }
         let node = document.createElement("li");
         const hasError = Object.hasOwn(response, "error") && !!response.error;
         if (response.count !== undefined && response.count !== null) {
@@ -523,17 +495,17 @@
           node = reportError(response.error);
         }
         tr.appendChild(node);
-        if (fields[0].length) {  
-          checkDomains(url, fields, nodes, tr); 
+      }
+      if (fields[0].length) {
+        checkDomains(url, fields, nodes, tr);
+      } else {
+        fields.shift();
+        if (fields.length) {
+          checkDomains(url, fields, nodes);
         } else {
-          fields.shift();
-          if (fields.length) {
-            checkDomains(url, fields, nodes);
-          } else {
-            notifyLoading(false, LOADING_DOMAINS_CSS);
-          }
+          notifyLoading(false, LOADING_DOMAINS_CSS);
         }
-      });
+      }
     } else {
       notifyLoading(false, LOADING_DOMAINS_CSS);
     }
@@ -555,30 +527,18 @@
    * @param {string} value - input to insert in the "active" input
    */
   const setActive = (value) => {
-    if (active !== undefined) {
-      // get cursor position
-      const oldVal = active.value.substring(0);
-      let iCaretPos = oldVal.length;
-      active.focus();
-      if (document.selection) {
-        const oSel = document.selection.createRange();
-        oSel.moveStart("character", -active.value.length);
-        iCaretPos = oSel.text.length;
-      } else if ("selectionStart" in active) {
-        iCaretPos = active.selectionStart;
-      }
-      // insert clicked text
-      active.value = oldVal.substring(0, iCaretPos) + value + oldVal.substring(iCaretPos);
-
-      // reset cursor position
-      iCaretPos += value.length - (["()", "''"].indexOf(value) > -1);
-      if (active.createTextRange) {
-        const range = active.createTextRange();
-        range.move("character", iCaretPos);
-        range.select();
-      } else if ("selectionStart" in active) {
-        active.setSelectionRange(iCaretPos, iCaretPos);
-      }      
+    if (active === undefined || active === null) {
+      return;
+    }
+    const oldVal = active.value;
+    active.focus();
+    let iCaretPos = "selectionStart" in active ? active.selectionStart : oldVal.length;
+    // insert clicked text
+    active.value = oldVal.substring(0, iCaretPos) + value + oldVal.substring(iCaretPos);
+    // reset cursor position
+    iCaretPos += value.length - (["()", "''"].indexOf(value) > -1);
+    if ("selectionStart" in active) {
+      active.setSelectionRange(iCaretPos, iCaretPos);
     }
   };
 
@@ -602,9 +562,9 @@
    */
   class SidePanel { 
     constructor(title) {
-      this.node = loadElement("DIV", {"class": "sidepanel"});
+      this.node = loadElement("DIV", {"class": "sdt-sidepanel"});
       // insert title
-      const titlePanel = loadElement("DIV", {"class": "titlepanel"});
+      const titlePanel = loadElement("DIV", {"class": "sdt-titlepanel"});
       titlePanel.appendChild(loadElement("b", {}, title));
 
       // insert clear button
@@ -658,7 +618,7 @@
      */
     constructor(url, parentNode, callback) {
       const singleLayer = /server\/\d+\/?$/i.test(url),
-        jsonUrl = url + (singleLayer ? "" : "/layers") + "?f=json";
+        jsonUrl = url + (singleLayer ? "" : "/layers");
       let helpMessage = "Click field name to get up to 1000 examples. Double-click selections to add to form.";
 
       this.url = url;
@@ -672,8 +632,21 @@
       parentNode.appendChild(helpMessageNode);
       
       // get JSON data from service and build data afterward.
-      ajax(jsonUrl, this.buildRenderer.bind(this, callback));
-    
+      this.load(jsonUrl, callback);
+    }
+
+    /** Loads the layer JSON, an automatic request, and builds the lists from it. */
+    async load(jsonUrl, callback) {
+      const result = await limiter.fetchJson(jsonUrl, { params: { f: "json" }, token });
+      // The answer can arrive after an update has cut this script off.
+      SDT.guard.run(() => {
+        const data = SDT.net.legacyResponse(result);
+        if (data === null) {
+          this.parentNode.appendChild(loadElement("P", {}, `Could not load the fields: ${result.error.message}`));
+          return;
+        }
+        this.buildRenderer(callback, data);
+      });
     }
     /**
      * Renderer for the Field Selector
@@ -708,7 +681,7 @@
   
       // if layer 
       if (dataItems.length === 1) {
-        this.layerSelect.className = "hidden";
+        this.layerSelect.className = "sdt-hidden";
         this.updateFields(dataItems);
       } else {
         df.appendChild(loadElement("SPAN", {}, "Layers:"));
@@ -731,7 +704,7 @@
         setActive(evt.currentTarget.value);
       });
 
-      // call the callback with the data items collected from the previous ajax call.
+      // call the callback with the data items collected from the layer JSON.
       if (callback && typeof callback === "function") {
         callback(dataItems);
       }
@@ -770,7 +743,7 @@
      * Update the value items
      * @param {string} url
      */
-    updateValues(url) {
+    async updateValues(url) {
       const val = this.fieldSelect.value;
       const layerId = this.layerSelect.value;
       // loading of values
@@ -780,8 +753,12 @@
       this.valueList.setAttribute("disabled", "disabled");
       // stop additional clicks on fieldSelect from subsequent calls
       this.fieldSelect.setAttribute("disabled", "disabled");
-      // request distinct values
-      ajax(`${url}/${layerId}/query?where=1%3D1&returnGeometry=false&outFields=${val}&orderByFields=${val}&returnDistinctValues=true&f=json`, this._updateValuesCallback.bind(this));
+      // request distinct values. A click starts this, so it doesn't count toward the request limit.
+      const result = await SDT.net.fetchJson(`${url}/${layerId}/query`, {
+        params: { where: "1=1", returnGeometry: "false", outFields: val, orderByFields: val, returnDistinctValues: "true", f: "json" },
+        token
+      });
+      this._updateValuesCallback(SDT.net.legacyResponse(result));
     }
     /**
      * Updates values after query
@@ -830,10 +807,10 @@
   };
 
 
-  const LOADING_METADATA_CSS = "loading-metadata";
-  const LOADING_NULLS_CSS = "loading-nulls";
-  const LOADING_DOMAINS_CSS = "loading-domains";
-  const LOADING_SOMETHING_CSS = "loading-something";
+  const LOADING_METADATA_CSS = "sdt-loading-metadata";
+  const LOADING_NULLS_CSS = "sdt-loading-nulls";
+  const LOADING_DOMAINS_CSS = "sdt-loading-domains";
+  const LOADING_SOMETHING_CSS = "sdt-loading-something";
   const notifyLoading = (value, cssClass) => {
     const bodyClasses = (document.body.className || "").split(" ");
     if (value) {
@@ -849,131 +826,126 @@
     document.body.className = bodyClasses.join(" ");
   };
 
-  SDT.guard.onLoad(() => {
+  /** Counts values for each field and coded value of the layer at url. */
+  const countFields = async (url) => {
+    const results = SDT.net.legacyResponse(await limiter.fetchJson(url, { params: { f: "json" }, token }));
+    // The answer can arrive after an update has cut this script off.
+    if (!SDT.guard.alive()) {
+      return;
+    }
+    if (results && results.fields && results.fields.length > 0) {
+      const fieldHTML = getFieldList();
+      const hasDomainTest = (field) => !!field && field.domain && field.domain.codedValues;
 
-    // collect the links on the web page to collect information about the content they link to.
-    const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0),
-      url = window.location.href.split("?")[0],
-      findTest = /\/find\/?$/i,
-      // search for map service links on the page
-      urls = tags.map((tag, i) => {
-        return Object.create({}, {
-          i: {
-            value: i
-          },
-          url: {
-            value: tag.href
-          }
-        });
-      }).filter((item) => {
-      // filter out links in the breadcrumbs section at the top of the page.
-        if (tags[item.i].parentNode.className === "breadcrumbs") {
-          return false;
+      chrome.storage.sync.get({
+        autoFieldCounts: true,
+        autoDomainCounts: true
+      }, SDT.guard.wrap((items) => {
+        const domainFields = [];
+        let domainFieldHTML;
+        if (items.autoFieldCounts) {
+          notifyLoading(true, LOADING_NULLS_CSS);
+          checkForNulls(url, results.fields.slice(0), fieldHTML.slice(0));
         }
-        return /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url);
-      });
-      
-    /**
-     * collect and present service data based on a list of urls.
-     * @function collectMetaData
-     * @param {string[]} f - a list of urls to collect data on.
-     * @param {boolean} canCountFeatures - if true, count features.
-     */
-    const collectMetaData = (f, canCountFeatures) => {
-      if (!f || !f.length) {
-        notifyLoading(false, LOADING_METADATA_CSS);
-        return; 
-      }
-      const data = f.shift();
-      ajax(data.url + "?f=json",
-        (response) => {
-          const spatialReferenceNode = showSpatialReferenceData(response),
-            metadata = showMetadata(response);
+        if (items.autoDomainCounts && results.fields.some(hasDomainTest)) {
           
-          if (spatialReferenceNode !== null) {
-            tags[data.i].parentNode.appendChild(spatialReferenceNode);  
-          }
-          
-          if (metadata !== null) {
-            tags[data.i].parentNode.appendChild(metadata);
-          }
-          
-          // if the service has fields, get the layer count
-          if (response.fields && response.fields.length && canCountFeatures) {
-            getLayerCount(data.url, response, (countList) => {
-              tags[data.i].parentNode.appendChild(countList);
-            });
-          }
-          collectMetaData(f, canCountFeatures);
-        });
+          domainFieldHTML = fieldHTML.slice(0);
+
+          results.fields.forEach((field, i) => {
+            if (hasDomainTest(field)) {
+              domainFields.push(field.domain.codedValues.map((item) => {
+                // future reference: check if Object.assign supported by Chrome
+                item.field = field.name;
+                item.type = field.type;
+                return item;
+              }));
+            } else {
+              domainFieldHTML[i] = null;
+            }
+          });
+
+          // filter out nulled out HTML nodes.
+          domainFieldHTML = domainFieldHTML.filter((item) => !!item );
+          notifyLoading(true, LOADING_DOMAINS_CSS);
+          checkDomains(url, domainFields, domainFieldHTML, null);
+        }
+      }));
+
+    }
+  };
+
+  SDT.guard.onLoad(() => {
+    const type = SDT.page.classify(location, document);
+    if (type === "jsonView" || type === "other") {
+      return;
+    }
+    token = SDT.auth.pageToken(location);
+    limiter = SDT.net.pageLimiter();
+    const pageScope = SDT.auth.scopeOf(location.href);
+    const url = SDT.page.baseUrl(location);
+
+    // Links to services on this server, outside the breadcrumbs. Each href loses its token, f and
+    // fragment before the test (TOK-3), and links to other servers get no requests (SEC-5). The
+    // page's own JSON link (?f=pjson) then points at the page itself, so links to the page are left out.
+    const self = url.replace(/\/+$/, "");
+    const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0);
+    const urls = tags
+      .map((tag, i) => ({ i, url: SDT.url.stripForFilter(tag.href) }))
+      .filter((item) => pageScope !== null
+        && tags[item.i].parentNode.className !== "breadcrumbs"
+        && item.url.replace(/\/+$/, "") !== self
+        && SDT.auth.scopeOf(item.url) === pageScope
+        && /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url));
+
+    /** Collects and shows each linked service's details, through the limiter. */
+    const collectMetaData = async (items, canCountFeatures) => {
+      await Promise.all(items.map(async (item) => {
+        const parent = tags[item.i].parentNode;
+        const result = await limiter.fetchJson(item.url, { params: { f: "json" }, token });
+        if (SDT.net.isSkipped(result)) {
+          parent.appendChild(skippedNote(result.error, "span"));
+          return;
+        }
+        if (result.error?.type === "aborted") {
+          return;
+        }
+        const response = SDT.net.legacyResponse(result) ?? { error: { message: result.error.message } };
+        const spatialReferenceNode = showSpatialReferenceData(response),
+          metadata = showMetadata(response);
+        if (spatialReferenceNode !== null) {
+          parent.appendChild(spatialReferenceNode);
+        }
+        if (metadata !== null) {
+          parent.appendChild(metadata);
+        }
+        // if the service has fields, get the layer count
+        if (response.fields && response.fields.length && canCountFeatures) {
+          getLayerCount(item.url, response, (countList) => {
+            parent.appendChild(countList);
+          });
+        }
+      }));
+      notifyLoading(false, LOADING_METADATA_CSS);
     };
 
     chrome.storage.sync.get({
       autoMetadata: true,
       autoFeatureCounts: true
     }, SDT.guard.wrap((items) => {
-      //console.log(urls, items);
-      if (urls && urls.length && items.autoMetadata) {
+      if (urls.length && items.autoMetadata) {
         notifyLoading(true, LOADING_METADATA_CSS);
         collectMetaData(urls, items.autoFeatureCounts);
       }
     }));
-    
-    // field and domain data counting.
-    if (/(imageserver|\d+)\/?$/i.test(url)) {
-      ajax(url + "?f=json", (results) => {
-        if (results && results.fields && results.fields.length > 0) {
-          const fieldHTML = getFieldList();
-          const hasDomainTest = (field) => !!field && field.domain && field.domain.codedValues;
 
-          chrome.storage.sync.get({
-            autoFieldCounts: true,
-            autoDomainCounts: true
-          }, SDT.guard.wrap((items) => {
-            const domainFields = [];
-            let domainFieldHTML;
-            if (items.autoFieldCounts) {
-              notifyLoading(true, LOADING_NULLS_CSS);
-              checkForNulls(url, results.fields.slice(0), fieldHTML.slice(0));
-            }
-            if (items.autoDomainCounts && results.fields.some(hasDomainTest)) {
-              
-              domainFieldHTML = fieldHTML.slice(0);
-
-              results.fields.forEach((field, i) => {
-                if (hasDomainTest(field)) {
-                  domainFields.push(field.domain.codedValues.map((item) => {
-                    // future reference: check if Object.assign supported by Chrome
-                    item.field = field.name;
-                    item.type = field.type;
-                    return item;
-                  }));
-                } else {
-                  domainFieldHTML[i] = null;
-                }
-              });
-
-              // filter out nulled out HTML nodes.
-              domainFieldHTML = domainFieldHTML.filter((item) => !!item );
-              notifyLoading(true, LOADING_DOMAINS_CSS);
-              checkDomains(url, domainFields, domainFieldHTML, null);
-            }
-          }));
-
-        }
-      });
+    // Field and domain countson layer pages and ImageServer pages.
+    if (type === "layer" || (type === "service" && SDT.page.serviceType(location) === "ImageServer")) {
+      countFields(url);
     }
 
-
-    // todo: find page helper
-    if (findTest.test(url)) {
-      findHelper(url.replace(findTest, ""));
+    if (type === "find") {
+      findHelper(url.replace(/\/find\/?$/i, ""));
     }
-
-    // todo: identify page helper
-
-    // todo: tile testing
-    // todo: geometry helper
   });
 
 }

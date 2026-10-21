@@ -7,127 +7,84 @@
     height: 200
   };
 
-  // 
-  const reqStatus = (response) => {
-    if (response.status >= 200 && response.status < 300) {
-      return Promise.resolve(response);
-    } else {
-      return Promise.reject(new Error(response.statusText));
+  // Hover previews send no token (Phase 6 keeps that rule) and don't use the request limiter,
+  // because a hover is a user action.
+  const getMapBBOX = async (url) => {
+    const result = await SDT.net.fetchJson(url, { params: { f: "json" } });
+    if (result.error) {
+      throw new Error(result.error.message);
     }
+    const data = result.data;
+    let extent = [];
+    if ("initialExtent" in data) {
+      extent = [data.initialExtent.xmin, data.initialExtent.ymin, data.initialExtent.xmax, data.initialExtent.ymax];
+    } else if ("fullExtent" in data) {
+      extent = [data.fullExtent.xmin, data.fullExtent.ymin, data.fullExtent.xmax, data.fullExtent.ymax];
+    }
+    if (extent.length !== 4) {
+      throw new Error(`Invalid extent length: ${extent.length}`);
+    }
+    return extent.join(",");
   };
 
-  const getJSON = (response) => response.json();
-
-  const getMapBBOX = (url) => {
-    return new Promise((resolve, reject) => {
-      fetch(url + "?f=json")
-        .then(reqStatus)
-        .then(getJSON)
-        .then((data) => {
-          let extent = [];
-          if ("initialExtent" in data) {
-            extent = [data.initialExtent.xmin, data.initialExtent.ymin, data.initialExtent.xmax, data.initialExtent.ymax];
-          } else if ("fullExtent" in data) {
-            extent = [data.fullExtent.xmin, data.fullExtent.ymin, data.fullExtent.xmax, data.fullExtent.ymax];
-          }
-          if (extent.length === 4) {
-            resolve(extent.join(","));
-          }
-          else {
-            reject("Invalid extent length: " + extent.length);
-          }
-          
-        })
-        .catch((err) => {
-          window.console && console.log("Fetch Error :-S", err);
-          reject(err);
-        });
-    });
-  };
   /**
    * @function getMapImageUrl
    * @param {string} url - link url
-   * @returns {string} url string for the image link.
+   * @returns {Promise<string>} url string for the image link.
    */
-  const getMapImageUrl = (url) => {
-    return new Promise((resolve, reject) => {
-      if (url in IMAGE_LOOKUP) {
-        resolve(IMAGE_LOOKUP[url]);
-      }
-      
-      if (/[^/]$/.test(url)) {
-        url = url + "/";
-      }
-  
-      getMapBBOX(url)
-        .then((bbox) => {
-          let exportUrl = url;
-          if (/\/mapserver\/$/i.test(url)) {
-            exportUrl += "export?size=" + WIDTH_HEIGHT["width"] + "," + WIDTH_HEIGHT["height"] + "&format=png32&f=json&bbox=" + bbox;
-            return fetch(exportUrl);
-          } else if (/\/featureserver\/$/i.test(url)) {
-            // try replacing feature server with map server
-            exportUrl = exportUrl.replace(/\/featureserver\/$/i, "/MapServer/");
-            exportUrl += "export?size=" + WIDTH_HEIGHT["width"] + "," + WIDTH_HEIGHT["height"] + "&format=png32&f=json&bbox=" + bbox;
-            return fetch(exportUrl);
-          } else if (/\/imageserver\/$/i.test(url)) {
-            exportUrl += "exportImage?bbox=" + bbox + "&size=" + WIDTH_HEIGHT["width"] + "," + WIDTH_HEIGHT["height"] + "&format=jpgpng&f=json";
-            return fetch(exportUrl);
-          } else {
-            return Promise.reject("Invalid service type: " + url);
-          }
-        })
-        .then(reqStatus)
-        .then(getJSON)
-        .then((data) => {
-          if ("href" in data) {
-            IMAGE_LOOKUP[url] = data["href"];
-            resolve(IMAGE_LOOKUP[url]);
-          } else {
-            window.console && console.log("unexpected data error: ", url, data);
-            reject("no data found");
-          }
-        })
-        .catch(function (err) {
-          reject(err);
-        });
-    });
+  const getMapImageUrl = async (url) => {
+    if (url in IMAGE_LOOKUP) {
+      return IMAGE_LOOKUP[url];
+    }
+    if (/[^/]$/.test(url)) {
+      url = url + "/";
+    }
+    const bbox = await getMapBBOX(url);
+    const size = `${WIDTH_HEIGHT.width},${WIDTH_HEIGHT.height}`;
+    let request;
+    if (/\/mapserver\/$/i.test(url)) {
+      request = [`${url}export`, { size, format: "png32", f: "json", bbox }];
+    } else if (/\/featureserver\/$/i.test(url)) {
+      // try replacing feature server with map server
+      request = [`${url.replace(/\/featureserver\/$/i, "/MapServer/")}export`, { size, format: "png32", f: "json", bbox }];
+    } else if (/\/imageserver\/$/i.test(url)) {
+      request = [`${url}exportImage`, { bbox, size, format: "jpgpng", f: "json" }];
+    } else {
+      throw new Error("Not a map or image service");
+    }
+    const result = await SDT.net.fetchJson(request[0], { params: request[1] });
+    if (result.error || !result.data || typeof result.data !== "object" || !("href" in result.data)) {
+      throw new Error("No image in the answer");
+    }
+    IMAGE_LOOKUP[url] = result.data.href;
+    return IMAGE_LOOKUP[url];
   };
 
   /**
    * On hover, get map
-   * @param {Event} evt 
+   * @param {string} url - the link's URL, without its token, f and fragment
    */
-  const hoverGetMap = (evt) => {
-    if (!evt || !evt.target) {
-      return;
-    }
-    const url = evt.target.href;
-    if (!url) {
-      return;
-    }
-    
+  const hoverGetMap = async (url) => {
     notifyLoading(true);
-    getMapImageUrl(url)
-      .then((href) => {
-        let mapImage = document.getElementById("mapimage");
-        mapImage.setAttribute("src", href);
-        mapImage.classList.remove("none");
-        notifyLoading(false);
-      }).catch(() => {
-        window.console && console.log("Error getting image url from: %s", url);
-        hoverHideMap();
-        notifyLoading(false);
-      });
+    try {
+      const href = await getMapImageUrl(url);
+      const mapImage = document.getElementById("mapimage");
+      mapImage.setAttribute("src", href);
+      mapImage.classList.remove("sdt-none");
+    } catch {
+      console.log("Services Directory Toolkit: no map image for %s", url);
+      hoverHideMap();
+    }
+    notifyLoading(false);
   };
 
   const hoverHideMap = () => {
     let mapImage = document.getElementById("mapimage");
     mapImage.setAttribute("src",NO_IMAGE_SRC);
-    mapImage.classList.add("none");
+    mapImage.classList.add("sdt-none");
   };
 
-  const LOADING_CSS = "loading-mapimage";
+  const LOADING_CSS = "sdt-loading-mapimage";
   const notifyLoading = (value) => {
     const bodyClasses = (document.body.className || "").split(" ");
     if (value) {
@@ -153,14 +110,14 @@
       WIDTH_HEIGHT["height"] = items.mapImageHeight;
       // construct parent container.
       let parentDiv = loadElement("DIV", {
-        "class": "map-image-panel",
+        "class": "sdt-map-image-panel",
         "style": "min-width:" + items.mapImageWidth + "px;min-height:" + (items.mapImageHeight + 30) + "px;"
       });
       let mapDiv = loadElement("IMG", {
         id: "mapimage",
         src: NO_IMAGE_SRC,
         alt: "Map image goes here",
-        "class": "none"
+        "class": "sdt-none"
       });
       parentDiv.appendChild(mapDiv);
       parentDiv.appendChild(loadElement("P", {"style": "margin:2px 0;padding:0;"}, "Hover over a link to view."));
@@ -169,23 +126,19 @@
   };
 
   const setup = () => {
+    // Links to map and image services on this server, outside the breadcrumbs. Each href loses its
+    // token, f and fragment before the test (TOK-3). The page's own JSON link then points at the
+    // page itself, so links to the page are left out.
+    const pageScope = SDT.auth.scopeOf(location.href);
+    const self = SDT.page.baseUrl(location).replace(/\/+$/, "");
     const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0);
-    const urls = tags.map((tag, index) =>  {
-      return Object.create({}, {
-        i: {
-          value: index
-        },
-        url: {
-          value: tag.href
-        }
-      });
-    }).filter((item) => {
-      // filter out links in the breadcrumbs section at the top of the page.
-      if (tags[item.i].parentNode.className === "breadcrumbs") {
-        return false;
-      }
-      return /(map|image)server\/?$/i.test(item.url);
-    });
+    const urls = tags
+      .map((tag, i) => ({ i, url: SDT.url.stripForFilter(tag.href) }))
+      .filter((item) => pageScope !== null
+        && tags[item.i].parentNode.className !== "breadcrumbs"
+        && item.url.replace(/\/+$/, "") !== self
+        && SDT.auth.scopeOf(item.url) === pageScope
+        && /(map|image)server\/?$/i.test(item.url));
 
     if (urls.length > 0) {
       // construct 
@@ -195,13 +148,16 @@
       urls.forEach((item) => {
         const tag = tags[item.i];
 
-        SDT.guard.listen(tag, "mouseover", hoverGetMap);
+        SDT.guard.listen(tag, "mouseover", () => hoverGetMap(item.url));
       });
     }
   };
 
   const onPageLoaded = () => {
-    // collect the links on the web page to collect information about the content they link to.
+    const type = SDT.page.classify(location, document);
+    if (type === "jsonView" || type === "other") {
+      return;
+    }
     chrome.storage.sync.get({
       showMapImages: true
     }, SDT.guard.wrap((items) => {

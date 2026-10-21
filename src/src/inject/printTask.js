@@ -2,37 +2,6 @@
   const { loadElement } = SDT.dom;
  
   /**
-   * requests data from a URL and returns it in JSON format
-   * @function ajax
-   * @param {string} u - URL to send the requests
-   * @param {function} callback - function to call when results are returned
-   * @param {object} [data] - optional information to send, triggers a post instead of a get requests
-   * @param {object} [x] - state of the application
-   */
-  const ajax = (u, callback, data, x) => {
-    try {
-      x = new(this.XMLHttpRequest)("MSXML2.XMLHTTP.3.0");
-      x.open(data ? "POST" : "GET", u, 1);
-      x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-      x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = SDT.guard.wrap(() => {
-        if (x.readyState > 3 && callback) {
-          try {
-            // JSON.parse doesn't handle NaN values where numbers are supposed to go
-            let processedResponseText = (x.responseText || "{}").replace(/:\s*NaN,/ig, ":\"NaN\",");
-            callback(JSON.parse(processedResponseText), x);
-          } catch (err) {
-            console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
-          }
-        }
-      });
-      x.send(data);
-    } catch (e) {
-      window.console && console.log("Services Directory Toolkit: request failed", e);
-    }
-  };
-
-  /**
    * Hides an input
    * @param {HTML} node 
    * @returns {string} original type of the node to show later on.
@@ -44,7 +13,7 @@
         node.setAttribute("type", "hidden");
         break;
       default:
-        node.className += (node.className ? " " : "") + "hidden";
+        node.classList.add("sdt-hidden");
     }
     return type;
   };
@@ -60,7 +29,7 @@
         node.setAttribute("type", type);
         break;
       default:
-        node.className = node.className.replace(/\s?hidden/ig, "");
+        node.classList.remove("sdt-hidden");
     }
   };
 
@@ -164,8 +133,17 @@
     }
   };
 
-  SDT.guard.run(() => {
-    const url = window.location.href.split("?")[0];
-    ajax(url.replace(/\/(execute|submitjob)\/?$/i, "") + "?f=json", updateGPForm);
+  SDT.guard.run(async () => {
+    // Only a task's execute or submitJob form: not its JSON result (PRT-1).
+    if (SDT.page.classify(location, document) !== "gpTask") {
+      return;
+    }
+    const url = SDT.page.baseUrl(location).replace(/\/(execute|submitjob)\/?$/i, "");
+    const result = await SDT.net.pageLimiter().fetchJson(url, { params: { f: "json" }, token: SDT.auth.pageToken(location) });
+    const response = SDT.net.legacyResponse(result);
+    if (response !== null) {
+      // The extension may have been updated while the request was out.
+      SDT.guard.run(updateGPForm, response);
+    }
   });
 }

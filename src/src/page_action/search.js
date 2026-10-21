@@ -9,37 +9,6 @@
   let locs, hits;
 		
   /**
-   * requests data from a URL and returns it in JSON format
-   * @function ajax
-   * @param {string} u - URL to send the requests
-   * @param {function} callback - function to call when results are returned
-   * @param {object} [data] - optional information to send, triggers a post instead of a get requests
-   * @param {object} [x] - state of the application
-   */
-  const ajax = (u, callback, data, x) => {
-    try {
-      x = new(this.XMLHttpRequest)("MSXML2.XMLHTTP.3.0");
-      x.open(data ? "POST" : "GET", u, 1);
-      x.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-      x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      x.onreadystatechange = () => {
-        if (x.readyState > 3 && callback) {
-          try {
-            // JSON.parse doesn't handle NaN values where numbers are supposed to go
-            let processedResponseText = (x.responseText || "{}").replace(/:\s*NaN,/ig, ":\"NaN\",");
-            callback(JSON.parse(processedResponseText), x);
-          } catch (err) {
-            console && console.warn("Services Directory Toolkit: could not parse the response from %s", u, x.responseText, err);
-          }
-        }
-      };
-      x.send(data);
-    } catch (e) {
-      window.console && console.log("Services Directory Toolkit: request failed", e);
-    }
-  };
-
-  /**
    * get values of dot.notated.parameters out of a JSON object
    * @function getFinalVal
 	 * @param {string[]} fields - list of fields
@@ -143,29 +112,31 @@
    * @function queryMe
    * @param {string[]} list - list of urls
    * @param {function} myTest - test to perform on the results to see if it matches.
+   * @param {object|null} token - the tab's token, from SDT.auth.pageToken
    */
-  const queryMe = (list, myTest) => { 
-    if (!list.length) { return; }
+  const queryMe = async (list, myTest, token) => {
+    if (!list.length) {
+      btn.removeAttribute("disabled");
+      btn.firstChild.nodeValue = "Search";
+      Array.prototype.forEach.call(d.getElementsByTagName("a"), (ln) => {
+        let location = ln.href;
+        ln.addEventListener("click", () => {
+          chrome.tabs.create({active: true, url: location});
+        });
+      });
+      return;
+    }
     const url = list.shift();
-    ajax(url + "?f=json", (data) => {
+    const data = SDT.net.legacyResponse(await SDT.net.fetchJson(url, { params: { f: "json" }, token }));
+    // POP-1: a location that fails is skipped, and the search carries on. Phase 9 counts and shows failures.
+    if (data !== null) {
       locs++;
       responseSearch(url, data, myTest);
       list = list.concat(subUrls(url, data));
       searchCount.firstChild.nodeValue = locs.toString();
       resultCount.firstChild.nodeValue = hits.toString();
-      if (list.length) {	
-        queryMe(list, myTest); 
-      } else {
-        btn.removeAttribute("disabled");
-        btn.firstChild.nodeValue = "Search";
-        Array.prototype.forEach.call(d.getElementsByTagName("a"), (ln) => {
-          let location = ln.href;
-          ln.addEventListener("click", () => {
-            chrome.tabs.create({active: true, url: location});
-          });
-        });
-      }
-    });
+    }
+    queryMe(list, myTest, token);
   };
 
   // function called on mouse click, parses searches, sets up tests, and queries the current REST service.
@@ -194,7 +165,13 @@
         active: true, 
         currentWindow: true
       }, (tabs) => {
-        tabs.forEach((tab) => queryMe([tab.url.replace(/\?.*$/, "")], myTest));
+        // Start from the tab's URL without its query, with the tab's token, which goes only to the
+        // tab's scope. The popup is an extension page, so it sends no Referer: a token bound to a
+        // referrer gets 498 here (token support spec).
+        tabs.forEach((tab) => {
+          const tabUrl = new URL(tab.url);
+          queryMe([SDT.page.baseUrl(tabUrl)], myTest, SDT.auth.pageToken(tabUrl));
+        });
       });
     } else { 
       alert("Please enter a value"); 

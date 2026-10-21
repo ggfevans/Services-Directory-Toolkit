@@ -24,6 +24,10 @@ reviews:
         with text nodes instead. Flag MV2-only APIs (chrome.extension.*, background pages,
         the page_action manifest key, chrome.pageAction). The src/src/page_action/ folder
         name is historical and fine.
+        Requests go through SDT.net.fetchJson; automatic ones through SDT.net.pageLimiter().
+        Flag fetch or XMLHttpRequest outside src/src/lib/, any token placed in a URL, the DOM or
+        a console message, and a token sent to a URL whose SDT.auth.scopeOf differs from the
+        page's. Classes the extension injects start with sdt-.
     - path: "src/src/lib/**"
       instructions: |
         Shared classic scripts. Each starts with globalThis.SDT ??= {} and assigns one SDT namespace;
@@ -33,14 +37,16 @@ reviews:
     - path: "src/src/inject/**"
       instructions: |
         Content scripts can outlive their extension after an update. Flag addEventListener calls,
-        timers, chrome.* callbacks and XHR callbacks that don't go through SDT.guard, and top-level
-        code that runs before SDT.guard.onLoad or SDT.guard.run.
+        timers, chrome.* callbacks and promise callbacks that don't go through SDT.guard, and top-level
+        code that runs before SDT.guard.onLoad or SDT.guard.run. Each script checks
+        SDT.page.classify before doing anything, and does nothing on jsonView and other.
     - path: "src/manifest.json"
       instructions: |
         Flag any new permissions or host_permissions and explain why each is needed. The
         toolbar button is enabled by an enableAction message from status.js, not by
         declarativeContent rules; flag any attempt to reintroduce them. The version must
-        match package.json.
+        match package.json. Every content_scripts group lists the lib files first, in the
+        order dom, guard, auth, url, net, page.
     - path: "src/src/{options,config}/**"
       instructions: |
         Settings defaults are repeated in places that must agree: options.html/options.js,

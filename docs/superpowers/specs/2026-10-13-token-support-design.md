@@ -84,10 +84,10 @@ Mockup: `docs/design/mockups/token-popup.html`, popup states A to D and the stat
 
 - parses with `new URL` and reads `pathname` only
 - splits at the first whole-segment `/rest/services`. The scope is the origin plus the path before it, such as `https://gis.example.org/server` or `https://services3.arcgis.com/Ab12Cd/arcgis`.
-- lower-cases the host and the instance path, but not an ArcGIS Online org ID
+- lower-cases the host and the instance path. On a hosted ArcGIS Online host it lower-cases only the `arcgis` and `tiles` segments, so the org ID keeps its case (`/<orgId>/arcgis` on services hosts, `/tiles/<orgId>/arcgis` on tiles hosts)
 - returns null for `/admin`, `/tokens`, `/manager` and any path without a whole-segment `/rest/services`
 
-A path such as `/restricted/rest/services` scopes to `/restricted`, as Phase 2 of the store-readiness spec says. `new URL` already resolves `%2e`-encoded dot segments. Issue #44 settles how encoded slashes and double-encoded dots that survive `new URL` are handled.
+A path such as `/restricted/rest/services` scopes to `/restricted`, as Phase 2 of the store-readiness spec says. `new URL` resolves `%2e`-encoded dot segments. If the instance path still contains `%2f`, `%2e`, `%25` or `%5c` in any case after parsing, `scopeOf` returns null, so no token is attached. That covers encoded slashes and dots, double-encoded ones such as `%252e%252e`, and encoded backslashes, which a server that decodes twice or reads `\` as `/` could treat as separators (owner's decision on issue #44, 2026-10-20).
 
 A hosted ArcGIS Online scope is one on a `services*.arcgis.com` or `tiles*.arcgis.com` host. Other `*.arcgis.com` hosts, such as elevation and route, run their own servers with a Login link and an `agstoken` session, and count as Enterprise scopes here.
 

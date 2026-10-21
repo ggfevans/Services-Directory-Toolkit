@@ -55,6 +55,10 @@ Changes made on top of Ken's last commit:
 - Fixed error reporting, which crashed on any HTTP 400 from a service.
 - Fixed print task pages, where inputs the extension should hide stayed visible.
 - Added browser tests that run against a fake ArcGIS Server, and a live check that every feature still appears on Esri's public sample server.
+- Limited automatic requests to the page's own server: at most 50 per page and 4 at a time. They stop if the server answers 429 or 503, and rows past the limit say they weren't loaded.
+- Sent a `token` from the page URL only to the same server's REST services, in the request body rather than the URL, and never across a redirect. The popup's search does the same with the tab's token.
+- Skipped JSON views and pages that aren't Services Directory pages, which used to show a stuck spinner or an "Invalid form." dialog.
+- Prefixed the extension's CSS classes with `sdt-`, so they no longer clash with the page's own.
 
 ## License
 

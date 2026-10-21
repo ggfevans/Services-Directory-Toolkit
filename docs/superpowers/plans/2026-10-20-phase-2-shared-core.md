@@ -30,7 +30,7 @@ Read both specs, `CLAUDE.md`, and the comments at the top of `tests/e2e/fixtures
 The owner made these on 2026-10-20.
 
 1. **Two pull requests.** Part A holds the mechanism, the build check, the DOM helpers, the guard and the `loadElement` switch-over. Part B holds the rest. Each part ends with docs that match the code and a PR body that lists the finding IDs it closes and how.
-2. **Encoded separators.** `SDT.auth.scopeOf(url)` returns `null` (no scope, so no token) when the instance path, after `new URL()` has parsed it, still contains `%2f` or `%2e` in any case. `/restricted/rest/services` scopes to `/restricted`. Part B updates section 5.1 of the token spec to say so.
+2. **Encoded separators.** `SDT.auth.scopeOf(url)` returns `null` (no scope, so no token) when the instance path, after `new URL()` has parsed it, still contains `%2f` or `%2e` in any case (and, from open point 3, `%25` or `%5c`). `/restricted/rest/services` scopes to `/restricted`. Part B updates section 5.1 of the token spec to say so.
 3. **Rows past the cap.** Until Phase 5's Load more (#14), each row the 50-request budget leaves out shows an inline text note: `Not loaded: request limit reached (50)`, built with text nodes.
 4. **12.1 markup.** The research note from 2026-10-20 found no difference at the text level and couldn't check element classes (see Task B5). The classifier therefore confirms a page with any one of three markers, and no 12.x fixture variant is added. Task B5 records the source and date in the store-readiness spec.
 
@@ -113,7 +113,7 @@ Everything a later phase may call. Lib files in `src/src/lib/`, in load order.
 | `scopeOf(url)` | `string` or `null` | See below |
 | `pageToken(location)` | `{ value, scope }` or `null` | The page URL's `token` parameter and the page's scope. `null` when the token is missing or empty, or the page has no scope. Reads `location.search` and `location.href`. |
 
-`scopeOf(url)` parses with `new URL` (which resolves `.`, `..`, `%2e` and `%2e%2e` segments) and reads only the pathname. It returns `null` for a URL that doesn't parse, isn't `http:` or `https:`, has no whole-segment `rest/services`, or has an instance-path segment that still contains `%2f` or `%2e` (decision 2), or that is `admin`, `tokens` or `manager` in any case. Otherwise it returns `<protocol>//<host><instance path>`, such as `https://gis.example.org/server`, with the instance path lower-cased. On a hosted ArcGIS Online host only the `arcgis` and `tiles` segments are lower-cased. Two URLs are in the same scope exactly when their `scopeOf` strings are equal.
+`scopeOf(url)` parses with `new URL` (which resolves `.`, `..`, `%2e` and `%2e%2e` segments) and reads only the pathname. It returns `null` for a URL that doesn't parse, isn't `http:` or `https:`, has no whole-segment `rest/services`, or has an instance-path segment that still contains `%2f`, `%2e`, `%25` or `%5c` (decision 2 and open point 3), or that is `admin`, `tokens` or `manager` in any case. Otherwise it returns `<protocol>//<host><instance path>`, such as `https://gis.example.org/server`, with the instance path lower-cased. On a hosted ArcGIS Online host only the `arcgis` and `tiles` segments are lower-cased. Two URLs are in the same scope exactly when their `scopeOf` strings are equal.
 
 ### `SDT.url` (`url.js`, Part B)
 
@@ -122,11 +122,13 @@ Everything a later phase may call. Lib files in `src/src/lib/`, in load order.
 | `build(base, params = {}, token = null, { method = "GET" } = {})` | `{ url, method, body, carriesToken }` or `null` | See below |
 | `stripForFilter(href)` | `string` | Drops the fragment and every `token` and `f` parameter (names in any case), and a trailing `?`. Returns the input as a string when it doesn't parse. (TOK-3) |
 | `tidy(url)` | `string` | `url.href` without a trailing `?` |
+| `dropParams(url, names)` | `undefined` | Deletes each query parameter of a `URL` whose name is in `names`, in any case |
+| `withoutToken(href)` | `string` | `href` without its fragment or any `token` parameter, or `""` when it doesn't parse. Error objects use it for their `url`. |
 
-`build()` takes the token as an argument and never reads `location` (TOK-2). It returns `null` unless `base` is an `http:`, `https:` or `chrome-extension:` URL. It always removes the fragment and any `token` parameter from `base`. Parameters with `undefined` or `null` values are dropped, and the rest become strings in insertion order.
+`build()` takes the token as an argument and never reads `location` (TOK-2). It returns `null` unless `base` is an `http:`, `https:` or `chrome-extension:` URL. It always removes the fragment and any `token` parameter, whatever the case of its name, from `base`. Parameters with `undefined` or `null` values are dropped, and the rest become strings in insertion order.
 - `carriesToken` is true when `token.value` is non-empty and `scopeOf(base) === token.scope`. An empty token is never sent.
-- If `carriesToken`, or `method` is `"POST"`: `method` is `"POST"`, the URL loses every key in `params`, and `body` is a `URLSearchParams` of the params plus `token` when it carries one (TOK-4).
-- Otherwise: `method` is `"GET"`, the params are `set` on the URL's query in order, and `body` is `null`.
+- If `carriesToken`, or `method` is `"POST"`: `method` is `"POST"`, the URL loses every key in `params` (in any case), and `body` is a `URLSearchParams` of the params plus `token` when it carries one (TOK-4).
+- Otherwise: `method` is `"GET"`, the params replace any base parameter of the same name in any case, and are appended to the URL's query in order, and `body` is `null`.
 
 ### `SDT.net` (`net.js`, Part B)
 
@@ -146,7 +148,7 @@ Everything a later phase may call. Lib files in `src/src/lib/`, in load order.
 
 `fetchJson` builds the request with `SDT.url.build(url, params, token, { method })`. It sends no headers of its own, so a GET has no `X-Requested-With` or `Content-Type` (POP-9), and a POST's `URLSearchParams` body sets `application/x-www-form-urlencoded`. It leaves `credentials` at the browser default unless the caller passes one (TOK-5), and passes `referrerPolicy` through. A request that carries a token uses `redirect: "manual"` (TOK-1). The signal is `AbortSignal.timeout(timeoutMs)`, combined with the caller's `signal` through `AbortSignal.any`.
 
-An error is `{ error: { type, message, url, status?, code?, arcgis? } }`. `url` is the request URL, which never holds a token. The types:
+An error is `{ error: { type, message, url, status?, code?, arcgis? } }`. `url` is the request URL, which never holds a token. When nothing is sent (the `url` type, and the limiter's refusals), it is the given URL through `SDT.url.withoutToken`. The types:
 
 | `type` | When | Extra fields |
 |---|---|---|
@@ -180,7 +182,7 @@ At most `concurrency` requests are in flight. `stats()` returns `{ accepted, act
 | `isServicesDirectory(document)` | `boolean` | Any one marker: a `.breadcrumbs` element; a `.titlecell` whose text has "ArcGIS REST Services Directory"; or a `document.title` or first `h2` that matches `HEADING` |
 | `baseUrl(location)` | `string` | `location.origin + location.pathname` |
 | `SERVICE_TYPES` | `string[]` | `MapServer`, `FeatureServer`, `ImageServer`, `GPServer`, `GeocodeServer`, `GeometryServer`, `GeoDataServer`, `GlobeServer`, `NAServer`, `SceneServer`, `StreamServer`, `VectorTileServer`, `MobileServer`, `SchematicsServer`, `KnowledgeGraphServer`, `UtilityNetworkServer`, `VersionManagementServer`, `NetworkDiagramServer`, `ParcelFabricServer`, `ValidationServer`, `WorkflowManagerServer` |
-| `HEADING` | `RegExp` | `/^(?:Folder\|Layer\|Table\|Query\|Find\|Task\|Execute Task\|Submit Job)\b\|\([A-Za-z]+Server\)$/` |
+| `HEADING` | `RegExp` | `/^(?:(?:Folder\|Layer\|Table\|Query\|Find\|Task\|Execute Task\|Submit Job)\b\|[\s\S]*\([A-Za-z]+Server\)$)/` |
 
 `classify` works in this order:
 1. No whole-segment `rest/services` in the pathname: `other`.
@@ -1325,7 +1327,7 @@ End the body with `🤖 Generated with [Claude Code](https://claude.com/claude-c
 
 Start after PR A has merged (`git fetch origin && git merge origin/main`).
 
-Closes INJ-1, INJ-12, INJ-16, QRY-17, POP-9, SEC-11, ADV-6, TOK-1, TOK-2, TOK-4, TOK-5 and TOK-6. Closes this phase's part of INJ-2, INJ-4, INJ-18, INJ-19, PRT-1, QRY-3, QRY-5, QRY-10, QRY-15, QRY-18, SEC-5, ADV-1, ADV-5, TOK-3 and POP-6 (token part). Token spec: TR-2, TR-6, TR-8, the pathname half of TR-5, and this phase's part of TR-7 and TR-14.
+Closes INJ-1, INJ-12, INJ-16, QRY-17, POP-9, SEC-11, ADV-6, TOK-1, TOK-2, TOK-4, TOK-5 and TOK-6. Closes this phase's part of INJ-2, INJ-4, INJ-18, INJ-19, PRT-1, QRY-3, QRY-5, QRY-10, QRY-18, SEC-5, ADV-1, ADV-5, TOK-3 and POP-6 (token part). Token spec: TR-2, TR-6, TR-8, the pathname half of TR-5, and this phase's part of TR-7 and TR-14.
 
 ### Task B1: `SDT.auth`: the token scope
 
@@ -1384,10 +1386,16 @@ test("%2e%2e segments are resolved before the check", () => {
   assert.equal(auth.scopeOf(`${ENTERPRISE}/rest/services/%2e%2e/%2E%2e/admin`), null);
 });
 
-test("an instance path that still holds %2f or %2e after parsing has no scope", () => {
-  assert.equal(auth.scopeOf("https://gis.example.org/a%2fb/rest/services"), null);
-  assert.equal(auth.scopeOf("https://gis.example.org/a%2Eb/rest/services"), null);
-  assert.equal(auth.scopeOf("https://gis.example.org/a%2Fb/rest/services"), null);
+test("an instance path that still holds %2f, %2e, %25 or %5c after parsing has no scope", () => {
+  for (const segment of ["a%2fb", "a%2Fb", "a%2Eb", "a%2eb", "%252e%252e", "a%25b", "a%5cb", "a%5Cb"]) {
+    assert.equal(auth.scopeOf(`https://gis.example.org/${segment}/rest/services`), null, segment);
+  }
+  // A backslash new URL turns into a slash is just a separator.
+  assert.equal(auth.scopeOf("https://gis.example.org\\server\\rest\\services"), ENTERPRISE);
+});
+
+test("encoded characters after rest/services don't affect the scope", () => {
+  assert.equal(auth.scopeOf(`${ENTERPRISE}/rest/services/Export%20Web%20Map%2FTask/GPServer`), ENTERPRISE);
 });
 
 test("/restricted/rest/services scopes to /restricted", () => {
@@ -1488,9 +1496,10 @@ SDT.auth = {
     if (!split) {
       return null;
     }
-    // new URL has resolved dot segments, %2e ones included. An encoded slash or dot that survives
-    // could mean something else to the server, so such a path gets no scope.
-    if (split.instance.some((segment) => /%2[ef]/i.test(segment))) {
+    // new URL has resolved dot segments, %2e ones included. An encoded slash, dot, percent sign or
+    // backslash that survives could mean something else to a server that decodes again, so such a
+    // path gets no scope (owner's decision on issue #44).
+    if (split.instance.some((segment) => /%(?:2[ef5]|5c)/i.test(segment))) 
       return null;
     }
     if (split.instance.some((segment) => SDT.auth.OUTSIDE.includes(segment.toLowerCase()))) {
@@ -1524,7 +1533,7 @@ In `docs/superpowers/specs/2026-10-13-token-support-design.md`, section 5.1, rep
 Replace the paragraph after the bullets ("A path such as `/restricted/rest/services` scopes to ... Issue #44 settles how encoded slashes and double-encoded dots that survive `new URL` are handled.") with:
 
 ```markdown
-A path such as `/restricted/rest/services` scopes to `/restricted`, as Phase 2 of the store-readiness spec says. `new URL` resolves `%2e`-encoded dot segments. If the instance path still contains `%2f` or `%2e` in any case after parsing, `scopeOf` returns null, so no token is attached (owner's decision on issue #44, 2026-10-20).
+A path such as `/restricted/rest/services` scopes to `/restricted`, as Phase 2 of the store-readiness spec says. `new URL` resolves `%2e`-encoded dot segments. If the instance path still contains `%2f`, `%2e`, `%25` or `%5c` in any case after parsing, `scopeOf` returns null, so no token is attached. That covers encoded slashes and dots, double-encoded ones such as `%252e%252e`, and encoded backslashes, which a server that decodes twice or reads `\` as `/` could treat as separators (owner's decision on issue #44, 2026-10-20).
 ```
 
 - [ ] **Step 5: Run the tests**
@@ -1631,6 +1640,13 @@ test("a token in the base URL is dropped whatever its case", () => {
   }
 });
 
+test("a param replaces a base parameter of the same name in any case", () => {
+  assert.equal(url.build(`${BASE}?F=html&keep=1`, { f: "json" }).url, `${BASE}?keep=1&f=json`);
+  const request = url.build(`${BASE}?F=html&keep=1`, { f: "json" }, TOKEN);
+  assert.equal(request.url, `${BASE}?keep=1`);
+  assert.equal(request.body.toString(), "f=json&token=tok.en-1");
+});
+
 test("method POST without a token puts the params in the body", () => {
   assert.deepEqual(summary(url.build(BASE, { f: "json" }, null, { method: "POST" })), { url: BASE, method: "POST", body: "f=json", carriesToken: false });
 });
@@ -1653,6 +1669,12 @@ test("stripForFilter drops token, f and the fragment, so the link filters can ma
   assert.equal(url.stripForFilter(`${BASE}?foo=1&token=abc`), `${BASE}?foo=1`);
   assert.equal(url.stripForFilter(BASE), BASE);
   assert.equal(url.stripForFilter("not a url"), "not a url");
+});
+
+test("withoutToken drops every token parameter and the fragment, and gives up on a URL that doesn't parse", () => {
+  assert.equal(url.withoutToken(`${BASE}?f=json&Token=abc#x`), `${BASE}?f=json`);
+  assert.equal(url.withoutToken("ftp://gis.example.org/x?token=abc"), "ftp://gis.example.org/x");
+  assert.equal(url.withoutToken("not a url ?token=abc"), "");
 });
 ```
 
@@ -1679,8 +1701,19 @@ SDT.url = {
   },
 
   /**
+   * Deletes every query parameter of url named in names, whatever its case. ArcGIS reads parameter
+   * names without regard to case, so Token= and TOKEN= are tokens too.
+   */
+  dropParams(url, names) {
+    const lower = new Set([...names].map((name) => name.toLowerCase()));
+    [...url.searchParams.keys()]
+      .filter((key) => lower.has(key.toLowerCase()))
+      .forEach((key) => url.searchParams.delete(key));
+  },
+
+  /**
    * Builds a request. token is { value, scope } or null. Returns { url, method, body, carriesToken },
-   * or null when base isn't an http(s) or extension URL. A token in base itself is always dropped.
+   * or null when base isn't an http(s) or extension URL. A token in base itself, in any case, is always dropped.
    */
   build(base, params = {}, token = null, { method = "GET" } = {}) {
     let url;
@@ -1693,27 +1726,39 @@ SDT.url = {
       return null;
     }
     url.hash = "";
-    // ArcGIS reads parameter names without regard to case, so Token= and TOKEN= are tokens too.
-    [...url.searchParams.keys()]
-      .filter((key) => /^token$/i.test(key))
-      .forEach((key) => url.searchParams.delete(key));
+    SDT.url.dropParams(url, ["token"]);
+    // A token only ever comes in through the token argument, never through params.
     const entries = Object.entries(params ?? {})
-      .filter(([, value]) => value !== undefined && value !== null)
+      .filter(([key, value]) => value !== undefined && value !== null && !/^token$/i.test(key))
       .map(([key, value]) => [key, String(value)]);
     const carriesToken = Boolean(token && token.value && token.scope) && SDT.auth.scopeOf(url.href) === token.scope;
+    // A param replaces any parameter of the same name in base, whatever its case.
+    SDT.url.dropParams(url, entries.map(([key]) => key));
     if (carriesToken || method === "POST") {
-      const moved = new Set(entries.map(([key]) => key.toLowerCase()));
-      [...url.searchParams.keys()]
-        .filter((key) => moved.has(key.toLowerCase()))
-        .forEach((key) => url.searchParams.delete(key));
       const body = new URLSearchParams(entries);
       if (carriesToken) {
         body.set("token", token.value);
       }
       return { url: SDT.url.tidy(url), method: "POST", body, carriesToken };
     }
-    entries.forEach(([key, value]) => url.searchParams.set(key, value));
+    entries.forEach(([key, value]) => url.searchParams.append(key, value));
     return { url: SDT.url.tidy(url), method: "GET", body: null, carriesToken: false };
+  },
+
+  /**
+   * href without its fragment or any token parameter, for error objects and messages. Returns ""
+   * for a URL that doesn't parse, because its token can't be found.
+   */
+  withoutToken(href) {
+    let url;
+    try {
+      url = new URL(href);
+    } catch {
+      return "";
+    }
+    url.hash = "";
+    SDT.url.dropParams(url, ["token"]);
+    return SDT.url.tidy(url);
   },
 
   /** href without its fragment or any token and f parameters, for the link filters (TOK-3). */
@@ -1725,9 +1770,7 @@ SDT.url = {
       return String(href ?? "");
     }
     url.hash = "";
-    [...url.searchParams.keys()]
-      .filter((key) => /^(?:token|f)$/i.test(key))
-      .forEach((key) => url.searchParams.delete(key));
+    SDT.url.dropParams(url, ["token", "f"]);
     return SDT.url.tidy(url);
   }
 };
@@ -1861,7 +1904,10 @@ test("a network failure, a timeout and an abort are errors", async () => {
 
   const hanging = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)));
   const slow = withFetch(hanging);
+  // Node unrefs AbortSignal.timeout's timer, so hold the event loop open until it fires.
+  const keepAlive = setTimeout(() => {}, 5000);
   assert.equal(plain(await slow.net.fetchJson(BASE, { timeoutMs: 20 })).error.type, "timeout");
+  clearTimeout(keepAlive);
 
   const controller = new AbortController();
   const pending = slow.net.fetchJson(BASE, { signal: controller.signal });
@@ -1887,6 +1933,14 @@ test("legacyResponse gives today's callers data, an ArcGIS error as { error }, o
   assert.deepEqual(plain(net.legacyResponse({ data: { a: 1 } })), { a: 1 });
   assert.deepEqual(plain(net.legacyResponse({ error: { type: "arcgis", arcgis: { code: 400 } } })), { error: { code: 400 } });
   assert.equal(net.legacyResponse({ error: { type: "http", status: 502 } }), null);
+});
+
+test("an error never repeats a token from the URL it was given", async () => {
+  const { calls, net } = withFetch();
+  const { error } = plain(await net.fetchJson("ftp://gis.example.org/x?token=abc"));
+  assert.equal(error.type, "url");
+  assert.doesNotMatch(JSON.stringify(error), /abc/);
+  assert.equal(calls.length, 0);
 });
 ```
 
@@ -1958,7 +2012,7 @@ SDT.net = {
   async fetchJson(url, { params = {}, token = null, method = "GET", timeoutMs = SDT.net.TIMEOUT_MS, signal, credentials, referrerPolicy } = {}) {
     const request = SDT.url.build(url, params, token, { method });
     if (!request) {
-      return { error: { type: "url", message: "Not an http(s) URL.", url: String(url) } };
+      return { error: { type: "url", message: "Not an http(s) URL.", url: SDT.url.withoutToken(url) } };
     }
     const fail = (type, message, extra = {}) => ({ error: { type, message, url: request.url, ...extra } });
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -2202,6 +2256,15 @@ test("isSkipped is true for the limit and for stopped work only", () => {
   assert.equal(net.isSkipped({ error: { type: "http", status: 502 } }), false);
   assert.equal(net.isSkipped({ data: {} }), false);
 });
+
+test("a refused request's error never repeats a token from its URL", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ scope: SCOPE, max: 0, fetchJson: fake.fetchJson });
+  for (const url of [`${at(1)}?token=abc`, "https://other.example.org/server/rest/services/A/MapServer?token=abc"]) {
+    assert.doesNotMatch(JSON.stringify(plain(await limiter.fetchJson(url))), /abc/, url);
+  }
+  assert.equal(fake.sent(), 0);
+});
 ```
 
 - [ ] **Step 2: Run the tests to see them fail**
@@ -2239,7 +2302,7 @@ Add these members to the `SDT.net` object, after `legacyResponse`:
     const controller = new AbortController();
     const queue = [];
     const state = { accepted: 0, active: 0, peak: 0, stopped: null };
-    const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: String(url), ...extra } });
+    const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: SDT.url.withoutToken(url), ...extra } });
     const halted = (url) => (state.stopped
       ? refusal("stopped", SDT.net.stoppedNote(state.stopped), url, { status: state.stopped })
       : refusal("aborted", "Not loaded: the page was left.", url));
@@ -2549,7 +2612,12 @@ Add `"src/lib/page.js"` after `"src/lib/net.js"` in the three `js` arrays, and `
 In the store-readiness spec, Phase 2, after the "`SDT` page classifier" bullets, add:
 
 ```markdown
-**12.1 markup check (2026-10-20).** Source: a search engine's index of public 12.0, 12.1 and ArcGIS Online Services Directory pages (EPA, Esri's `utility.arcgisonline.com`, UNHCR, two ArcGIS Online orgs), and the summaries of Esri's 12.1 What's new pages. Esri's hosts were unreachable from the build environment, so no 12.1 HTML was read. Titles, headings and labels match the 10.9 and 11.x fixtures, and nothing points to a redesign. Element classes such as `td.breadcrumbs` and `td.titlecell` are unverified on 12.1. The classifier therefore takes the type from the pathname and `document.contentType`, and accepts a page with any one of three markers: a `.breadcrumbs` element, the title cell's text, or a Services Directory heading. No 12.x fixture variant was added. The `CONTRIBUTING.md` release check includes opening a 12.1 page to confirm the classes.
+**12.1 markup check (2026-10-20).** Source: a search engine's index of public 12.0, 12.1 and ArcGIS Online Services Directory pages, read on 2026-10-20: EPA's `edg.epa.gov`, `gispub.epa.gov` and `geodata.epa.gov` (12.1), Esri's `utility.arcgisonline.com` (12.1, including its Export Web Map Task and execute pages), `imagery.superiordcgis.org` (12.1), UNHCR's `gis.unhcr.org` and the Colorado School of Mines' `cgsarcimage.mines.edu` (12.0), and three ArcGIS Online orgs on `services`, `services1` and `services9.arcgis.com` (reporting 12), plus the summaries of Esri's 12.1 What's new pages for ArcGIS Enterprise and the REST API. Esri's hosts were unreachable from the build environment, so no 12.1 HTML was read: the index shows page titles and text, not tags or classes.
+- Titles, headings and labels match the 10.9 and 11.x fixtures (`Folder: /`, `Current Version:`, `Layer: X (ID: n)`, `Task: X`, `Display Field`), and no release note mentions a redesigned Services Directory. So no difference was found at the text level.
+- Element classes such as `td.breadcrumbs` and `td.titlecell`, and the `<b>Fields: </b>` list, are unverified on 12.1.
+- The 12.1 index shows the execute page's title as `Execute Task (Export Web Map Task)`, where the fixture has `Execute Task: Export Web Map Task`. That may be the fixture's mistake in every version.
+
+The classifier therefore takes the type from the pathname and `document.contentType`, and accepts a page with any one of three markers: a `.breadcrumbs` element, the title cell's text, or a Services Directory heading in the title or first `h2` (either execute-title form matches). No 12.x fixture variant was added. The `CONTRIBUTING.md` release check includes opening a 12.1 page to confirm the classes.
 ```
 
 - [ ] **Step 5: Run the tests**
@@ -2676,15 +2744,29 @@ EOF
 Append to `tests/e2e/pages.spec.js`. Add `FAKE_ORIGIN` to its import from `./fixtures.js`.
 
 ```js
-// The extension's own requests: those with f=json, in the query string or in a form body.
-const extensionRequests = (fakeServer) => fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json");
+// The extension's own requests: those with f=json, in the query string or in a form body. On a page
+// opened with ?f=json, the page's own load is such a request too, so pass the page to leave out that
+// one call. A second identical call would still be the extension's.
+const extensionRequests = (fakeServer, page) => {
+  const opened = page ? new URL(page.url()) : null;
+  let pageLoad = opened ? fakeServer.calls.find((call) => call.method === "GET"
+    && `${call.origin}${call.path}` === `${opened.origin}${opened.pathname}`
+    && new URLSearchParams(call.query).toString() === opened.searchParams.toString()) : null;
+  return fakeServer.calls.filter((call) => {
+    if (call === pageLoad) {
+      pageLoad = null;
+      return false;
+    }
+    return call.query.f === "json" || call.body.f === "json";
+  });
+};
 
 for (const path of ["?f=json", "/Parcels/MapServer?f=pjson", "/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task?f=pjson"]) {
   test(`a JSON view gets no requests, no gear and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
     await page.goto(`${REST_ROOT}${path}`);
     // Nothing on a JSON view signals that the scripts are done, so give them a moment.
     await page.waitForTimeout(1000);
-    expect(extensionRequests(fakeServer)).toEqual([]);
+    expect(extensionRequests(fakeServer, page)).toEqual([]);
     await expect(page.locator(".sdt-status-icon")).toHaveCount(0);
     expect(await page.evaluate(() => document.body.className)).not.toMatch(/sdt-/);
     expect(await actionEnabled(page)).toBe(false);
@@ -2710,6 +2792,8 @@ test("the Query Helper says when it can't load the fields (QRY-5)", async ({ pag
 
 In `known-bugs.spec.js`, change `knownBug("PRT-1", ...` to `test("PRT-1: a geoprocessing JSON result gets no requests and no dialog", ...`, keeping the body. The harness fails the test on the "Invalid form." dialog.
 
+In `action-popup.spec.js`, "the toolbar button is enabled on Services Directory pages and disabled elsewhere" also opens `${SERVICE_PAGE}?f=pjson` and expects the button to stay disabled there (open point 5).
+
 - [ ] **Step 2: Run the tests to see them fail**
 
 Run: `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npx playwright test tests/e2e/pages.spec.js tests/e2e/known-bugs.spec.js -g "JSON view|query string|can't load|PRT-1"`
@@ -2723,7 +2807,8 @@ Expected: FAIL. The JSON views and the TOK-6 page get a gear and an enabled butt
   ```js
     async load() {
       const result = await SDT.net.fetchJson(chrome.runtime.getURL("src/config/options.json"));
-      this.renderForm(SDT.net.legacyResponse(result) ?? {});
+      // The answer can arrive after an update has cut this script off.
+      SDT.guard.run(() => this.renderForm(SDT.net.legacyResponse(result) ?? {}));
     }
   ```
 
@@ -2784,14 +2869,19 @@ Delete the `ajax` copy, and replace the final `SDT.guard.run(...)` with:
     /** Loads the layer JSON, an automatic request, and builds the lists from it. */
     async load(jsonUrl, callback) {
       const result = await SDT.net.pageLimiter().fetchJson(jsonUrl, { params: { f: "json" }, token: SDT.auth.pageToken(location) });
-      const data = SDT.net.legacyResponse(result);
-      if (data === null) {
-        this.parentNode.appendChild(loadElement("P", {}, `Could not load the fields: ${result.error.message}`));
-        return;
-      }
-      this.buildRenderer(callback, data);
+      // The answer can arrive after an update has cut this script off.
+      SDT.guard.run(() => {
+        const data = SDT.net.legacyResponse(result);
+        if (data === null) {
+          this.parentNode.appendChild(loadElement("P", {}, `Could not load the fields: ${result.error.message}`));
+          return;
+        }
+        this.buildRenderer(callback, data);
+      });
     }
   ```
+
+  `load` and `status.js`'s `load` aren't awaited by a guarded caller, so the code after their `await` goes through `SDT.guard.run` itself.
 
 - `updateValues`: replace the `ajax(...)` call. A click starts it, so it doesn't use the limiter:
 
@@ -2865,6 +2955,11 @@ import { folderPage } from "../fixtures/pages.js";
 const ROOT_PAGE = /^\/arcgis\/rest\/services$/;
 const LIMIT_NOTE = "Not loaded: request limit reached (50)";
 
+// The manifest's patterns match path plus query, and none of them matches .../rest/services?token=,
+// so the content scripts don't run there until Phase 3 adds a ?-query variant (MAN-2). These tests
+// open the root with a trailing slash, which /rest/services/* matches.
+const withToken = (root, token) => `${root}/?token=${token}`;
+
 /** The services root, with extra list items (HTML) at the top of its services list. */
 const rootWith = (extraItems) => folderPage({
   folder: "",
@@ -2920,7 +3015,7 @@ test("a page opened with ?token= sends the token in each metadata request's POST
 
 test("on ArcGIS Online, links that carry the page's token get metadata, with the token only in the body (TOK-3)", async ({ page, fakeServer }) => {
   const token = ONLINE_TOKENS.jsmith;
-  await page.goto(`${ONLINE_REST_ROOT}?token=${token}`);
+  await page.goto(withToken(ONLINE_REST_ROOT, token));
   await expect(page.locator(".sdt-datablock")).toHaveCount(2);
   await expect(page.locator(".sdt-datablock", { hasText: "Fire hydrants for an invented city." })).toHaveCount(1);
   const metadata = fakeServer.calls.filter((call) => call.origin === ONLINE_ORIGIN && /\/FeatureServer$/.test(call.path));
@@ -2935,7 +3030,7 @@ test("on ArcGIS Online, links that carry the page's token get metadata, with the
 test("a request that carries the token stops at a 307, and nothing reaches the redirect's target (TOK-1)", async ({ page, fakeServer }) => {
   const token = SERVER_TOKENS.jsmith;
   fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer$/, () => ({ status: 307, headers: { location: `${ONLINE_ORIGIN}/landing` }, body: "" }));
-  await page.goto(`${REST_ROOT}?token=${token}`);
+  await page.goto(withToken(REST_ROOT, token));
   const row = page.locator("li").filter({ hasText: /^\s*Parcels \(MapServer\)/ });
   await expect(row).toContainText("redirect");
   const redirected = fakeServer.calls.filter((call) => call.path === "/arcgis/rest/services/Parcels/MapServer");
@@ -3081,7 +3176,7 @@ Expected: FAIL. The online link gets a request, all 60 bulk services are request
   ```
 
 - In `checkDomains`, replace the `params` string and the `ajax(url + params, (response) => {...})` call. Send `limiter.fetchJson(`${url}/query`, { params: { where: `${item.field} = ${value}`, returnGeometry: "false", returnCountOnly: "true", f: "json" }, token })`, make the function `async`, and handle the result the same way: a skipped row appends `skippedNote(result.error, "li")` to `tr` and carries on with the next code, and a `null` from `legacyResponse` returns, as today.
-- In `FieldSelector`, make the same changes as in `queryTest.js` (Task B7 Step 5): the constructor calls `this.load(jsonUrl, callback)` through `SDT.net.pageLimiter()`, and `updateValues` calls `SDT.net.fetchJson` with the page token. In `updateValues`, use `token` from the block and `limiter` only in `load`.
+- In `FieldSelector`, make the same changes as in `queryTest.js` (Task B7 Step 5): the constructor calls `this.load(jsonUrl, callback)`, which uses `limiter`, and `updateValues` calls `SDT.net.fetchJson` with the page token. Both use `token` and `limiter` from the block.
 - Replace `setActive` with the IE-free version from Task B7 Step 5.
 - Replace the body of the `SDT.guard.onLoad(() => { ... })` handler with:
 
@@ -3096,11 +3191,15 @@ Expected: FAIL. The online link gets a request, all 60 bulk services are request
     const url = SDT.page.baseUrl(location);
 
     // Links to services on this server, outside the breadcrumbs. Each href loses its token, f and
-    // fragment before the test (TOK-3), and links to other servers get no requests (SEC-5).
+    // fragment before the test (TOK-3), and links to other servers get no requests (SEC-5). The
+    // page's own JSON link (?f=pjson) then points at the page itself, so links to the page are left out.
+    const self = url.replace(/\/+$/, "");
     const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0);
     const urls = tags
       .map((tag, i) => ({ i, url: SDT.url.stripForFilter(tag.href) }))
-      .filter((item) => tags[item.i].parentNode.className !== "breadcrumbs"
+      .filter((item) => pageScope !== null
+        && tags[item.i].parentNode.className !== "breadcrumbs"
+        && item.url.replace(/\/+$/, "") !== self
         && SDT.auth.scopeOf(item.url) === pageScope
         && /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url));
 
@@ -3156,12 +3255,18 @@ Expected: FAIL. The online link gets a request, all 60 bulk services are request
   ```
 
   Metadata requests now run through the limiter, up to four at once, instead of one after another. A failed one shows its error in its own row and no longer stops the others.
+
+  Two filter conditions aren't obvious. Without `pageScope !== null`, a page with no scope (an encoded separator in its instance path) would pass links that also have no scope, such as links to other sites. And once `f` is stripped, every page's own "JSON" link (`?f=pjson`) points at the page, so a service or layer page would request its own metadata and show it under that link.
 - Move today's field-count block (from `ajax(url + "?f=json", (results) => {` to its closing `});`) into a new top-level function. Keep its body, and change only the request and the callback's first lines:
 
   ```js
   /** Counts values for each field and coded value of the layer at url. */
   const countFields = async (url) => {
     const results = SDT.net.legacyResponse(await limiter.fetchJson(url, { params: { f: "json" }, token }));
+    // The answer can arrive after an update has cut this script off.
+    if (!SDT.guard.alive()) {
+      return;
+    }
     if (results && results.fields && results.fields.length > 0) {
       // ...today's body, unchanged, from "const fieldHTML = getFieldList();" on...
     }
@@ -3205,7 +3310,7 @@ EOF
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `tests/e2e/requests.spec.js`:
+Append to `tests/e2e/requests.spec.js`. The second test passes today too: it guards the rewrite, and shows previews never send the page's token.
 
 ```js
 test("hovering a link to another server sends nothing", async ({ page, fakeServer }) => {
@@ -3215,6 +3320,25 @@ test("hovering a link to another server sends nothing", async ({ page, fakeServe
   await page.getByRole("link", { name: "Online parcels map", exact: true }).hover();
   await page.waitForTimeout(500);
   expect(fakeServer.calls.filter((call) => call.origin !== FAKE_ORIGIN)).toEqual([]);
+});
+
+test("hovering a link on this server shows its map preview, without the page's token", async ({ page, fakeServer }) => {
+  // A 1x1 transparent PNG, so the preview loads nothing from the network.
+  const image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=#preview";
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/\?f=json$/, () => json({ initialExtent: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 } }));
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/export\?/, () => json({ href: image }));
+  await page.goto(withToken(REST_ROOT, SERVER_TOKENS.jsmith));
+  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+  await page.getByRole("link", { name: "Parcels", exact: true }).first().hover();
+  await expect(page.locator("#mapimage")).toHaveAttribute("src", image);
+  const previews = fakeServer.calls.filter((call) => /\/Parcels\/MapServer\/(export)?$/.test(call.path));
+  expect(previews.map((call) => call.path)).toEqual(["/arcgis/rest/services/Parcels/MapServer/", "/arcgis/rest/services/Parcels/MapServer/export"]);
+  for (const call of previews) {
+    expect(call.method).toBe("GET");
+    expect(call.body).toEqual({});
+    expect(Object.keys(call.query)).not.toContain("token");
+  }
+  expect(previews[1].query).toEqual({ size: "300,200", format: "png32", f: "json", bbox: "0,0,10,10" });
 });
 ```
 
@@ -3269,7 +3393,7 @@ Expected: FAIL. The hover sends `GET https://services9.arcgis.com/.../Parcels/Ma
       throw new Error("Not a map or image service");
     }
     const result = await SDT.net.fetchJson(request[0], { params: request[1] });
-    if (result.error || !("href" in result.data)) {
+    if (result.error || !result.data || typeof result.data !== "object" || !("href" in result.data)) {
       throw new Error("No image in the answer");
     }
     IMAGE_LOOKUP[url] = result.data.href;
@@ -3300,13 +3424,18 @@ Expected: FAIL. The hover sends `GET https://services9.arcgis.com/.../Parcels/Ma
 
   ```js
     const pageScope = SDT.auth.scopeOf(location.href);
+    const self = SDT.page.baseUrl(location).replace(/\/+$/, "");
     const tags = Array.prototype.slice.call(document.getElementsByTagName("a"), 0);
     const urls = tags
       .map((tag, i) => ({ i, url: SDT.url.stripForFilter(tag.href) }))
-      .filter((item) => tags[item.i].parentNode.className !== "breadcrumbs"
+      .filter((item) => pageScope !== null
+        && tags[item.i].parentNode.className !== "breadcrumbs"
+        && item.url.replace(/\/+$/, "") !== self
         && SDT.auth.scopeOf(item.url) === pageScope
         && /(map|image)server\/?$/i.test(item.url));
   ```
+
+  The two extra conditions are the ones Task B8 explains.
 
   and `SDT.guard.listen(tags[item.i], "mouseover", () => hoverGetMap(item.url));`.
 - At the start of `onPageLoaded`:
@@ -3410,11 +3539,15 @@ test("scripts send requests through SDT.net, not fetch or XMLHttpRequest", async
   assert.deepEqual(await ruleIds("{\n  fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  fetch(\"/x\");\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  new XMLHttpRequest();\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  window.fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  new window.XMLHttpRequest();\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\");\n}\n", INJECT), []);
 });
 
 test("content scripts use await, not inline promise callbacks", async () => {
   assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\").then((r) => r);\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\").catch(function () {});\n}\n", INJECT), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("{\n  SDT.guard.run(async () => {\n    await SDT.net.fetchJson(\"/x\");\n  });\n}\n", INJECT), []);
 });
 ```
 
@@ -3472,18 +3605,23 @@ Expected: FAIL. `search.js` still has its `ajax` copy, the lint cases get `[]`, 
 The real popup's requests aren't routed, so the test sends them through the helper page. In `tests/e2e/action-popup.spec.js`, in "the real popup reads the tab's URL, which needs activeTab", replace the `popup.XMLHttpRequest = class {...};` block with:
 
 ```js
-    // The popup now uses fetch. Pass each request to the routed helper page. A signal or a body from
-    // the popup's realm can't cross over, so rebuild the body and leave the signal behind.
-    popup.fetch = (url, init = {}) => fetch(url, {
-      method: init.method,
-      body: init.body ? new URLSearchParams(String(init.body)) : undefined,
-      redirect: init.redirect,
-      credentials: init.credentials,
-      referrerPolicy: init.referrerPolicy
-    });
+    // The popup uses fetch (SDT.net.fetchJson). Pass each request to this routed page's fetch. A
+    // signal or a body from the popup's realm can't cross over, so rebuild the body as a string and
+    // leave the signal behind, and return a Response from the popup's realm.
+    popup.fetch = async (url, init = {}) => {
+      const response = await fetch(String(url), {
+        method: init.method,
+        body: init.body ? String(init.body) : undefined,
+        headers: init.body ? { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" } : undefined,
+        redirect: init.redirect,
+        credentials: init.credentials,
+        referrerPolicy: init.referrerPolicy
+      });
+      return new popup.Response(await response.text(), { status: response.status, statusText: response.statusText });
+    };
 ```
 
-This test runs only in CI. Read the change twice, and check the CI run.
+This test runs only in CI. Read the change twice, and check the CI run. Returning a `Response` built in the popup's realm keeps `fetchJson`'s `response.ok`, `response.type` and `text()` working there. The same stub, installed from the options page into the popup page opened as a tab, was checked locally with and without a token (a throwaway test, not committed).
 
 - [ ] **Step 5: Add the lint rules**
 
@@ -3493,6 +3631,7 @@ In `eslint.config.js`:
 const NETWORK = "Send requests with SDT.net.fetchJson (src/src/lib/net.js).";
 const NETWORK_SELECTORS = [
   { selector: "CallExpression[callee.name='fetch']", message: NETWORK },
+  { selector: "CallExpression[callee.property.name='fetch']", message: NETWORK },
   { selector: "NewExpression[callee.name='XMLHttpRequest']", message: NETWORK },
   { selector: "NewExpression[callee.property.name='XMLHttpRequest']", message: NETWORK }
 ];
@@ -3574,7 +3713,7 @@ In the `src/src/inject/**` instructions, add: "Each script checks SDT.page.class
 
 - [ ] **Step 5: Record the budget decisions in the spec**
 
-In the store-readiness spec, section 4.3, after the "Total" bullet, add:
+In the store-readiness spec, change the QRY-15 register row's phases to `4, 7`, with the resolution "Fix (`nothing`/`donothing` in 4, the rest in 7)" (open point 8). Then, in section 4.3, after the "Total" bullet, add:
 
 ```markdown
   Until Phase 5 adds Load more, each row left out shows the text "Not loaded: request limit reached (50)" (owner's decision on issue #44, 2026-10-20).
@@ -3583,7 +3722,7 @@ In the store-readiness spec, section 4.3, after the "Total" bullet, add:
 After the "Server pushback" bullet, add:
 
 ```markdown
-  Until Phase 5's status bar, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent.
+  Until Phase 5's status bar, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent (owner's decision on issue #44, 2026-10-20).
 ```
 
 - [ ] **Step 6: Final verification**
@@ -3622,7 +3761,6 @@ Open the PR against `main` with the title "Phase 2, part B: fetchJson, the reque
   - PRT-1: the classifier; its known-bug case is now a test. Alerts are Phase 8's.
   - QRY-3: the classifier skips other operations and JSON results.
   - QRY-5: `fetchJson` errors reach the Query Helper, which says so.
-  - QRY-15: list what this PR changed for it, and ask the owner (see "Open points").
   - TOK-3: `stripForFilter` in `inject.js` and `mapImages.js`.
   - POP-6: the popup forwards the tab's token.
   - ADV-1: the docs.
@@ -3665,3 +3803,21 @@ Points 4 and 9 stand as written unless review says otherwise. Points 6 and 7 nee
 7. **POST on 11.x, 12.x and ArcGIS Online.** POST with the token in the body is verified only on 10.9.1 (probe Q5). If a server refuses POST on resource endpoints, metadata on `?token=` pages fails there, while pages without a token aren't affected. Running the probe on an 11.x or 12.x server before PR B merges would settle it.
 8. **QRY-15's Phase 2 part** isn't spelled out in the register ("Auto-submit label, `nothing`/`donothing`, stale tab, submit buttons by index | 2, 4, 7"). This plan's Query Helper changes are the classifier gate and the `sdt-` class on its controls. The owner should say whether that is Phase 2's part, or what is.
 9. **Map previews outside the cap.** Hover requests skip the limiter, because a hover is a user action. Phase 6's request-count test then sets their limit (one export per hovered link).
+
+## Changes made while implementing Part B
+
+Part B followed the tasks above. Where the code showed the plan was wrong, the implementation and this plan were changed together. The code blocks above show the final code.
+
+- **B1:** `scopeOf` also refuses `%25` and `%5c` in the instance path (open point 3), and the token spec says so.
+- **B2:** `build` drops `token` from the base URL whatever the case of its name, and a param replaces a base parameter of the same name in any case. ArcGIS reads parameter names without regard to case. `SDT.url.dropParams` does both.
+- **B3:** Node unrefs `AbortSignal.timeout`'s timer, so the timeout unit test holds the event loop open with its own timer.
+- **B7:** `status.js` and `queryTest.js` call `load()` without awaiting it, so the code after its `await` runs through `SDT.guard.run`. The JSON-view test leaves out the page's own load: on a page opened with `?f=json`, that request has `f=json` too. The action-state test also checks a JSON view (open point 5).
+- **B8:**
+  - The link filter skips links to the page itself. Once `f` is stripped, every page's `?f=pjson` link points at the page, and the MapServer page test caught a third data block.
+  - The link filter needs `pageScope !== null`. Without it, a page with no scope would pass links that have no scope either.
+  - `countFields` checks `SDT.guard.alive()` after its `await`, before it calls `chrome.storage`.
+  - The manifest's patterns don't match `.../rest/services?token=`, because a pattern's path also covers the query string. The token and 307 tests open `.../rest/services/?token=` instead. Phase 3 adds the `?` variants (MAN-2).
+- **B9:** `mapImages.js` uses the same two filter conditions as B8. A second test shows that a preview on the page's own server still loads, and that its requests carry no token.
+- **B10:** The lint rule also catches `window.fetch(...)`. The `@cdp` stub returns a `Response` made in the popup's realm and sends the form body as a string with its content type.
+- **B11:** The docs got the text in Steps 1 to 4, extended to cover the changes above: the skipped-row notes, the self-link and scope filter rules, the `?token=` root gap until Phase 3, and the `@cdp` stub.
+- **Review:** error objects for requests that weren't sent (`url`, `destination`, `limit`, `stopped`, `aborted`) echoed the caller's URL as given, which could hold a `token`. They now pass it through `SDT.url.withoutToken`.

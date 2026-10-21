@@ -38,6 +38,10 @@
       "js": [
         "src/lib/dom.js",
         "src/lib/guard.js",
+        "src/lib/auth.js",
+        "src/lib/url.js",
+        "src/lib/net.js",
+        "src/lib/page.js",
         "src/inject/inject.js",
         "src/inject/status.js",
         "src/inject/mapImages.js"
@@ -51,6 +55,10 @@
       "js": [
         "src/lib/dom.js",
         "src/lib/guard.js",
+        "src/lib/auth.js",
+        "src/lib/url.js",
+        "src/lib/net.js",
+        "src/lib/page.js",
         "src/inject/queryTest.js"
       ]
     },
@@ -64,6 +72,10 @@
       "js": [
         "src/lib/dom.js",
         "src/lib/guard.js",
+        "src/lib/auth.js",
+        "src/lib/url.js",
+        "src/lib/net.js",
+        "src/lib/page.js",
         "src/inject/printTask.js"
       ]
     }

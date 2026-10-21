@@ -100,10 +100,12 @@ These are part of each phase's definition of done.
 Automatic requests are those the extension sends without a user action. They are limited as follows:
 
 - **Total:** at most 50 automatic requests per page view. Past that, the remaining rows show a "Load more" control.
+  Until Phase 5 adds Load more, each row left out shows the text "Not loaded: request limit reached (50)" (owner's decision on issue #44, 2026-10-20).
 - **Concurrency:** at most 4 requests in flight at once.
 - **Destination:** only the page's own origin and its `/rest/services` root. Links to other servers get no automatic requests.
 - **Cancellation:** pending requests are cancelled on `pagehide`.
 - **Server pushback:** an HTTP 429 or 503 stops automatic work on that page and shows a notice.
+  Until Phase 5's status bar, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent (owner's decision on issue #44, 2026-10-20).
 - **Token:** a `token` from the page URL goes only to the page's origin and REST root. It travels in a form POST body, and a request that carries it never follows a redirect.
 
 ### 4.4 Security rules
@@ -318,7 +320,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
   - takes the token as an argument and doesn't read `location`, so a later feature can supply a token from another source
   - attaches the token only to URLs inside the token scope: the origin plus the path up to and including the first whole-segment `/rest/services`, read from the parsed `URL.pathname` (TOK-2)
   - compares the host and the instance path in lower case, except an ArcGIS Online org ID, which is case-sensitive
-  - resolves `%2e%2e` segments before the check (`new URL()` resolves these; #44 settles what survives parsing), scopes `/restricted/rest/services` to `/restricted`, and leaves `/admin`, `/tokens` and `/manager` outside the scope
+  - resolves `%2e%2e` segments before the check (`new URL()` resolves these), gives no scope to an instance path that still contains `%2f`, `%2e`, `%25` or `%5c` after parsing (owner's decision on #44), scopes `/restricted/rest/services` to `/restricted`, and leaves `/admin`, `/tokens` and `/manager` outside the scope
   - strips `token`, `f` and the fragment from a link's href before the link filters in `inject.js` and `mapImages.js` test it (TOK-3)
 
 **`SDT` page classifier:**
@@ -327,6 +329,13 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - A page can still rewrite its path with `history.replaceState` before the scripts load. The extension's requests from that page go only to the page's origin, and section 3 treats the check as a correctness filter.
 - It relies on markers common to 10.9, 11.x, 12.x (12.1 is current) and ArcGIS Online. Check the 12.1 Services Directory markup before choosing the markers, and add a 12.x fixture variant if it differs.
 - On `jsonView` and `other` the scripts do nothing and show no spinner.
+
+**12.1 markup check (2026-10-20).** Source: a search engine's index of public 12.0, 12.1 and ArcGIS Online Services Directory pages, read on 2026-10-20: EPA's `edg.epa.gov`, `gispub.epa.gov` and `geodata.epa.gov` (12.1), Esri's `utility.arcgisonline.com` (12.1, including its Export Web Map Task and execute pages), `imagery.superiordcgis.org` (12.1), UNHCR's `gis.unhcr.org` and the Colorado School of Mines' `cgsarcimage.mines.edu` (12.0), and three ArcGIS Online orgs on `services`, `services1` and `services9.arcgis.com` (reporting 12), plus the summaries of Esri's 12.1 What's new pages for ArcGIS Enterprise and the REST API. Esri's hosts were unreachable from the build environment, so no 12.1 HTML was read: the index shows page titles and text, not tags or classes.
+- Titles, headings and labels match the 10.9 and 11.x fixtures (`Folder: /`, `Current Version:`, `Layer: X (ID: n)`, `Task: X`, `Display Field`), and no release note mentions a redesigned Services Directory. So no difference was found at the text level.
+- The owner checked the root page of an ArcGIS Enterprise 12.1 server in DevTools on 2026-10-20 ("Current Version: 12.1"). Its title and `h2` are `Folder: /`, and its element classes match the fixture's root page: `table.userTable`, `td.titlecell`, `table.navTable`, `td.breadcrumbs`, `td.apiref` and `div.rbody`. The other page types' classes and the `<b>Fields: </b>` list are unverified on 12.1.
+- The 12.1 index shows the execute page's title as `Execute Task (Export Web Map Task)`, where the fixture has `Execute Task: Export Web Map Task`. That may be the fixture's mistake in every version.
+
+The classifier therefore takes the type from the pathname and `document.contentType`, and accepts a page with any one of three markers: a `.breadcrumbs` element, the title cell's text, or a Services Directory heading in the title or first `h2` (either execute-title form matches). No 12.x fixture variant was added. The `CONTRIBUTING.md` release check includes opening a 12.1 page to confirm the classes.
 
 **Extension-context guard:** stops cleanly after an update cuts off old content scripts. Its `onLoad` replaces `inject.js`'s `readyState` polling (INJ-17, moved from Phase 5).
 
@@ -607,7 +616,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 - Upload only after the performance and bug review (#8) has run on the merged Phase 9 code and every Critical and High finding is fixed. That review measures against the section 4.3 request budget and adds `npm run perf`.
 
 **Acceptance:**
-- The POP-1, POP-2 and POP-3 `test.fail()` cases pass.
+- The POP-2 and POP-3 `test.fail()` cases pass. (POP-1's case passes from Phase 2.)
 - Crawl tests cover the cap, the visited set and a failed folder.
 - URL-trimming table tests pass.
 - A unit test checks that each popup switch's key exists in the schema and is a boolean.
@@ -696,7 +705,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 | QRY-12 | L | Stale distinct-values responses | 7 | Fix |
 | QRY-13 | L | "Up to 1000 examples" not enforced | 7 | Fix |
 | QRY-14 | L | Select Distinct preset incomplete | 7 | Fix |
-| QRY-15 | L | Auto-submit label, `nothing`/`donothing`, stale tab, submit buttons by index | 2, 4, 7 | Fix |
+| QRY-15 | L | Auto-submit label, `nothing`/`donothing`, stale tab, submit buttons by index | 4, 7 | Fix (`nothing`/`donothing` in 4, the rest in 7) |
 | QRY-16 | L | outStatistics text replaced when not valid JSON | 7 | Fix |
 | PRT-6 | L | New `<select>` has no label; focus not moved on "Other..." | 8 | Fix |
 | QRY-17 | L | `token` dropped (duplicate of INJ-16) | 2 | Fix |
@@ -729,7 +738,7 @@ Screenshots and the Privacy tab answers wait for Phase 9, when the UI is final.
 
 | ID | Sev | Summary | Phase | Resolution |
 |---|---|---|---|---|
-| POP-1 | H | One bad response ends the crawl and leaves the button stuck | 9 | Fix |
+| POP-1 | H | One bad response ends the crawl and leaves the button stuck | 2, 9 | Fix (the crawl skips a failed location in 2, so the `test.fail()` case passes there; counting and showing failures in 9) |
 | POP-2 | H | Invalid regex locks the button; regex is the default | 9 | Fix |
 | POP-3 | H | Number-only searches never match | 9 | Fix |
 | POP-4 | H | Crawl has no visited set, cap, timeout or limit | 9 | Fix; Stop button won't fix (closing the popup stops the crawl) |
