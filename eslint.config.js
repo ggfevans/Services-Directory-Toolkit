@@ -65,6 +65,20 @@ const STORAGE_SELECTORS = [{
   message: STORAGE_WRITE
 }];
 
+// Every setting's default lives once, in SDT.settings (store-readiness spec, Phase 4). An object
+// passed to chrome.storage.*.get is a second copy of some defaults, so only src/src/lib/ may pass one.
+const STORAGE_DEFAULTS = "Read settings with SDT.settings.read (src/src/lib/settings.js), which holds every default.";
+const STORAGE_DEFAULTS_SELECTORS = [{
+  selector: "CallExpression[callee.object.object.property.name='storage']:matches([callee.property.name='get'], [callee.property.value='get'])[arguments.0.type='ObjectExpression']",
+  message: STORAGE_DEFAULTS
+}];
+// Content scripts read settings only through SDT.settings, which validates what is stored.
+const STORAGE_READ = "Content scripts read settings with SDT.settings.read, which validates them.";
+const STORAGE_READ_SELECTORS = [{
+  selector: "CallExpression[callee.object.object.property.name='storage']:matches([callee.property.name='get'], [callee.property.value='get'])",
+  message: STORAGE_READ
+}];
+
 // Lib files are classic scripts that may run twice in one world (store-readiness spec, section 5).
 const LIB_FILE = "Lib files may run twice. Add to the SDT namespace instead of declaring top-level names.";
 const LIB_SELECTORS = [{ selector: "Program > :matches(VariableDeclaration, FunctionDeclaration, ClassDeclaration)", message: LIB_FILE }];
@@ -87,7 +101,7 @@ export default [
       }
     },
     rules: {
-      "no-restricted-syntax": ["error", ...BASE_SELECTORS]
+      "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...STORAGE_DEFAULTS_SELECTORS]
     }
   },
   {
@@ -96,14 +110,15 @@ export default [
     languageOptions: { globals: globals.serviceworker }
   },
   // A later entry replaces the rule's whole option list for the files it matches, so each of these
-  // repeats BASE_SELECTORS.
+  // repeats BASE_SELECTORS. Lib files may pass defaults to chrome.storage.*.get; content scripts may
+  // not read storage at all, which covers the defaults rule.
   {
     files: ["src/src/inject/**/*.js"],
-    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...GUARD_SELECTORS, ...NETWORK_SELECTORS, ...AWAIT_SELECTORS, ...STORAGE_SELECTORS] }
+    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...GUARD_SELECTORS, ...NETWORK_SELECTORS, ...AWAIT_SELECTORS, ...STORAGE_SELECTORS, ...STORAGE_READ_SELECTORS] }
   },
   {
     files: ["src/src/page_action/**/*.js"],
-    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...NETWORK_SELECTORS] }
+    rules: { "no-restricted-syntax": ["error", ...BASE_SELECTORS, ...BLOCK_SELECTORS, ...NETWORK_SELECTORS, ...STORAGE_DEFAULTS_SELECTORS] }
   },
   {
     files: ["src/src/lib/**/*.js"],
