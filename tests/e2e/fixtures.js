@@ -196,13 +196,15 @@ export const test = base.extend({
     await use(new URL(serviceWorker.url()).host);
   },
 
-  // Writes chrome.storage.sync items. Call it before opening the page that should read them.
+  // Writes items to chrome.storage.sync, or to chrome.storage.local when area is "local". Call it
+  // before opening the page that should read them.
   seedStorage: async ({ serviceWorker }, use) => {
-    await use((items) => inWorker(serviceWorker, (values) => chrome.storage.sync.set(values), items));
+    await use((items, area = "sync") => inWorker(serviceWorker, ({ values, name }) => chrome.storage[name].set(values), { values: items, name: area }));
   },
 
+  // Reads keys (null for everything) from chrome.storage.sync, or from chrome.storage.local.
   readStorage: async ({ serviceWorker }, use) => {
-    await use((keys = null) => inWorker(serviceWorker, (names) => chrome.storage.sync.get(names), keys));
+    await use((keys = null, area = "sync") => inWorker(serviceWorker, ({ names, name }) => chrome.storage[name].get(names), { names: keys, name: area }));
   },
 
   // Opens the popup page in a normal tab, with chrome.tabs.query answering as if target were the

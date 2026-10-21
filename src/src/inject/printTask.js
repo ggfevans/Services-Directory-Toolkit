@@ -101,9 +101,10 @@
    * Modifies the Geoprocessing form to make choices easier. 
    * @function updateGPForm
    * @param {object} response
+   * @param {string} webMap - the saved web map, or ""
    * @returns
    */
-  const updateGPForm = (response) => {
+  const updateGPForm = (response, webMap) => {
     if (!response.parameters) {
       alert("Could not find GP parameters for this task.");
       return;
@@ -116,14 +117,11 @@
       blanks = blanks.concat(Array.prototype.slice.call(myForm.getElementsByTagName("INPUT"), 0));
       // for each parameter in the geoprocessing JSON, swap in choices 
       response.parameters.forEach(swapInChoice.bind(this, blanks));
-      // look for Web_Map_as_JSON blank to fill in with default value.
+      // Fill an empty Web_Map_as_JSON box with the saved web map, if there is one. Phase 8 (#22)
+      // replaces this with an Insert saved web map button.
       blanks.some((blank) => {
-        if (blank.name === "Web_Map_as_JSON" && /^\s*$/.test(blank.value)) {
-          chrome.storage.sync.get({
-            defaultWebMapAsJSON: ""
-          }, SDT.guard.wrap((items) => {
-            blank.value = items.defaultWebMapAsJSON;
-          }));
+        if (blank.name === "Web_Map_as_JSON" && /^\s*$/.test(blank.value) && webMap) {
+          blank.value = webMap;
         }
         return blank.name === "Web_Map_as_JSON";
       });
@@ -142,8 +140,10 @@
     const result = await SDT.net.pageLimiter().fetchJson(url, { params: { f: "json" }, token: SDT.auth.pageToken(location) });
     const response = SDT.net.legacyResponse(result);
     if (response !== null) {
+      // The saved web map lives in storage.local (spec section 3).
+      const { defaultWebMapAsJSON } = await SDT.settings.read(["defaultWebMapAsJSON"]);
       // The extension may have been updated while the request was out.
-      SDT.guard.run(updateGPForm, response);
+      SDT.guard.run(updateGPForm, response, defaultWebMapAsJSON);
     }
   });
 }

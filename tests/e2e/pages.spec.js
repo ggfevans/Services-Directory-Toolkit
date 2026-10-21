@@ -75,7 +75,7 @@ test("a query page gets the Query Helper with SQL and quick-fill buttons", async
 
 test("a print task's execute page gets dropdowns and the saved web map", async ({ page, seedStorage }) => {
   const webMap = "{\"operationalLayers\":[]}";
-  await seedStorage({ defaultWebMapAsJSON: webMap });
+  await seedStorage({ defaultWebMapAsJSON: webMap }, "local");
   await page.goto(`${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute`);
   await expect(page.locator("select:has(option[value='PNG32'])")).toHaveCount(1);
   await expect(page.locator("select:has(option[value='A4 Portrait'])")).toHaveCount(1);

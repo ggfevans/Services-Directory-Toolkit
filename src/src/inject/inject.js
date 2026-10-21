@@ -807,6 +807,11 @@
   };
 
 
+  // Field and coded-value counts still run on every layer page. Phase 5 (#45) replaces them with a
+  // Count values button, so the settings schema has no keys for them (design review decision 2).
+  const COUNT_FIELD_VALUES = true;
+  const COUNT_DOMAIN_VALUES = true;
+
   const LOADING_METADATA_CSS = "sdt-loading-metadata";
   const LOADING_NULLS_CSS = "sdt-loading-nulls";
   const LOADING_DOMAINS_CSS = "sdt-loading-domains";
@@ -837,48 +842,43 @@
       const fieldHTML = getFieldList();
       const hasDomainTest = (field) => !!field && field.domain && field.domain.codedValues;
 
-      chrome.storage.sync.get({
-        autoFieldCounts: true,
-        autoDomainCounts: true
-      }, SDT.guard.wrap((items) => {
-        const domainFields = [];
-        let domainFieldHTML;
-        if (items.autoFieldCounts) {
-          notifyLoading(true, LOADING_NULLS_CSS);
-          checkForNulls(url, results.fields.slice(0), fieldHTML.slice(0));
-        }
-        if (items.autoDomainCounts && results.fields.some(hasDomainTest)) {
-          
-          domainFieldHTML = fieldHTML.slice(0);
+      const domainFields = [];
+      let domainFieldHTML;
+      if (COUNT_FIELD_VALUES) {
+        notifyLoading(true, LOADING_NULLS_CSS);
+        checkForNulls(url, results.fields.slice(0), fieldHTML.slice(0));
+      }
+      if (COUNT_DOMAIN_VALUES && results.fields.some(hasDomainTest)) {
 
-          results.fields.forEach((field, i) => {
-            if (hasDomainTest(field)) {
-              domainFields.push(field.domain.codedValues.map((item) => {
-                // future reference: check if Object.assign supported by Chrome
-                item.field = field.name;
-                item.type = field.type;
-                return item;
-              }));
-            } else {
-              domainFieldHTML[i] = null;
-            }
-          });
+        domainFieldHTML = fieldHTML.slice(0);
 
-          // filter out nulled out HTML nodes.
-          domainFieldHTML = domainFieldHTML.filter((item) => !!item );
-          notifyLoading(true, LOADING_DOMAINS_CSS);
-          checkDomains(url, domainFields, domainFieldHTML, null);
-        }
-      }));
+        results.fields.forEach((field, i) => {
+          if (hasDomainTest(field)) {
+            domainFields.push(field.domain.codedValues.map((item) => {
+              // future reference: check if Object.assign supported by Chrome
+              item.field = field.name;
+              item.type = field.type;
+              return item;
+            }));
+          } else {
+            domainFieldHTML[i] = null;
+          }
+        });
 
+        // filter out nulled out HTML nodes.
+        domainFieldHTML = domainFieldHTML.filter((item) => !!item );
+        notifyLoading(true, LOADING_DOMAINS_CSS);
+        checkDomains(url, domainFields, domainFieldHTML, null);
+      }
     }
   };
 
-  SDT.guard.onLoad(() => {
+  SDT.guard.onLoad(async () => {
     const type = SDT.page.classify(location, document);
     if (type === "jsonView" || type === "other") {
       return;
     }
+    const settings = await SDT.settings.read(["autoMetadata", "autoFeatureCounts"]);
     token = SDT.auth.pageToken(location);
     limiter = SDT.net.pageLimiter();
     const pageScope = SDT.auth.scopeOf(location.href);
@@ -928,19 +928,15 @@
       notifyLoading(false, LOADING_METADATA_CSS);
     };
 
-    chrome.storage.sync.get({
-      autoMetadata: true,
-      autoFeatureCounts: true
-    }, SDT.guard.wrap((items) => {
-      if (urls.length && items.autoMetadata) {
-        notifyLoading(true, LOADING_METADATA_CSS);
-        collectMetaData(urls, items.autoFeatureCounts);
-      }
-    }));
-
-    // Field and domain countson layer pages and ImageServer pages.
+    // Field and domain counts on layer pages and ImageServer pages. These requests go to the limiter
+    // before the metadata requests, as they did when the settings arrived in a storage callback.
     if (type === "layer" || (type === "service" && SDT.page.serviceType(location) === "ImageServer")) {
       countFields(url);
+    }
+
+    if (urls.length && settings.autoMetadata) {
+      notifyLoading(true, LOADING_METADATA_CSS);
+      collectMetaData(urls, settings.autoFeatureCounts);
     }
 
     if (type === "find") {
