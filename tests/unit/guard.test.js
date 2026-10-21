@@ -104,3 +104,31 @@ test("onLoad reads nothing once the context is gone", () => {
   cutOff();
   assert.doesNotThrow(() => guard.onLoad(() => assert.fail("ran")));
 });
+
+test("whenActive runs now on a page that isn't prerendering", () => {
+  const doc = Object.assign(eventTarget(), { prerendering: false });
+  const { guard } = setup({ document: doc });
+  let calls = 0;
+  guard.whenActive(() => { calls += 1; });
+  assert.equal(calls, 1);
+  assert.equal(doc.listeners.length, 0);
+});
+
+test("whenActive waits until a prerendered page is shown (BG-2)", () => {
+  const doc = Object.assign(eventTarget(), { prerendering: true });
+  const { guard } = setup({ document: doc });
+  let calls = 0;
+  guard.whenActive(() => { calls += 1; });
+  assert.equal(calls, 0);
+  assert.deepEqual(doc.listeners.map(({ type, options }) => [type, options.once]), [["prerenderingchange", true]]);
+  doc.prerendering = false;
+  doc.fire("prerenderingchange", doc);
+  assert.equal(calls, 1);
+});
+
+test("whenActive reads nothing once the context is gone", () => {
+  const trap = new Proxy({}, { get(_, key) { throw new Error(`read ${String(key)}`); } });
+  const { guard, cutOff } = setup({ document: trap });
+  cutOff();
+  assert.doesNotThrow(() => guard.whenActive(() => assert.fail("ran")));
+});

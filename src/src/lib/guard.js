@@ -71,5 +71,21 @@ SDT.guard = {
     } else {
       SDT.guard.listen(window, "load", fn, { once: true });
     }
+  },
+
+  /**
+   * Runs fn now, or, on a page that Chrome is prerendering, once the user is shown it. Chrome clears
+   * a tab's action state when the prerendered page takes over the tab, and the service worker
+   * ignores messages from a document that isn't active (BG-2).
+   */
+  whenActive(fn) {
+    if (!SDT.guard.alive()) {
+      return;
+    }
+    if (document.prerendering) {
+      SDT.guard.listen(document, "prerenderingchange", fn, { once: true });
+    } else {
+      SDT.guard.run(fn);
+    }
   }
 };
