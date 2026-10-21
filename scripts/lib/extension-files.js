@@ -28,6 +28,24 @@ const PAGE_SCRIPT = /<script\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
 // importScripts(...) in a classic service worker. Each argument must be a string literal.
 const IMPORT_SCRIPTS_CALL = /\bimportScripts\(([^)]*)\)/g;
 
+/** Splits an argument list at the commas outside quotes, so a comma inside a path stays in it. */
+const splitArguments = (argumentList) => {
+  const parts = [""];
+  let quote = null;
+  for (const char of argumentList) {
+    if (quote) {
+      quote = char === quote ? null : quote;
+    } else if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+    } else if (char === ",") {
+      parts.push("");
+      continue;
+    }
+    parts[parts.length - 1] += char;
+  }
+  return parts;
+};
+
 /**
  * The files a classic service worker loads with importScripts, in call order, as paths relative to
  * the extension root. A path resolves against the worker's own location, and a leading / against the
@@ -36,7 +54,7 @@ const IMPORT_SCRIPTS_CALL = /\bimportScripts\(([^)]*)\)/g;
 export const importedScripts = (worker, code, problems) => {
   const files = [];
   for (const [, argumentList] of code.matchAll(IMPORT_SCRIPTS_CALL)) {
-    for (const argument of argumentList.split(",").filter((part) => part.trim())) {
+    for (const argument of splitArguments(argumentList).filter((part) => part.trim())) {
       const literal = argument.match(STRING_LITERAL);
       if (!literal) {
         problems.push(`${worker}: importScripts needs string literals, got "${argument.trim()}"`);

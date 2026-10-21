@@ -157,6 +157,15 @@ test("reports an importScripts argument that is not a string literal", (t) => {
   assert.deepEqual(referencedFiles(dir).problems, ["bg/bg.js: importScripts needs string literals, got \"base + \"x.js\"\""]);
 });
 
+test("a comma inside an importScripts path is part of the path, not a separator", (t) => {
+  const files = withWorker("importScripts(\"../lib/sender.js\", \"../lib/a,b.js\");\nSDT.sender.accepts();\n");
+  files["lib/a,b.js"] = "globalThis.SDT ??= {};\n";
+  const dir = makeExtension(t, files);
+  const { files: referenced, problems } = referencedFiles(dir);
+  assert.deepEqual(problems, []);
+  assert.ok(referenced.includes("lib/a,b.js"), referenced.join("\n"));
+});
+
 test("reports a service worker that uses SDT before importing the file that defines it", (t) => {
   const dir = makeExtension(t, withWorker("importScripts(\"../lib/sender.js\");\nSDT.dom.loadElement(\"b\");\n"));
   assert.deepEqual(referencedFiles(dir).problems, ["background.service_worker: bg/bg.js uses SDT.dom before a script that defines it"]);

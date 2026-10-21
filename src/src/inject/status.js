@@ -45,7 +45,7 @@
     let seenBusy = false;
     // A live region announces changes, not what it holds when it appears, so the first message
     // also waits a second.
-    let lastWrite = Date.now();
+    let lastWrite = performance.now();
     let timer = null;
 
     const wanted = () => {
@@ -60,7 +60,7 @@
       const text = wanted();
       if (text !== message.textContent) {
         message.textContent = text;
-        lastWrite = Date.now();
+        lastWrite = performance.now();
       }
     };
 
@@ -72,7 +72,7 @@
       if (timer !== null || wanted() === message.textContent) {
         return;
       }
-      timer = setTimeout(SDT.guard.wrap(write), Math.max(0, lastWrite + THROTTLE_MS - Date.now()));
+      timer = setTimeout(SDT.guard.wrap(write), Math.max(0, lastWrite + THROTTLE_MS - performance.now()));
     };
 
     new MutationObserver(SDT.guard.wrap(update)).observe(body, { attributes: true, attributeFilter: ["class"], attributeOldValue: true });

@@ -6,7 +6,9 @@ importScripts("../lib/sender.js");
   // calls as a fallback) and enabled per tab by status.js, a content script that sends enableAction
   // only on Services Directory pages. Chrome clears per-tab action state on navigation, so leaving
   // the page disables the button again.
-  const disableByDefault = () => chrome.action.disable();
+  const disableByDefault = () => chrome.action.disable().catch((error) => {
+    console.debug("Services Directory Toolkit: could not disable the toolbar button", error);
+  });
 
   chrome.runtime.onInstalled.addListener(disableByDefault);
   chrome.runtime.onStartup.addListener(disableByDefault);

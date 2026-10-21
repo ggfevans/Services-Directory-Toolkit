@@ -215,6 +215,24 @@ In `scripts/lib/extension-files.js`, after the `PAGE_SCRIPT` constant, add:
 // importScripts(...) in a classic service worker. Each argument must be a string literal.
 const IMPORT_SCRIPTS_CALL = /\bimportScripts\(([^)]*)\)/g;
 
+/** Splits an argument list at the commas outside quotes, so a comma inside a path stays in it. */
+const splitArguments = (argumentList) => {
+  const parts = [""];
+  let quote = null;
+  for (const char of argumentList) {
+    if (quote) {
+      quote = char === quote ? null : quote;
+    } else if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+    } else if (char === ",") {
+      parts.push("");
+      continue;
+    }
+    parts[parts.length - 1] += char;
+  }
+  return parts;
+};
+
 /**
  * The files a classic service worker loads with importScripts, in call order, as paths relative to
  * the extension root. A path resolves against the worker's own location, and a leading / against the
@@ -223,7 +241,7 @@ const IMPORT_SCRIPTS_CALL = /\bimportScripts\(([^)]*)\)/g;
 export const importedScripts = (worker, code, problems) => {
   const files = [];
   for (const [, argumentList] of code.matchAll(IMPORT_SCRIPTS_CALL)) {
-    for (const argument of argumentList.split(",").filter((part) => part.trim())) {
+    for (const argument of splitArguments(argumentList).filter((part) => part.trim())) {
       const literal = argument.match(STRING_LITERAL);
       if (!literal) {
         problems.push(`${worker}: importScripts needs string literals, got "${argument.trim()}"`);
@@ -375,7 +393,7 @@ const ID = "sdt-test-extension";
 const WORKER = "src/bg/background.js";
 
 /** Loads the worker. Returns the listeners it added and the chrome.action calls it made. */
-const loadWorker = ({ enable = async () => {} } = {}) => {
+const loadWorker = ({ enable = async () => {}, disable = async () => {} } = {}) => {
   const listeners = {};
   const calls = [];
   const debug = [];
@@ -383,7 +401,10 @@ const loadWorker = ({ enable = async () => {} } = {}) => {
   const chrome = {
     runtime: { id: ID, onInstalled: event("onInstalled"), onStartup: event("onStartup"), onMessage: event("onMessage") },
     action: {
-      disable: async (...args) => { calls.push(["disable", ...args]); },
+      disable: (...args) => {
+        calls.push(["disable", ...args]);
+        return disable(...args);
+      },
       enable: (...args) => {
         calls.push(["enable", ...args]);
         return enable(...args);
@@ -423,6 +444,8 @@ test("enableAction from a sender the check rejects changes nothing (BG-2, BG-3)"
     { ...topFrame, frameId: 2 },
     { ...topFrame, documentLifecycle: "prerender" },
     { ...topFrame, documentLifecycle: "cached" },
+    { ...topFrame, documentLifecycle: "pending_deletion" },
+    { ...topFrame, documentLifecycle: undefined },
     { ...topFrame, tab: undefined }
   ]) {
     listeners.onMessage({ type: "enableAction" }, sender);
@@ -513,7 +536,9 @@ importScripts("../lib/sender.js");
   // calls as a fallback) and enabled per tab by status.js, a content script that sends enableAction
   // only on Services Directory pages. Chrome clears per-tab action state on navigation, so leaving
   // the page disables the button again.
-  const disableByDefault = () => chrome.action.disable();
+  const disableByDefault = () => chrome.action.disable().catch((error) => {
+    console.debug("Services Directory Toolkit: could not disable the toolbar button", error);
+  });
 
   chrome.runtime.onInstalled.addListener(disableByDefault);
   chrome.runtime.onStartup.addListener(disableByDefault);
@@ -899,7 +924,7 @@ Expected: FAIL. Every indicator test and the changed `pages.spec.js` and harness
     let seenBusy = false;
     // A live region announces changes, not what it holds when it appears, so the first message
     // also waits a second.
-    let lastWrite = Date.now();
+    let lastWrite = performance.now();
     let timer = null;
 
     const wanted = () => {
@@ -914,7 +939,7 @@ Expected: FAIL. Every indicator test and the changed `pages.spec.js` and harness
       const text = wanted();
       if (text !== message.textContent) {
         message.textContent = text;
-        lastWrite = Date.now();
+        lastWrite = performance.now();
       }
     };
 
@@ -926,7 +951,7 @@ Expected: FAIL. Every indicator test and the changed `pages.spec.js` and harness
       if (timer !== null || wanted() === message.textContent) {
         return;
       }
-      timer = setTimeout(SDT.guard.wrap(write), Math.max(0, lastWrite + THROTTLE_MS - Date.now()));
+      timer = setTimeout(SDT.guard.wrap(write), Math.max(0, lastWrite + THROTTLE_MS - performance.now()));
     };
 
     new MutationObserver(SDT.guard.wrap(update)).observe(body, { attributes: true, attributeFilter: ["class"], attributeOldValue: true });
@@ -2036,7 +2061,7 @@ End the body with `🤖 Generated with [Claude Code](https://claude.com/claude-c
 | The matrix covers the root and a folder opened with `?token=` (TR-22) | 7 | `url-patterns.spec.js` (both, plus the token-in-body test) and the unit matrix |
 | ESLint rejects `chrome.storage.*.set`, `remove` and `clear` under `src/src/inject/` | 6 | `tests/unit/lint-rules.test.js` |
 | The toolbar icon is a size dictionary with the Track S artwork | Deferred | #55 (Decision 5) |
-| axe-core passes on the gear and the popup, light and dark, plus a keyboard-only test | 8 | `tests/e2e/accessibility.spec.js` |
+| axe-core passes on the gear (now the status indicator) and the popup, light and dark, plus a keyboard-only test | 8 | `tests/e2e/accessibility.spec.js` |
 | `README.md`, `CONTRIBUTING.md`, `CLAUDE.md` and `.coderabbit.yaml` match the code | 10 | Review |
 
 ## Finding IDs
@@ -2095,3 +2120,10 @@ Every code block above went in as written. These instructions changed, and the s
 1. **Task 5, the `referencedFiles` JSDoc.** Adding ", and any web_accessible_resources key" to the end of the `problems` sentence, which already ended "and scripts that use an SDT namespace ...", gave it two "and"s. The sentence now lists the kinds of problem with one "and" before the last.
 2. **Task 10, `CLAUDE.md`'s settings section.** Its second "already disagree" bullet said "both settings UIs show a web map". With the in-page form gone there is one settings UI, so it now says "the options page shows a web map".
 3. **Task 10, `CLAUDE.md`'s popup paragraph.** It listed the popup's scripts as `search.js` and `url_shortener.js` ("Both read the active tab's URL"). It now also names `options_link.js`, which Task 8 adds, so the doc matches the code.
+
+### After review of PR #62
+
+4. **`disableByDefault` catches a rejected `chrome.action.disable()`** and logs it at debug level, as the enable handler does (CodeRabbit). `tests/unit/background.test.js` has a case for it, and its stub `disable` can reject.
+5. **`importedScripts` splits arguments only at commas outside quotes** (`splitArguments`), so a path holding a comma isn't reported as a non-literal (CodeAnt). `tests/unit/extension-files.test.js` has a case for it.
+6. **The indicator's throttle uses `performance.now()`**, which a system clock change can't move (CodeAnt).
+7. **The worker-level sender test also refuses `pending_deletion` and a missing `documentLifecycle`** (CodeAnt). `tests/unit/sender.test.js` already covered both.

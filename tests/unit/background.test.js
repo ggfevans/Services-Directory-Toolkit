@@ -10,7 +10,7 @@ const ID = "sdt-test-extension";
 const WORKER = "src/bg/background.js";
 
 /** Loads the worker. Returns the listeners it added and the chrome.action calls it made. */
-const loadWorker = ({ enable = async () => {} } = {}) => {
+const loadWorker = ({ enable = async () => {}, disable = async () => {} } = {}) => {
   const listeners = {};
   const calls = [];
   const debug = [];
@@ -18,7 +18,10 @@ const loadWorker = ({ enable = async () => {} } = {}) => {
   const chrome = {
     runtime: { id: ID, onInstalled: event("onInstalled"), onStartup: event("onStartup"), onMessage: event("onMessage") },
     action: {
-      disable: async (...args) => { calls.push(["disable", ...args]); },
+      disable: (...args) => {
+        calls.push(["disable", ...args]);
+        return disable(...args);
+      },
       enable: (...args) => {
         calls.push(["enable", ...args]);
         return enable(...args);
@@ -58,6 +61,8 @@ test("enableAction from a sender the check rejects changes nothing (BG-2, BG-3)"
     { ...topFrame, frameId: 2 },
     { ...topFrame, documentLifecycle: "prerender" },
     { ...topFrame, documentLifecycle: "cached" },
+    { ...topFrame, documentLifecycle: "pending_deletion" },
+    { ...topFrame, documentLifecycle: undefined },
     { ...topFrame, tab: undefined }
   ]) {
     listeners.onMessage({ type: "enableAction" }, sender);
@@ -83,6 +88,23 @@ test("a failed enable() is caught and logged at debug level, not left unhandled 
     assert.deepEqual(unhandled, []);
     assert.equal(debug.length, 1);
     assert.match(String(debug[0][1]), /No tab with id: 7/);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+});
+
+test("a failed disable() on install or start is caught and logged at debug level, not left unhandled", async () => {
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    const { listeners, debug } = loadWorker({ disable: async () => { throw new Error("disable failed"); } });
+    listeners.onInstalled();
+    listeners.onStartup();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+    assert.equal(debug.length, 2);
+    assert.match(String(debug[0][1]), /disable failed/);
   } finally {
     process.off("unhandledRejection", onUnhandled);
   }
