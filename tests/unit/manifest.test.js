@@ -45,3 +45,7 @@ test("the popup loads the lib files first, in the manifest's order", () => {
 test("the toolbar button starts disabled, before the service worker runs (BG-1)", () => {
   assert.equal(manifest.action.default_state, "disabled");
 });
+
+test("the manifest declares no web-accessible resources (MAN-1, SEC-4, SET-8)", () => {
+  assert.equal(Object.hasOwn(manifest, "web_accessible_resources"), false);
+});

@@ -161,3 +161,11 @@ test("reports a service worker that uses SDT before importing the file that defi
   const dir = makeExtension(t, withWorker("importScripts(\"../lib/sender.js\");\nSDT.dom.loadElement(\"b\");\n"));
   assert.deepEqual(referencedFiles(dir).problems, ["background.service_worker: bg/bg.js uses SDT.dom before a script that defines it"]);
 });
+
+test("reports web_accessible_resources, which let any page detect the extension (MAN-1)", (t) => {
+  const manifest = { ...MANIFEST, web_accessible_resources: [{ resources: ["img/*"], matches: ["*://*/*"] }] };
+  const dir = makeExtension(t, { ...FILES, "manifest.json": JSON.stringify(manifest) });
+  assert.deepEqual(referencedFiles(dir).problems, [
+    "web_accessible_resources: not allowed, because any page could load these files and detect the extension (MAN-1)"
+  ]);
+});

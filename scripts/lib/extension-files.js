@@ -19,8 +19,6 @@ const HTML_REFERENCE = /<(?:script|link|img)\b[^>]*?\b(?:src|href)\s*=\s*["']([^
 const GET_URL_CALL = /chrome\.runtime\.getURL\(([^)]*)\)/g;
 const STRING_LITERAL = /^\s*(["'`])([^"'`$]+)\1\s*$/;
 
-const globToRegExp = (glob) => new RegExp(`^${glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
-
 // SDT namespaces: a lib file defines one with "SDT.dom = {" (or ??=) at the start of a line, and a
 // script uses one wherever "SDT.dom" appears.
 const SDT_DEFINES = /^\s*SDT\.(\w+)\s*\?{0,2}=(?!=)/gm;
@@ -88,8 +86,8 @@ export const sdtLoadOrderProblems = (extDir, scripts, source) => {
  * - the _locales folder, if default_locale is set
  *
  * Returns { files, problems }. Both use paths relative to extDir. problems lists missing files,
- * files nothing references, getURL and importScripts calls that can't be checked, and scripts
- * that use an SDT namespace before a file that defines it.
+ * files nothing references, getURL and importScripts calls that can't be checked, scripts that
+ * use an SDT namespace before a file that defines it, and any web_accessible_resources key.
  */
 export const referencedFiles = (extDir) => {
   const manifest = JSON.parse(readFileSync(join(extDir, "manifest.json"), "utf8"));
@@ -145,14 +143,8 @@ export const referencedFiles = (extDir) => {
     problems.push(...sdtLoadOrderProblems(extDir, scripts, page));
   }
 
-  for (const entry of manifest.web_accessible_resources || []) {
-    for (const glob of entry.resources) {
-      const matches = existing.filter((file) => globToRegExp(glob).test(file));
-      if (!matches.length) {
-        problems.push(`web_accessible_resources pattern ${glob} matches no files`);
-      }
-      matches.forEach((file) => files.add(file));
-    }
+  if (Object.hasOwn(manifest, "web_accessible_resources")) {
+    problems.push("web_accessible_resources: not allowed, because any page could load these files and detect the extension (MAN-1)");
   }
 
   if (manifest.default_locale) {
