@@ -63,3 +63,9 @@ test("every content-script group loads the settings schema, and none loads the w
     }
   }
 });
+
+test("the options page loads the guard, the settings schema and the writer before its own script", () => {
+  const page = readFileSync(join(ROOT, "src/src/options/options.html"), "utf8");
+  const scripts = [...page.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(([, src]) => src);
+  assert.deepEqual(scripts, ["../lib/guard.js", "../lib/settings.js", "../lib/writer.js", "options.js"]);
+});
