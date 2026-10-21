@@ -61,8 +61,12 @@
       "matches": [
         "*://*/rest/services/*/query",
         "*://*/rest/services/*/query?*",
+        "*://*/rest/services/*/query/",
+        "*://*/rest/services/*/query/?*",
         "*://*/*/rest/services/*/query",
-        "*://*/*/rest/services/*/query?*"
+        "*://*/*/rest/services/*/query?*",
+        "*://*/*/rest/services/*/query/",
+        "*://*/*/rest/services/*/query/?*"
       ],
       "js": [
         "src/lib/dom.js",
@@ -79,12 +83,20 @@
       "matches": [
         "*://*/rest/services/*/GPServer/*/execute",
         "*://*/rest/services/*/GPServer/*/execute?*",
+        "*://*/rest/services/*/GPServer/*/execute/",
+        "*://*/rest/services/*/GPServer/*/execute/?*",
         "*://*/rest/services/*/GPServer/*/submitJob",
         "*://*/rest/services/*/GPServer/*/submitJob?*",
+        "*://*/rest/services/*/GPServer/*/submitJob/",
+        "*://*/rest/services/*/GPServer/*/submitJob/?*",
         "*://*/*/rest/services/*/GPServer/*/execute",
         "*://*/*/rest/services/*/GPServer/*/execute?*",
+        "*://*/*/rest/services/*/GPServer/*/execute/",
+        "*://*/*/rest/services/*/GPServer/*/execute/?*",
         "*://*/*/rest/services/*/GPServer/*/submitJob",
-        "*://*/*/rest/services/*/GPServer/*/submitJob?*"
+        "*://*/*/rest/services/*/GPServer/*/submitJob?*",
+        "*://*/*/rest/services/*/GPServer/*/submitJob/",
+        "*://*/*/rest/services/*/GPServer/*/submitJob/?*"
       ],
       "js": [
         "src/lib/dom.js",

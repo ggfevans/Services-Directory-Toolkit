@@ -2127,3 +2127,7 @@ Every code block above went in as written. These instructions changed, and the s
 5. **`importedScripts` splits arguments only at commas outside quotes** (`splitArguments`), so a path holding a comma isn't reported as a non-literal (CodeAnt). `tests/unit/extension-files.test.js` has a case for it.
 6. **The indicator's throttle uses `performance.now()`**, which a system clock change can't move (CodeAnt).
 7. **The worker-level sender test also refuses `pending_deletion` and a missing `documentLifecycle`** (CodeAnt). `tests/unit/sender.test.js` already covered both.
+
+### After merge
+
+8. **Trailing slashes** (owner's decision, 2026-10-21, after PR #62 merged). The exact patterns in Decision 1 dropped `.../query/` and `GPServer/*/execute/` or `submitJob/`, which `main`'s broader patterns had matched. A follow-up PR adds a `/` and a `/?*` form of each Query Helper and GP pattern, 8 and 16 patterns in all. `tests/unit/url-patterns.test.js` now expects the helpers on those URLs, `tests/unit/page.test.js` pins that the classifier calls them `query` and `gpTask`, and `tests/e2e/url-patterns.spec.js` opens a query form and an execute form with a trailing slash. `query/extra` still gets only the main group.
