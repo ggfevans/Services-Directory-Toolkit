@@ -22,6 +22,8 @@ ul {
   padding: 0;
 }
 button {
+  /* At least 24 px tall, the WCAG 2.2 target size. */
+  min-height: 24px;
   border: 0;
   background-color: #336;
   font-weight: bold;
@@ -54,4 +56,13 @@ li > a {
 fieldset {
   padding: 0 5px;
   border-radius: 6px;
+}
+/* The Options link: a 24 px tall target (WCAG 2.2 target size). */
+#optionsfoot {
+  margin: 0.5em 0 0;
+}
+#optionslink {
+  display: inline-block;
+  min-height: 24px;
+  line-height: 24px;
 }

@@ -122,3 +122,59 @@ test("reports an extension page that loads a script using SDT before the lib", (
   }));
   assert.deepEqual(referencedFiles(dir).problems, ["popup/popup.html: popup/popup.js uses SDT.dom before a script that defines it"]);
 });
+
+// A service worker at bg/bg.js, in place of bg.js, that loads lib/sender.js with importScripts, as
+// src/src/bg/background.js does.
+const withWorker = (worker) => {
+  const files = withLib({ "lib/sender.js": "globalThis.SDT ??= {};\nSDT.sender = {};\n" });
+  delete files["bg.js"];
+  return {
+    ...files,
+    "manifest.json": JSON.stringify({ ...JSON.parse(manifestWith(["lib/dom.js", "lib/net.js", "cs.js"])), background: { service_worker: "bg/bg.js" } }),
+    "bg/bg.js": worker
+  };
+};
+
+test("files the service worker loads with importScripts count as referenced", (t) => {
+  const dir = makeExtension(t, withWorker("importScripts(\"../lib/sender.js\");\n{\n  SDT.sender.accepts();\n}\n"));
+  const { files, problems } = referencedFiles(dir);
+  assert.deepEqual(problems, []);
+  assert.ok(files.includes("lib/sender.js"), files.join("\n"));
+});
+
+test("an importScripts path that starts with / resolves against the extension root", (t) => {
+  const dir = makeExtension(t, withWorker("importScripts(\"/lib/sender.js\");\nSDT.sender.accepts();\n"));
+  assert.deepEqual(referencedFiles(dir).problems, []);
+});
+
+test("reports a file the service worker imports that does not exist", (t) => {
+  const dir = makeExtension(t, withWorker("importScripts(\"../lib/sender.js\", \"../lib/missing.js\");\nSDT.sender.accepts();\n"));
+  assert.deepEqual(referencedFiles(dir).problems, ["bg/bg.js references missing file lib/missing.js"]);
+});
+
+test("reports an importScripts argument that is not a string literal", (t) => {
+  const dir = makeExtension(t, withWorker("importScripts(\"../lib/sender.js\", base + \"x.js\");\nSDT.sender.accepts();\n"));
+  assert.deepEqual(referencedFiles(dir).problems, ["bg/bg.js: importScripts needs string literals, got \"base + \"x.js\"\""]);
+});
+
+test("a comma inside an importScripts path is part of the path, not a separator", (t) => {
+  const files = withWorker("importScripts(\"../lib/sender.js\", \"../lib/a,b.js\");\nSDT.sender.accepts();\n");
+  files["lib/a,b.js"] = "globalThis.SDT ??= {};\n";
+  const dir = makeExtension(t, files);
+  const { files: referenced, problems } = referencedFiles(dir);
+  assert.deepEqual(problems, []);
+  assert.ok(referenced.includes("lib/a,b.js"), referenced.join("\n"));
+});
+
+test("reports a service worker that uses SDT before importing the file that defines it", (t) => {
+  const dir = makeExtension(t, withWorker("importScripts(\"../lib/sender.js\");\nSDT.dom.loadElement(\"b\");\n"));
+  assert.deepEqual(referencedFiles(dir).problems, ["background.service_worker: bg/bg.js uses SDT.dom before a script that defines it"]);
+});
+
+test("reports web_accessible_resources, which let any page detect the extension (MAN-1)", (t) => {
+  const manifest = { ...MANIFEST, web_accessible_resources: [{ resources: ["img/*"], matches: ["*://*/*"] }] };
+  const dir = makeExtension(t, { ...FILES, "manifest.json": JSON.stringify(manifest) });
+  assert.deepEqual(referencedFiles(dir).problems, [
+    "web_accessible_resources: not allowed, because any page could load these files and detect the extension (MAN-1)"
+  ]);
+});

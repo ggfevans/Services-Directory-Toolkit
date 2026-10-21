@@ -129,3 +129,13 @@ test("the popup search sends the tab's token in the POST body, never in a URL (P
     expect(call.body.token).toBe(token);
   }
 });
+
+test("the popup's Options link opens the options page", async ({ openPopupTab, context, extensionId }) => {
+  const popup = await openPopupTab(SERVICE_PAGE);
+  const link = popup.getByRole("link", { name: "Options" });
+  await expect(link).toHaveAttribute("href", "../options/options.html");
+  const opened = context.waitForEvent("page");
+  await link.click();
+  await expect(await opened).toHaveURL(`chrome-extension://${extensionId}/src/options/options.html`);
+  expect(popup.url()).toBe(`chrome-extension://${extensionId}/src/page_action/page_action.html`);
+});

@@ -18,11 +18,9 @@ const field = (page, name) => page
 // A nested list item whose text matches, such as "Features with values: 3 Response time: 12ms".
 const item = (parent, pattern) => parent.locator("li", { hasText: pattern });
 
-test("the services root shows the gear, spatial reference badges and service details", async ({ page }) => {
+test("the services root shows the status indicator, spatial reference badges and service details", async ({ page }) => {
   await page.goto(REST_ROOT);
-  const gear = page.locator("img.sdt-status-icon");
-  await expect(gear).toBeVisible();
-  await expect.poll(() => gear.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
   await expect(page.getByRole("link", { name: "3857" })).toHaveCount(2);
   await expect(page.getByRole("link", { name: "4326" })).toHaveCount(1);
   await expect(page.locator(".sdt-datablock")).toHaveCount(3);
@@ -70,8 +68,7 @@ test("a layer page counts values for every field and every coded value", async (
 
 test("a query page gets the Query Helper with SQL and quick-fill buttons", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0/query`);
-  // status.js also lists "Query Helper" as a legend in the in-page settings form, so scope to the panel.
-  await expect(page.locator(".sdt-sidepanel").getByText("Query Helper", { exact: true })).toBeVisible();
+  await expect(page.getByText("Query Helper", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "LIKE", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Select All *", exact: true })).toBeVisible();
 });
@@ -111,12 +108,12 @@ const extensionRequests = (fakeServer, page) => {
 };
 
 for (const path of ["?f=json", "/Parcels/MapServer?f=pjson", "/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task?f=pjson"]) {
-  test(`a JSON view gets no requests, no gear and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
+  test(`a JSON view gets no requests, no indicator and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
     await page.goto(`${REST_ROOT}${path}`);
     // Nothing on a JSON view signals that the scripts are done, so give them a moment.
     await page.waitForTimeout(1000);
     expect(extensionRequests(fakeServer, page)).toEqual([]);
-    await expect(page.locator(".sdt-status-icon")).toHaveCount(0);
+    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toHaveCount(0);
     expect(await page.evaluate(() => document.body.className)).not.toMatch(/sdt-/);
     expect(await actionEnabled(page)).toBe(false);
   });
@@ -126,7 +123,7 @@ test("a page whose REST path is only in its query string gets nothing (TOK-6)", 
   // The content-script patterns match this URL, because they also test the query string.
   await page.goto(`${FAKE_ORIGIN}/other/page?x=/arcgis/rest/services/`);
   await page.waitForTimeout(1000);
-  await expect(page.locator(".sdt-status-icon")).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toHaveCount(0);
   expect(await actionEnabled(page)).toBe(false);
   expect(extensionRequests(fakeServer)).toEqual([]);
 });

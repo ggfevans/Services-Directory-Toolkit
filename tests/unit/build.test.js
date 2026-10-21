@@ -94,3 +94,30 @@ test("the build fails when a content-script group loads a script that uses SDT b
   assert.match(result.stderr, /content_scripts\[\d\]: src\/inject\/inject\.js uses SDT\.dom before a script that defines it/);
   assert.strictEqual(existsSync(join(tmp, "build", `${pkg.name}-${pkg.version}.zip`)), false);
 });
+
+test("the zipped manifest declares no web-accessible resources (MAN-1, SEC-4, SET-8)", () => {
+  const zipped = JSON.parse(execFileSync("unzip", ["-p", ZIP, "manifest.json"], { encoding: "utf8" }));
+  assert.equal(Object.hasOwn(zipped, "web_accessible_resources"), false);
+});
+
+test("the build fails when the manifest declares web-accessible resources", (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), "sdt-build-"));
+  t.after(() => rmSync(tmp, { recursive: true }));
+
+  cpSync(join(ROOT, "scripts"), join(tmp, "scripts"), { recursive: true });
+  cpSync(join(ROOT, "src"), join(tmp, "src"), { recursive: true });
+  cpSync(join(ROOT, "package.json"), join(tmp, "package.json"));
+  cpSync(join(ROOT, "LICENSE"), join(tmp, "LICENSE"));
+  symlinkSync(join(ROOT, "node_modules"), join(tmp, "node_modules"), "dir");
+
+  const manifestPath = join(tmp, "src", "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.web_accessible_resources = [{ resources: ["icons/*"], matches: ["*://*/*"] }];
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  const result = spawnSync(process.execPath, [join(tmp, "scripts/build.js")], { cwd: tmpdir(), encoding: "utf8" });
+
+  assert.strictEqual(result.status, 1);
+  assert.match(result.stderr, /web_accessible_resources: not allowed/);
+  assert.strictEqual(existsSync(join(tmp, "build", `${pkg.name}-${pkg.version}.zip`)), false);
+});

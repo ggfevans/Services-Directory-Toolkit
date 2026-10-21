@@ -13,7 +13,7 @@
 // - PORTAL_ORIGIN answers ArcGIS Online's community/self, the one request the toolkit sends outside
 //   a token's scope.
 import { catalog as defaultCatalog, ONLINE_ORG, ONLINE_TOKENS, onlineCatalog as defaultOnlineCatalog, SERVER_TOKENS, users } from "./catalog.js";
-import { createPages, loginPage, messagePage, otherPage, REST_PATH, tokensPage } from "./pages.js";
+import { createPages, docsPage, loginPage, messagePage, otherPage, REST_PATH, tokensPage } from "./pages.js";
 
 export { ONLINE_ORG, ONLINE_TOKENS, SERVER_TOKENS };
 
@@ -156,13 +156,22 @@ const serviceResource = (catalog, service, rest, params, format, problems, pages
   if (first === "find" && second === undefined && service.type === "MapServer") {
     return format === "html" ? html(pages.findPage(service, params)) : json({ results: [] }, format);
   }
+  if (first === "queryDomains" && second === undefined && service.type === "FeatureServer") {
+    const domains = (service.layers || []).flatMap((layer) => layer.fields.map((field) => field.domain).filter(Boolean));
+    return format === "html" ? html(pages.queryDomainsPage(service, params)) : json({ domains }, format);
+  }
   const task = (service.tasks || []).find((t) => t.name === first);
   if (task) {
     if (second === undefined) {
       return format === "html" ? null : json(task.json, format);
     }
-    if (second === "execute") {
-      return format === "html" ? html(pages.executePage(service, task, params)) : json({ results: [], messages: [] }, format);
+    // A synchronous task has an execute form, and an asynchronous one a submitJob form.
+    const operation = task.json.executionType === "esriExecutionTypeAsynchronous" ? "submitJob" : "execute";
+    if (second === operation) {
+      if (format === "html") {
+        return html(pages.executePage(service, task, params, operation));
+      }
+      return json(operation === "execute" ? { results: [], messages: [] } : { jobId: "j0123456789", jobStatus: "esriJobSubmitted" }, format);
     }
     return null;
   }
@@ -234,6 +243,9 @@ const route = (catalog, url, params, cookies, problems) => {
   }
   if (pathname === "/other/page") {
     return html(otherPage());
+  }
+  if (pathname === "/docs/rest/services/overview") {
+    return html(docsPage());
   }
   if (pathname === "/arcgis/rest/login") {
     return html(loginPage());

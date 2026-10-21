@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Services Directory Toolkit",
-  "short_name": "Services Directory Toolkit",
+  "short_name": "SD Toolkit",
   "version": "2.0.0",
   "minimum_chrome_version": "120",
   "description": "Diagnostic and query tools for ArcGIS Server REST Services Directory pages. Based on Map Services Enhanced by Ken Doman.",
@@ -18,12 +18,17 @@
   "action": {
     "default_icon": "icons/icon19.png",
     "default_title": "Services Directory Toolkit",
+    "default_state": "disabled",
     "default_popup": "src/page_action/page_action.html"
   },
   "content_scripts": [
     {
       "matches": [
+        "*://*/rest/services",
+        "*://*/rest/services?*",
+        "*://*/rest/services/*",
         "*://*/*/rest/services",
+        "*://*/*/rest/services?*",
         "*://*/*/rest/services/*"
       ],
       "css": [
@@ -32,7 +37,11 @@
     },
     {
       "matches": [
+        "*://*/rest/services",
+        "*://*/rest/services?*",
+        "*://*/rest/services/*",
         "*://*/*/rest/services",
+        "*://*/*/rest/services?*",
         "*://*/*/rest/services/*"
       ],
       "js": [
@@ -49,8 +58,10 @@
     },
     {
       "matches": [
+        "*://*/rest/services/*/query",
+        "*://*/rest/services/*/query?*",
         "*://*/*/rest/services/*/query",
-        "*://*/*/rest/services/*/query*"
+        "*://*/*/rest/services/*/query?*"
       ],
       "js": [
         "src/lib/dom.js",
@@ -64,10 +75,14 @@
     },
     {
       "matches": [
-        "*://*/*/rest/services*execute",
-        "*://*/*/rest/services*execute*",
-        "*://*/*/rest/services*submitjob",
-        "*://*/*/rest/services*submitjob*"
+        "*://*/rest/services/*/GPServer/*/execute",
+        "*://*/rest/services/*/GPServer/*/execute?*",
+        "*://*/rest/services/*/GPServer/*/submitJob",
+        "*://*/rest/services/*/GPServer/*/submitJob?*",
+        "*://*/*/rest/services/*/GPServer/*/execute",
+        "*://*/*/rest/services/*/GPServer/*/execute?*",
+        "*://*/*/rest/services/*/GPServer/*/submitJob",
+        "*://*/*/rest/services/*/GPServer/*/submitJob?*"
       ],
       "js": [
         "src/lib/dom.js",
@@ -83,16 +98,5 @@
   "permissions": [
     "activeTab",
     "storage"
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "src/images/*",
-        "src/config/*"
-      ],
-      "matches": [
-        "*://*/*"
-      ]
-    }
   ]
 }

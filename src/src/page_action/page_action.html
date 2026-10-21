@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 	<title>Services Directory Toolkit</title>
 	<link rel="stylesheet" type="text/css" href="page_action.css" />
@@ -11,7 +11,7 @@
 	<div id="urlshortcontent">
 		<fieldset>
 			<legend>URL Shortener</legend>
-			<input style="width: 100%;" type="text" id="urlshortblank" />
+			<input style="width: 100%;" type="text" id="urlshortblank" aria-label="Shortened URL" />
 			<button id="copybtn">Copy to Clipboard</button>
 		</fieldset>
 	</div>
@@ -27,6 +27,7 @@
 			<ul id="searchresults"></ul>
 		</fieldset>
 	</form>
+	<p id="optionsfoot"><a id="optionslink" href="../options/options.html">Options</a></p>
 	<script src="../lib/dom.js"></script>
 	<script src="../lib/guard.js"></script>
 	<script src="../lib/auth.js"></script>
@@ -35,5 +36,6 @@
 	<script src="../lib/page.js"></script>
 	<script src="search.js"></script>
 	<script src="url_shortener.js"></script>
+	<script src="options_link.js"></script>
 </body>
 </html>

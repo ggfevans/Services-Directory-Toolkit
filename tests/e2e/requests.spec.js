@@ -8,10 +8,8 @@ import { folderPage } from "../fixtures/pages.js";
 const ROOT_PAGE = /^\/arcgis\/rest\/services$/;
 const LIMIT_NOTE = "Not loaded: request limit reached (50)";
 
-// The manifest's patterns match path plus query, and none of them matches .../rest/services?token=,
-// so the content scripts don't run there until Phase 3 adds a ?-query variant (MAN-2). These tests
-// open the root with a trailing slash, which /rest/services/* matches.
-const withToken = (root, token) => `${root}/?token=${token}`;
+// The services root opened with ?token= (TR-22).
+const withToken = (root, token) => `${root}?token=${token}`;
 
 /** The services root, with extra list items (HTML) at the top of its services list. */
 const rootWith = (extraItems) => folderPage({

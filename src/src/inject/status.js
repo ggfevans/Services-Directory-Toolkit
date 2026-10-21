@@ -1,261 +1,83 @@
 {
-  const { loadElement } = SDT.dom;
+  // The status indicator: a small ring in the bottom-right corner that spins while the extension's
+  // scripts are busy, and a status line for screen readers. Busy means a class starting sdt-loading-
+  // is on <body>, which inject.js, mapImages.js and queryTest.js set. The indicator takes no clicks
+  // and has no click handler (SEC-1, ADV-3); settings live on the options page. Phase 5 moves it
+  // into the page as the status bar (#14).
+  const SVG = "http://www.w3.org/2000/svg";
+  const NAME = "Services Directory Toolkit";
+  const LOADING = "SD Toolkit: loading";
+  const DONE = "SD Toolkit: finished loading";
+  // The status line changes at most once a second, so screen readers aren't flooded (WCAG 4.1.3).
+  const THROTTLE_MS = 1000;
+  const isBusy = (className) => /(?:^|\s)sdt-loading-/.test(className ?? "");
 
   // Enable the toolbar button for this tab (see src/src/bg/background.js). Re-send when the page is
-  // restored from the back/forward cache, because Chrome clears the tab's action state on navigation.
+  // restored from the back/forward cache, or shown after prerendering, because Chrome clears the
+  // tab's action state on navigation, and the service worker ignores messages from documents that
+  // aren't active.
   const enableAction = () => chrome.runtime.sendMessage({ type: "enableAction" });
 
-  // The gear and its in-page form. Phase 3 removes the form.
-  let statusNode = null;
-
-  const openOptionsForm = () => {
-    if (!statusNode) {
-      return;
+  /** An SVG element with the given attributes. */
+  const svgElement = (tag, attributes) => {
+    const element = document.createElementNS(SVG, tag);
+    for (const [name, value] of Object.entries(attributes)) {
+      element.setAttribute(name, String(value));
     }
-    statusNode.classList.add("sdt-open");
+    return element;
   };
 
-  const closeOptionsForm = () => {
-    if (!statusNode) {
-      return;
-    }
-    statusNode.classList.remove("sdt-open");
+  /** The ring: an opaque disc, a grey track and a teal arc from twelve o'clock (see inject.css). */
+  const ring = () => {
+    const svg = svgElement("svg", { "class": "sdt-indicator__ring", role: "img", "aria-label": NAME, viewBox: "0 0 24 24", width: 24, height: 24 });
+    svg.appendChild(svgElement("circle", { "class": "sdt-indicator__disc", cx: 12, cy: 12, r: 11.5 }));
+    svg.appendChild(svgElement("circle", { "class": "sdt-indicator__track", cx: 12, cy: 12, r: 7, "stroke-width": 3 }));
+    svg.appendChild(svgElement("circle", { "class": "sdt-indicator__arc", cx: 12, cy: 12, r: 7, "stroke-width": 3, transform: "rotate(-90 12 12)" }));
+    return svg;
   };
 
-  class OptionsForm {
-    
-    constructor(parentNode) {
-      let df = document.createDocumentFragment();
-      this.domNode = loadElement("DIV");
-      df.appendChild(this.domNode);
+  /**
+   * Keeps the indicator in step with <body>'s busy classes. The spin follows at once; the status
+   * line is empty until the first busy state, then says loading or finished, changing at most once a
+   * second. A change inside the wait is applied when the wait ends, so the last state always lands.
+   */
+  const watch = (body, indicator, message) => {
+    let seenBusy = false;
+    // A live region announces changes, not what it holds when it appears, so the first message
+    // also waits a second.
+    let lastWrite = performance.now();
+    let timer = null;
 
-      this.load();
+    const wanted = () => {
+      if (isBusy(body.className)) {
+        return LOADING;
+      }
+      return seenBusy ? DONE : "";
+    };
 
-      parentNode.appendChild(df);
-    }
+    const write = () => {
+      timer = null;
+      const text = wanted();
+      if (text !== message.textContent) {
+        message.textContent = text;
+        lastWrite = performance.now();
+      }
+    };
 
-    async load() {
-      const result = await SDT.net.fetchJson(chrome.runtime.getURL("src/config/options.json"));
-      // The answer can arrive after an update has cut this script off.
-      SDT.guard.run(() => this.renderForm(SDT.net.legacyResponse(result) ?? {}));
-    }
-
-    renderForm(config) {
-      if (!config.tools) {
-        alert("unable to load tools.");
+    const update = (records = []) => {
+      const busy = isBusy(body.className);
+      // A busy class added and removed between two callbacks still counts as busy.
+      seenBusy ||= busy || records.some((record) => isBusy(record.oldValue));
+      indicator.classList.toggle("sdt-indicator--busy", busy);
+      if (timer !== null || wanted() === message.textContent) {
         return;
       }
+      timer = setTimeout(SDT.guard.wrap(write), Math.max(0, lastWrite + THROTTLE_MS - performance.now()));
+    };
 
-      config.tools.forEach(tool => this.renderItem(tool));
-
-      const saveContainer = loadElement("div");
-
-      const saveButton = loadElement("BUTTON", {
-        type: "submit"
-      }, "Save");
-
-      // assign save function
-      SDT.guard.listen(saveButton, "click", evt => {
-        if (evt && evt.stopPropagation) {
-          evt.stopPropagation();
-        }
-        this.saveForm(evt);
-      }, {capture: true});
-
-      saveContainer.appendChild(saveButton);
-
-      const cancelButton = loadElement("BUTTON", {
-        type: "reset"
-      }, "Cancel");
-      
-      SDT.guard.listen(cancelButton, "click", evt => {
-        if (evt && evt.stopPropagation) {
-          evt.stopPropagation();
-        }
-        this.cancelForm();
-      });
-      
-      saveContainer.appendChild(cancelButton);
-
-      this.domNode.parentNode.appendChild(saveContainer);
-    }
-
-    renderItem(group) {
-      const fieldSet = loadElement("FIELDSET");
-      const legend = loadElement("LEGEND", {}, group.name);
-      fieldSet.appendChild(legend);
-
-      if (group.items) {
-        let lastItemIndex = group.items.length - 1;
-        group.items.forEach((item, index) => this.renderQuestion(item, fieldSet, index === lastItemIndex));
-      }
-
-      this.domNode.appendChild(fieldSet);
-    }
-
-    renderQuestion(questionItem, parentNode, isLastItem) {
-      let storageItem = {};
-      storageItem[questionItem.property] = questionItem.default || "";
-
-      switch (questionItem.type) {
-        case "checkbox": {
-          let checkboxLabel = loadElement("LABEL");
-          let checkbox = loadElement("INPUT", {
-            type: "checkbox",
-            name: questionItem.property
-          });
-          checkboxLabel.appendChild(checkbox);
-          let textspan = loadElement("SPAN", {}, questionItem.label);
-          checkboxLabel.appendChild(textspan);
-          parentNode.appendChild(checkboxLabel);
-          if (!isLastItem) {
-            parentNode.appendChild(loadElement("BR"));
-          }
-          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
-            checkbox.checked = items[questionItem.property];
-          }));
-          break;
-        }
-        case "radio": {
-          let checkboxQuestion = loadElement("SPAN",  {}, questionItem.label);
-          parentNode.appendChild(checkboxQuestion);
-
-          const radioBoxes = questionItem.options.map(option => {
-            parentNode.appendChild(loadElement("BR"));
-            let checkboxLabel = loadElement("LABEL");
-            let checkbox = loadElement("INPUT", {
-              type: "radio",
-              value: option.value,
-              name: questionItem.property
-            });
-            let textspan = loadElement("SPAN", {}, option.label);
-            checkboxLabel.appendChild(checkbox);
-            checkboxLabel.appendChild(textspan);
-            parentNode.appendChild(checkboxLabel);
-            return checkbox;
-          });
-  
-          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
-            radioBoxes.forEach(radioBox => {
-            //console.log(radioBox.value, items[questionItem.property], questionItem.property);
-              if (radioBox.value === items[questionItem.property]) {
-                radioBox.checked = true;
-              }
-            });
-          }));
-          break;
-        }
-        case "textarea": {
-          let label = loadElement("P", {}, questionItem.label);
-          let blank = loadElement("TEXTAREA", {
-            rows: "3",
-            name: questionItem.property,
-            placeholder: questionItem.placeholder || ""
-          });
-          parentNode.appendChild(label);
-          parentNode.appendChild(blank);
-          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
-            blank.value = items[questionItem.property];
-          }));
-          break;
-        }
-        case "number": {
-          let label = loadElement("P", {}, questionItem.label);
-          let blank = loadElement("INPUT", {
-            type: "number",
-            name: questionItem.property,
-            placeholder: questionItem.placeholder || ""
-          });
-          parentNode.appendChild(label);
-          parentNode.appendChild(blank);
-          if (!isLastItem) {
-            parentNode.appendChild(loadElement("BR"));
-          }
-          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
-            blank.value = items[questionItem.property];
-          }));
-          break;
-        }
-        default: {
-          let label = loadElement("P", {}, questionItem.label);
-          let blank = loadElement("INPUT", {
-            type: "text",
-            name: questionItem.property,
-            placeholder: questionItem.placeholder || ""
-          });
-          parentNode.appendChild(label);
-          parentNode.appendChild(blank);
-          if (!isLastItem) {
-            parentNode.appendChild(loadElement("BR"));
-          }
-          chrome.storage.sync.get(storageItem, SDT.guard.wrap(items => {
-            blank.value = items[questionItem.property];
-          }));
-        }      
-      }
-    }
-    cancelForm() {
-      // todo: reset form values
-      closeOptionsForm(); 
-    }
-    saveForm(evt) {
-      if (!evt || !evt.target) {
-        return;
-      }
-
-      let dataToSave = {},
-        saveBtn = evt.target,
-        checkboxes = this.domNode.querySelectorAll("input[type=checkbox]"),
-        radioboxes = this.domNode.querySelectorAll("input[type=radio]:checked"),
-        textboxes = this.domNode.querySelectorAll("input[type=text]"),
-        textareas = this.domNode.querySelectorAll("textarea"),
-        numberboxes = this.domNode.querySelectorAll("input[type=number]");
-        // save properties
-
-      if (checkboxes && checkboxes.length) {
-        [].forEach.call(checkboxes, checkbox => {
-          dataToSave[checkbox.name] = checkbox.checked;
-        });
-      }
-
-      if (radioboxes && radioboxes.length) {
-        [].forEach.call(radioboxes, checkbox => {
-          dataToSave[checkbox.name] = checkbox.value;
-        });
-      }
-
-      if (textboxes && textboxes.length) {
-        [].forEach.call(textboxes, blank => {
-          dataToSave[blank.name] = blank.value;
-        });
-      }
-
-      if (textareas && textareas.length) {
-        [].forEach.call(textareas, blank => {
-          dataToSave[blank.name] = blank.value;
-        });
-      }
-
-      if (numberboxes && numberboxes.length) {
-        [].forEach.call(numberboxes, blank => {
-          dataToSave[blank.name] = parseInt(blank.value, 10);
-        });
-      }
-
-      saveBtn.textContent = "Saving options.";
-      saveBtn.setAttribute("disabled", "disabled");
-
-      chrome.storage.sync.set(dataToSave, SDT.guard.wrap(() => {
-        
-        setTimeout(SDT.guard.wrap(() => {
-          saveBtn.textContent = "Save";
-          saveBtn.removeAttribute("disabled");
-          // close form
-          closeOptionsForm();
-        }));
-      }));
-    }
-  }
+    new MutationObserver(SDT.guard.wrap(update)).observe(body, { attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+    update();
+  };
 
   const start = () => {
     // JSON views and pages that aren't Services Directory pages get nothing, not even the button.
@@ -263,17 +85,16 @@
     if (type === "jsonView" || type === "other") {
       return;
     }
-    enableAction();
+    SDT.guard.whenActive(enableAction);
     SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
-    statusNode = loadElement("DIV", { "class": "sdt-status" });
-    const settingsImg = loadElement("IMG", { "class": "sdt-status-icon" });
-    statusNode.appendChild(settingsImg);
-    settingsImg.src = chrome.runtime.getURL("src/images/settings.svg");
-    SDT.guard.listen(statusNode, "click", openOptionsForm);
-    new OptionsForm(statusNode);
-    document.body.appendChild(statusNode);
+
+    const indicator = SDT.dom.loadElement("div", { "class": "sdt-indicator" });
+    const message = SDT.dom.loadElement("span", { "class": "sdt-visually-hidden", role: "status" });
+    indicator.appendChild(ring());
+    indicator.appendChild(message);
+    document.body.appendChild(indicator);
+    watch(document.body, indicator, message);
   };
 
   SDT.guard.run(start);
-  
 }

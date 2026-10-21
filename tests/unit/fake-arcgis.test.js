@@ -33,7 +33,11 @@ test("the root lists its folders and top-level services", () => {
 
 test("a folder lists its services with folder-qualified names", () => {
   const folder = getJson(createFakeArcGIS(), "/arcgis/rest/services/Transport?f=json");
-  assert.deepEqual(folder, { currentVersion: 11.3, folders: [], services: [{ name: "Transport/Roads", type: "MapServer" }] });
+  assert.deepEqual(folder, {
+    currentVersion: 11.3,
+    folders: [],
+    services: [{ name: "Transport/Roads", type: "MapServer" }, { name: "Transport/RouteTools", type: "GPServer" }]
+  });
 });
 
 test("service and layer JSON leave out fixture-only data", () => {
@@ -99,6 +103,31 @@ test("the print task and its execute page", () => {
   const page = get(server, "/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute").body;
   assert.match(page, /<textarea id="Web_Map_as_JSON" name="Web_Map_as_JSON"/);
   assert.equal(page.includes("name=\"Output_File\""), false);
+});
+
+test("an asynchronous task has a submitJob page and no execute page", () => {
+  const server = createFakeArcGIS();
+  const task = "/arcgis/rest/services/Transport/RouteTools/GPServer/Summarize%20Routes";
+  const page = get(server, `${task}/submitJob`).body;
+  assert.match(page, /<title>Submit Job: Summarize Routes<\/title>/);
+  assert.match(page, /action="\/arcgis\/rest\/services\/Transport\/RouteTools\/GPServer\/Summarize%20Routes\/submitJob"/);
+  assert.match(page, /<textarea id="Distance_Units" name="Distance_Units"/);
+  assert.equal(getJson(server, `${task}/submitJob?f=json`).jobStatus, "esriJobSubmitted");
+  assert.equal(get(server, `${task}/execute`), null);
+  // And a synchronous task has no submitJob page.
+  assert.equal(get(server, "/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/submitJob"), null);
+});
+
+test("a FeatureServer's queryDomains page and JSON", () => {
+  const server = createFakeArcGIS();
+  const page = get(server, "/arcgis/rest/services/Parcels/FeatureServer/queryDomains").body;
+  assert.match(page, /<h2>Query Domains: Parcels \(FeatureServer\)<\/h2>/);
+  assert.deepEqual(getJson(server, "/arcgis/rest/services/Parcels/FeatureServer/queryDomains?f=json").domains.map((domain) => domain.name), ["LandUse"]);
+  assert.equal(get(server, "/arcgis/rest/services/Parcels/MapServer/queryDomains"), null);
+});
+
+test("a page outside ArcGIS Server whose path holds /rest/services", () => {
+  assert.match(get(createFakeArcGIS(), "/docs/rest/services/overview").body, /not a Services Directory page/);
 });
 
 test("static assets, the non-REST page and unknown paths", () => {
@@ -269,7 +298,7 @@ test("a bad token gets 498 on JSON requests and the login page on HTML ones", ()
 
 test("the instance name matches in any case", () => {
   const folder = getJson(createFakeArcGIS(), "/ArcGIS/rest/services/Transport?f=json");
-  assert.deepEqual(folder.services, [{ name: "Transport/Roads", type: "MapServer" }]);
+  assert.deepEqual(folder.services.map((service) => service.name), ["Transport/Roads", "Transport/RouteTools"]);
 });
 
 test("the token page is served at tokenServicesUrl", () => {

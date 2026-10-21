@@ -139,6 +139,23 @@ const exportWebMapTask = {
   }
 };
 
+// An asynchronous task: its form is submitJob, not execute.
+const summarizeRoutesTask = {
+  name: "Summarize Routes",
+  json: {
+    name: "SummarizeRoutes",
+    displayName: "Summarize Routes",
+    description: "Summarises an invented route.",
+    category: "",
+    executionType: "esriExecutionTypeAsynchronous",
+    parameters: [
+      { name: "Route_Name", dataType: "GPString", displayName: "Route Name", direction: "esriGPParameterDirectionInput", defaultValue: "", parameterType: "esriGPParameterTypeRequired" },
+      { name: "Distance_Units", dataType: "GPString", displayName: "Distance Units", direction: "esriGPParameterDirectionInput", defaultValue: "Kilometers", parameterType: "esriGPParameterTypeOptional", choiceList: ["Meters", "Kilometers", "Miles"] },
+      { name: "Summary", dataType: "GPString", displayName: "Summary", direction: "esriGPParameterDirectionOutput", defaultValue: null, parameterType: "esriGPParameterTypeRequired" }
+    ]
+  }
+};
+
 const documentInfo = (title, keywords) => ({ Title: title, Author: "", Comments: "", Subject: "", Category: "", Keywords: keywords });
 
 // The invented server's users. onlineRole is the role ArcGIS Online's community/self reports.
@@ -242,6 +259,17 @@ export const catalog = {
         capabilities: "Map,Query",
         supportedQueryFormats: "JSON",
         maxRecordCount: 2000
+      }
+    },
+    {
+      name: "Transport/RouteTools",
+      type: "GPServer",
+      tasks: [summarizeRoutesTask],
+      info: {
+        serviceDescription: "Summarises invented routes.",
+        executionType: "esriExecutionTypeAsynchronous",
+        resultMapServerName: "",
+        maximumRecords: 1000
       }
     },
     {

@@ -60,9 +60,7 @@
     margin: 0.5em 0 0.8em;
 }
 
-.sdt-sidepanel button,
-.sdt-status button[type=submit],
-.sdt-status button[type=button] {
+.sdt-sidepanel button {
     font-size: 1.0em;
     border: 0;
     border-radius: 4px;
@@ -70,16 +68,6 @@
     margin:  0.2em 0.4em 0.2em 0;
     background-color: #336;
     color: White;
-    font-weight: bold;
-    z-index: inherit;
-}
-
-.sdt-status button[type=reset] {
-    font-size: 1.0em;
-    border: 0;
-    border-radius: 4px;
-    padding: 0.4em 0.8em;
-    margin:  0.2em 0.4em 0.2em 0;
     font-weight: bold;
     z-index: inherit;
 }
@@ -117,102 +105,79 @@ textarea.sdt-hidden {
     margin-top: -1px;
 }
 
-.sdt-status {
+/* The status indicator (status.js). It never takes clicks, so the page under it stays usable. */
+.sdt-indicator {
     position: fixed;
-    bottom: 22px;
-    right: 22px;
-    width: 50px;
-    height: 50px;
-    z-index: 999;
-    transition-property: width, height;
-    transition-duration: 0.8s;
-    overflow: hidden;
-    font-size: 0.75em;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2147483000;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    line-height: 0;
+    pointer-events: none;
 }
 
-.sdt-status.sdt-open {
-    width: 30%;
-    height: 50%;
-    max-height: 50%;
-    background: white;
-    border: 1px solid #336;
-    border-radius: 6px;
-    /* overflow: auto; */
-}
-
-.sdt-status div {
-    display: none;
-    overflow-x: hidden;
-    overflow-y: hidden;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-}
-
-.sdt-status.sdt-open div {
-    display:block;
-    overflow-y: auto;
-    bottom: 30px;
-}
-
-.sdt-status.sdt-open div:last-child {
-    bottom: 0;
-    top: auto;
-}
-
-@-webkit-keyframes sdt-spin { 
-    100% { 
-        -webkit-transform: rotate(360deg); 
-    } 
-}
-@keyframes sdt-spin { 
-    100% { 
-        -webkit-transform: rotate(360deg); 
-        transform:rotate(360deg); 
-    } 
-}
-
-/* Changing how loading is handled to remove messages between pages */
-.sdt-loading-metadata .sdt-status-icon,
-.sdt-loading-querytest .sdt-status-icon,
-.sdt-loading-mapimage .sdt-status-icon,
-.sdt-loading-domains .sdt-status-icon,
-.sdt-loading-nulls .sdt-status-icon,
-.sdt-loading-something .sdt-status-icon {
-    -webkit-animation:sdt-spin 1s linear infinite;
-    animation:sdt-spin 1s linear infinite;
-}
-
-.sdt-status textarea,
-.sdt-status input[type=text],
-.sdt-status input[type=number] {
-    width: 100%;
-}
-
-.sdt-status-icon {
-    float: right;
-    opacity: 0.5;
-    transition-property: opacity, height;
-    transition-duration: 0.5s;
-    width: 50px;
-    height: 50px;
-}
-
-.sdt-status-icon:hover {
-    opacity: 1.0;
-}
-
-.sdt-open .sdt-status-icon {
-    opacity: 0;
-    height: 0;
-}
-
-.sdt-status fieldset {
-    display: none;
-}
-.sdt-status.sdt-open fieldset {
+.sdt-indicator__ring {
     display: block;
+    width: 24px;
+    height: 24px;
 }
+
+/* An opaque disc, so the ring keeps its contrast on any page. */
+.sdt-indicator__disc {
+    fill: #ffffff;
+    stroke: #7b8786;
+    stroke-width: 1;
+}
+
+.sdt-indicator__track {
+    fill: none;
+    stroke: #d3dad9;
+}
+
+/* A quarter of the ring: the circumference is about 44. */
+.sdt-indicator__arc {
+    fill: none;
+    stroke: #0d6b66;
+    stroke-dasharray: 11 33;
+}
+
+.sdt-indicator--busy .sdt-indicator__ring {
+    animation: sdt-spin 1s linear infinite;
+}
+
+@keyframes sdt-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* No spin under reduced motion: busy shows two opposite quarters instead. */
+@media (prefers-reduced-motion: reduce) {
+    .sdt-indicator--busy .sdt-indicator__ring {
+        animation: none;
+    }
+
+    .sdt-indicator--busy .sdt-indicator__arc {
+        stroke-dasharray: 11 11;
+    }
+}
+
+/* Read by screen readers, not shown. */
+.sdt-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .sdt-map-image-panel {
     position:fixed;
     top:0;

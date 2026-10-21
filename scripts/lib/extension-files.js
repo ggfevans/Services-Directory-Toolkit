@@ -19,13 +19,55 @@ const HTML_REFERENCE = /<(?:script|link|img)\b[^>]*?\b(?:src|href)\s*=\s*["']([^
 const GET_URL_CALL = /chrome\.runtime\.getURL\(([^)]*)\)/g;
 const STRING_LITERAL = /^\s*(["'`])([^"'`$]+)\1\s*$/;
 
-const globToRegExp = (glob) => new RegExp(`^${glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
-
 // SDT namespaces: a lib file defines one with "SDT.dom = {" (or ??=) at the start of a line, and a
 // script uses one wherever "SDT.dom" appears.
 const SDT_DEFINES = /^\s*SDT\.(\w+)\s*\?{0,2}=(?!=)/gm;
 const SDT_USES = /\bSDT\.(\w+)/g;
 const PAGE_SCRIPT = /<script\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
+
+// importScripts(...) in a classic service worker. Each argument must be a string literal.
+const IMPORT_SCRIPTS_CALL = /\bimportScripts\(([^)]*)\)/g;
+
+/** Splits an argument list at the commas outside quotes, so a comma inside a path stays in it. */
+const splitArguments = (argumentList) => {
+  const parts = [""];
+  let quote = null;
+  for (const char of argumentList) {
+    if (quote) {
+      quote = char === quote ? null : quote;
+    } else if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+    } else if (char === ",") {
+      parts.push("");
+      continue;
+    }
+    parts[parts.length - 1] += char;
+  }
+  return parts;
+};
+
+/**
+ * The files a classic service worker loads with importScripts, in call order, as paths relative to
+ * the extension root. A path resolves against the worker's own location, and a leading / against the
+ * root. Adds a problem for an argument that isn't a string literal.
+ */
+export const importedScripts = (worker, code, problems) => {
+  const files = [];
+  for (const [, argumentList] of code.matchAll(IMPORT_SCRIPTS_CALL)) {
+    for (const argument of splitArguments(argumentList).filter((part) => part.trim())) {
+      const literal = argument.match(STRING_LITERAL);
+      if (!literal) {
+        problems.push(`${worker}: importScripts needs string literals, got "${argument.trim()}"`);
+        continue;
+      }
+      const reference = literal[2];
+      files.push(reference.startsWith("/")
+        ? posix.normalize(reference.slice(1))
+        : posix.normalize(posix.join(posix.dirname(worker), reference)));
+    }
+  }
+  return files;
+};
 
 /**
  * Checks one load order: a content-script group's js list, or an extension page's scripts. Every SDT
@@ -57,12 +99,13 @@ export const sdtLoadOrderProblems = (extDir, scripts, source) => {
  * Finds the files an extension uses:
  * - everything the manifest names
  * - everything its HTML pages load
+ * - every file the service worker loads with importScripts
  * - every path passed to chrome.runtime.getURL as a string literal
  * - the _locales folder, if default_locale is set
  *
  * Returns { files, problems }. Both use paths relative to extDir. problems lists missing files,
- * files nothing references, getURL calls that can't be checked, and scripts that use an SDT
- * namespace before a file that defines it.
+ * files nothing references, getURL and importScripts calls that can't be checked, scripts that
+ * use an SDT namespace before a file that defines it, and any web_accessible_resources key.
  */
 export const referencedFiles = (extDir) => {
   const manifest = JSON.parse(readFileSync(join(extDir, "manifest.json"), "utf8"));
@@ -85,8 +128,14 @@ export const referencedFiles = (extDir) => {
   } else {
     Object.values(defaultIcon || {}).forEach((path) => add(path, "action.default_icon"));
   }
-  if (manifest.background?.service_worker) {
-    add(manifest.background.service_worker, "background.service_worker");
+  const worker = manifest.background?.service_worker && posix.normalize(manifest.background.service_worker.replace(/^\//, ""));
+  if (worker) {
+    add(worker, "background.service_worker");
+    if (existing.includes(worker)) {
+      const imports = importedScripts(worker, readFileSync(join(extDir, worker), "utf8"), problems);
+      imports.forEach((path) => add(path, worker));
+      problems.push(...sdtLoadOrderProblems(extDir, [...imports, worker], "background.service_worker"));
+    }
   }
   for (const [index, script] of (manifest.content_scripts || []).entries()) {
     [...(script.js || []), ...(script.css || [])].forEach((path) => add(path, "content_scripts"));
@@ -112,14 +161,8 @@ export const referencedFiles = (extDir) => {
     problems.push(...sdtLoadOrderProblems(extDir, scripts, page));
   }
 
-  for (const entry of manifest.web_accessible_resources || []) {
-    for (const glob of entry.resources) {
-      const matches = existing.filter((file) => globToRegExp(glob).test(file));
-      if (!matches.length) {
-        problems.push(`web_accessible_resources pattern ${glob} matches no files`);
-      }
-      matches.forEach((file) => files.add(file));
-    }
+  if (Object.hasOwn(manifest, "web_accessible_resources")) {
+    problems.push("web_accessible_resources: not allowed, because any page could load these files and detect the extension (MAN-1)");
   }
 
   if (manifest.default_locale) {

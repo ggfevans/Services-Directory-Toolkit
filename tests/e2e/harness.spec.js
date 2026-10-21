@@ -2,14 +2,20 @@ import { test, expect, FAKE_ORIGIN, html, ONLINE_REST_ROOT, ONLINE_TOKENS, PORTA
 
 test("the extension loads with no manifest errors", async ({ page, extensionId }) => {
   await page.goto("chrome://extensions");
+  // Chrome records manifest warnings, such as an unrecognised key, only in Developer mode, so turn it
+  // on and reload the extension first. Unknown keys inside a known key, such as action, aren't reported.
+  await page.evaluate(() => new Promise((resolve) => chrome.developerPrivate.updateProfileConfiguration({ inDeveloperMode: true }, resolve)));
+  await page.evaluate((id) => new Promise((resolve) => chrome.developerPrivate.reload(id, { failQuietly: true }, resolve)), extensionId);
+  await expect.poll(() => page.evaluate((id) => new Promise((resolve) => chrome.developerPrivate.getExtensionInfo(id, resolve)), extensionId)
+    .then((info) => info.state)).toBe("ENABLED");
   const info = await page.evaluate((id) => new Promise((resolve) => chrome.developerPrivate.getExtensionInfo(id, resolve)), extensionId);
-  expect(info.state).toBe("ENABLED");
-  expect(info.manifestErrors).toEqual([]);
+  expect(info.manifestErrors.map((error) => error.message)).toEqual([]);
+  expect(info.installWarnings).toEqual([]);
 });
 
 test("content scripts run on a Services Directory page served by the fake server", async ({ page }) => {
   await page.goto(REST_ROOT);
-  await expect(page.locator("img.sdt-status-icon")).toBeAttached();
+  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeAttached();
 });
 
 // Each test below provokes one violation on purpose, asserts that the fixture recorded it in the right
@@ -79,8 +85,10 @@ test.describe("the fixture records", () => {
     harness.forgive();
   });
 
-  test("an error in the real toolbar popup", { tag: "@cdp" }, async ({ page, popupView, clickAction, harness }) => {
+  test("an error in the real toolbar popup", { tag: "@cdp" }, async ({ page, actionEnabled, popupView, clickAction, harness }) => {
     await page.goto(`${REST_ROOT}/Parcels/MapServer`);
+    // The button starts disabled, so wait for status.js to enable it before clicking.
+    await expect.poll(() => actionEnabled(page)).toBe(true);
     await clickAction(page);
     await popupView.waitForOpen();
     // Each call reaches one relay hook. The error event and the rejection are created in the popup's own
@@ -243,7 +251,7 @@ test.describe("signing in", () => {
 test.describe("the ArcGIS Online stand-ins", () => {
   test("a hosted service page loads and runs the content scripts", async ({ page }) => {
     await page.goto(`${ONLINE_REST_ROOT}/Parcels/FeatureServer`);
-    await expect(page.locator("img.sdt-status-icon")).toBeAttached();
+    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeAttached();
   });
 
   test("community/self answers a page on another origin", async ({ page }) => {
