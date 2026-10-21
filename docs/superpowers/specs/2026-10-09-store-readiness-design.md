@@ -378,6 +378,7 @@ The classifier therefore takes the type from the pathname and `document.contentT
 - add `*://*/rest/services`, `*://*/rest/services/*` and `?`-query variants such as `*://*/*/rest/services?*`
 - match `GPServer/*/execute` and `GPServer/*/submitJob`, with Esri's casing
 - match only exact `.../query` operations
+- each Query Helper and GP pattern also matches a trailing slash, as the patterns before Phase 3 did (owner's decision, 2026-10-21, after Phase 3 merged)
 - the action is enabled only when the page classifier says the page is a Services Directory page
 
 **Background:**
