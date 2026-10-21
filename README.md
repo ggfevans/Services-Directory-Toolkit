@@ -52,6 +52,10 @@ Changes made on top of Ken's last commit:
 
 - Moved to Manifest V3. The toolbar button now turns on only on ArcGIS REST pages.
 - Replaced the gear and its in-page settings form with a small status indicator that takes no clicks. It spins while the extension loads data and tells screen readers when it has finished. Settings are on the options page, which the popup's new Options link opens.
+- Defined every setting once, with its default and allowed values, and checked what is stored when it is read. The options page no longer breaks on a value saved by the old in-page form, and refuses a blank or out-of-range preview size instead of saving it.
+- Made the options page save only the settings you changed, check Chrome sync's size limits before saving, and say "Saved" only once the save has worked, or why it didn't. Errors appear under the fields they belong to.
+- Kept the print task's saved web map on this computer instead of syncing it, and started it empty.
+- Labelled every control on the options page, grouped the Select All choices, and added a note that changes apply when you reload a page.
 - Ran on the services root when its URL has a query string, such as `?f=html` or `?token=`, and on geoprocessing `submitJob` pages. The Query Helper now appears only on query pages.
 - Turned the toolbar button on only from the top frame of the page in the tab, not from frames, prerendered pages or pages in the back/forward cache.
 - Removed the extension's web-accessible files, which let any site detect that it was installed.

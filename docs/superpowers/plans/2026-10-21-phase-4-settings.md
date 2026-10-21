@@ -2507,4 +2507,10 @@ End the body with `🤖 Generated with [Claude Code](https://claude.com/claude-c
 
 ## Changes made while implementing
 
-None yet. If an instruction above has to change while implementing, record it here and update the step to say what was done.
+The plan was written on Phase 3's branch before that phase's review round, which then changed `src/src/bg/background.js`, `src/src/inject/status.js`, `scripts/lib/extension-files.js`, `tests/unit/background.test.js`, `tests/unit/extension-files.test.js`, `tests/e2e/harness.spec.js` and the Phase 3 plan on `main`. None of this plan's steps touch those files or collide with the changes, and every code block above was applied as written. The differences:
+
+- **Unit test counts are two higher throughout.** The review round added two unit tests, so `main` starts at 247, not 245. Each task added the number of tests it says, and the totals were 268 after Task 1 (not 266), 283 after Task 2 (not 281), 283 after Task 3, 295 after Task 4 (not 293) and 297 after Task 5 (not 295). The browser counts matched: 106 after Task 3 and 122 after Task 4.
+- **The failing runs matched the plan.** Task 1: 20 settings cases and the manifest case. Task 2: `writer.test.js` as a file (ENOENT) and the manifest case. Task 3: the five browser tests the plan names, the other ten passing. Task 4: all 12 unit cases and the 19 browser tests (16 in `options.spec.js`, SET-1, SET-3 and the pages test). Task 5: the two new lint cases.
+- **Known bugs** (Task 6, Step 1) fail on the lines the plan gives: INJ-2 at 46, INJ-3 at 59, INJ-11 at 65, QRY-1 at 87, POP-2 at 122 and POP-3 at 131.
+- **Final runs** (Task 6, Step 7): lint clean; 297 unit tests pass; the zip holds `src/lib/settings.js` and `src/lib/writer.js`; the browser suite without `@cdp` passes 122 tests, with the six known bugs as expected failures, against the unzipped build and against `src/` in Chromium 141, and against `src/` in Chrome for Testing 120.0.6099.109.
+- **The `@cdp` tests** weren't run locally (Chromium 141 has no `Extensions.triggerAction`). The popup now loads `settings.js`, which only defines `SDT.settings` and runs nothing at load, and the popup tests that open the same page through `openPopupTab` pass.

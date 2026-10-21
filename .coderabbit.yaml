@@ -34,7 +34,10 @@ reviews:
         flag top-level const, let, function or class declarations. A lib file may use only the SDT
         namespaces of files loaded before it: the manifest's content_scripts groups and
         page_action.html list them in one order, which the build checks. sender.js is the
-        exception: only the service worker loads it, with importScripts.
+        exception: only the service worker loads it, with importScripts. writer.js is loaded only
+        by the options page (and the popup from Phase 9); flag a content_scripts group that lists
+        it. settings.js holds every setting's default, allowed values and label; flag a default
+        written anywhere else.
     - path: "src/src/inject/**"
       instructions: |
         Content scripts can outlive their extension after an update. Flag addEventListener calls,
@@ -42,6 +45,8 @@ reviews:
         code that runs before SDT.guard.onLoad or SDT.guard.run. Each script checks
         SDT.page.classify before doing anything, and does nothing on jsonView and other.
         Content scripts never write to chrome.storage (set, remove or clear); lint enforces it.
+        They read settings only with await SDT.settings.read(keys), which validates; lint rejects
+        chrome.storage.*.get here.
         The status indicator in status.js has no listeners and pointer-events: none; flag any
         handler added to it.
     - path: "src/manifest.json"
@@ -53,12 +58,14 @@ reviews:
         Content-script patterns follow Esri's casing: the Query Helper group matches only
         .../query, and the GP group only GPServer/*/execute and GPServer/*/submitJob. The
         version must match package.json. Every content_scripts group lists the lib files
-        first, in the order dom, guard, auth, url, net, page.
+        first, in the order dom, guard, auth, url, net, page, settings.
     - path: "src/src/options/**"
       instructions: |
-        Settings defaults are repeated in places that must agree: options.html/options.js and
-        each content script's chrome.storage.sync.get defaults. Flag keys, values or defaults
-        that diverge.
+        Static HTML with one control per SDT.settings key, whose name is the key;
+        tests/unit/options-page.test.js checks them against the schema. Flag a default, allowed
+        value, range or label written here instead of in src/src/lib/settings.js, a selector
+        built from a stored value, a direct chrome.storage write instead of SDT.writer.save,
+        and a success message shown before the save resolves.
     - path: "src/src/bg/**"
       instructions: |
         Classic service worker. It acts on a runtime message only when
