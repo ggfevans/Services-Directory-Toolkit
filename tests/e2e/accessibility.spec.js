@@ -6,10 +6,10 @@ import { axeViolations } from "./axe.js";
 const NAME = "Services Directory Toolkit";
 const NO_VIOLATIONS = { light: [], dark: [] };
 
-test("axe finds nothing wrong with the status indicator, in light and dark", async ({ page }) => {
+test("axe finds nothing wrong with the status indicator, on a light and a dark page", async ({ page }) => {
   await page.goto(REST_ROOT);
   await expect(page.getByRole("status")).toHaveText("SD Toolkit: finished loading");
-  expect(await axeViolations(page, { include: ".sdt-indicator" })).toEqual(NO_VIOLATIONS);
+  expect(await axeViolations(page, { include: ".sdt-indicator", hostPage: true })).toEqual(NO_VIOLATIONS);
 });
 
 test("axe finds nothing wrong with the popup, in light and dark", async ({ openPopupTab }) => {
