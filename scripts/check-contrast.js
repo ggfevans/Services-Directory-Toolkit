@@ -1,22 +1,28 @@
-// Checks the colour tokens in docs/design/mockups/sdt.css against WCAG 2.2 AA, in both palettes.
+// Checks the colour tokens in src/src/lib/sdt.css against WCAG 2.2 AA, in both palettes.
 //
-//   node docs/design/scripts/check-contrast.js            prints a Markdown table
-//   node docs/design/scripts/check-contrast.js --quiet    prints failures only
+//   node scripts/check-contrast.js                  prints a Markdown table (npm run contrast)
+//   node scripts/check-contrast.js --quiet          prints failures only (npm run lint runs this)
+//   node scripts/check-contrast.js <file.css>       checks another copy, such as the design mockup's
 //
 // Text pairs need 4.5:1 (SC 1.4.3). Non-text pairs (control borders, focus rings, icons, badge
 // borders, switch parts) need 3:1 (SC 1.4.11). "page" is the background of the host page the
 // in-page additions sit on: white for a light Services Directory page, and the dark stand-in
 // page colour from docs/design/mockups/host-standin.css for a dark one.
-// Exits with status 1 if any pair fails.
-/* global process, console, URL */
+// Exits with status 1 if any pair fails or a token is missing.
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const CSS = readFileSync(new URL("../mockups/sdt.css", import.meta.url), "utf8");
+const file = process.argv.slice(2).find((arg) => !arg.startsWith("--"))
+  ?? fileURLToPath(new URL("../src/src/lib/sdt.css", import.meta.url));
+const CSS = readFileSync(file, "utf8");
 const PAGE = { light: "#ffffff", dark: "#16191d" };
 
 /** Reads the --sdt-* hex colours from the first block that follows marker. */
 const tokens = (marker) => {
   const start = CSS.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`${file}: no "${marker}" comment`);
+  }
   const block = CSS.slice(start, CSS.indexOf("}", start));
   return Object.fromEntries([...block.matchAll(/--sdt-([a-z0-9-]+):\s*(#[0-9a-f]{6});/gi)].map(([, name, value]) => [name, value.toLowerCase()]));
 };
@@ -88,6 +94,12 @@ for (const [fg, bg, min, what] of pairs) {
   const cells = ["light", "dark"].map((scheme) => {
     const set = scheme === "light" ? light : dark;
     const colour = (name) => (name === "page" ? PAGE[scheme] : set[name]);
+    const missing = [fg, bg].filter((name) => !colour(name));
+    if (missing.length) {
+      failures += 1;
+      console.error(`FAIL ${scheme}: no --sdt-${missing.join(" or --sdt-")} colour token (${what})`);
+      return "missing";
+    }
     const value = ratio(colour(fg), colour(bg));
     if (value < min) {
       failures += 1;
@@ -103,5 +115,5 @@ if (!quiet) {
   console.log("|---|---|---|---|---|");
   rows.forEach((row) => console.log(row));
 }
-console.log(`\n${pairs.length * 2} checks, ${failures} failures.`);
+console.log(`${quiet ? "" : "\n"}${pairs.length * 2} checks, ${failures} failures.`);
 process.exitCode = failures ? 1 : 0;
