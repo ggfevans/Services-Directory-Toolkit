@@ -93,7 +93,7 @@
 .sdt-buttonbox > button {
     width: 23%;
 }
-.sdt-error {
+.sdt-metadata-error {
   color: #d00;
   font-weight: bold;
   background-color: #fcc;
@@ -144,14 +144,9 @@ textarea.sdt-hidden {
     stroke-dasharray: 11 33;
 }
 
+/* The sdt-spin keyframes are in src/src/lib/sdt.css, which loads first. */
 .sdt-indicator--busy .sdt-indicator__ring {
     animation: sdt-spin 1s linear infinite;
-}
-
-@keyframes sdt-spin {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 /* No spin under reduced motion: busy shows two opposite quarters instead. */
@@ -163,19 +158,6 @@ textarea.sdt-hidden {
     .sdt-indicator--busy .sdt-indicator__arc {
         stroke-dasharray: 11 11;
     }
-}
-
-/* Read by screen readers, not shown. */
-.sdt-visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    border: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
 }
 
 .sdt-map-image-panel {

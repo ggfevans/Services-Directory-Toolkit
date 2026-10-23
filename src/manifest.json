@@ -32,6 +32,7 @@
         "*://*/*/rest/services/*"
       ],
       "css": [
+        "src/lib/sdt.css",
         "src/inject/inject.css"
       ]
     },

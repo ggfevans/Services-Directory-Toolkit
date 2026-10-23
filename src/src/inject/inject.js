@@ -164,7 +164,7 @@
         }
     }
 
-    return addSubList("Error", err0r, "sdt-error");
+    return addSubList("Error", err0r, "sdt-metadata-error");
   };
 
   /**
