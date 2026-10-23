@@ -67,6 +67,7 @@ Changes made on top of Ken's last commit:
 - Sent a `token` from the page URL only to the same server's REST services, in the request body rather than the URL, and never across a redirect. The popup's search does the same with the tab's token.
 - Skipped JSON views and pages that aren't Services Directory pages, which used to show a stuck spinner or an "Invalid form." dialog.
 - Prefixed the extension's CSS classes with `sdt-`, so they no longer clash with the page's own.
+- Added a shared stylesheet with light and dark palettes that meet WCAG 2.2 AA contrast, checked on every change, and a check that matches the extension's colours to the page's own background, ready for the redesigned interface.
 
 ## License
 

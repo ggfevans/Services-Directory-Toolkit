@@ -31,7 +31,7 @@ const EXPECTED_CONTROL = {
 };
 
 test("the options page has lang=\"en\"", () => {
-  assert.match(HTML, /<html lang="en">/);
+  assert.match(HTML, /<html lang="en"[\s>]/);
 });
 
 test("every control on the options page is named for a schema key", () => {

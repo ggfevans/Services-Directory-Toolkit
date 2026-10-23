@@ -22,6 +22,11 @@ test("the zip holds exactly the files the extension references, plus LICENSE", (
   assert.deepEqual(entries, expected);
 });
 
+test("the zip ships the shared stylesheet (#13)", () => {
+  const entries = execFileSync("unzip", ["-Z1", ZIP], { encoding: "utf8" }).trim().split("\n");
+  assert.ok(entries.includes("src/lib/sdt.css"));
+});
+
 test("the zipped LICENSE is the repository LICENSE", () => {
   const zipped = execFileSync("unzip", ["-p", ZIP, "LICENSE"], { encoding: "utf8" });
   assert.equal(zipped, readFileSync(join(ROOT, "LICENSE"), "utf8"));

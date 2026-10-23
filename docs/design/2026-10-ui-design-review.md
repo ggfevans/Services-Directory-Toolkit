@@ -151,11 +151,11 @@ The people using this are GIS developers and administrators checking services: w
 
 ## 4. Shared style
 
-The proposal is `docs/design/mockups/sdt.css`. It is written to be copied into the extension in Phase 5 with few changes.
+The proposal is `docs/design/mockups/sdt.css`. #13 copied it into the extension as `src/src/lib/sdt.css`, without the popup and options page layouts, which #23 and #25 add with those pages.
 
 ### 4.1 Where it lives and how it applies
 
-- **Files.** Phase 5 adds `src/src/lib/sdt.css`, listed first in the content-script `css` array and loaded with `<link>` by `page_action.html` and `options.html`. The spec's lib folder holds classic scripts, and `sdt.css` would be its first stylesheet.
+- **Files.** `src/src/lib/sdt.css`, added in #13, is listed first in the content-script `css` array and loaded with `<link>` by `page_action.html` and `options.html`. The spec's lib folder holds classic scripts, and `sdt.css` is its first stylesheet.
 - **Root class.** Every element the extension adds carries `sdt` on its outermost node, plus a component class. `.sdt` sets font, size, line height, colour, text alignment and `color-scheme`, so page CSS on `body` doesn't leak in. Components set every property they rely on.
 - **Prefix.** Classes are `sdt-component`, `sdt-component__part` and `sdt-component--variant`. Custom properties are `--sdt-*`. State goes in ARIA attributes (`aria-expanded`, `aria-invalid`, `aria-busy`, `aria-disabled`) or `data-tone`, which keeps the styles tied to what assistive technology hears.
 - **Isolation.** Light DOM with prefixed classes, as Phase 2 already plans. Open shadow roots would isolate the panels completely, but the manifest's content-script stylesheet doesn't reach into a shadow root. Each root would then need a stylesheet built from a CSS string. Revisit shadow roots if real servers' CSS breaks the panels.
@@ -212,7 +212,7 @@ System type keeps the extension's text distinct from the page's Verdana-style te
 
 ### 4.3 Contrast
 
-`docs/design/scripts/check-contrast.js` reads the token blocks from `sdt.css` and checks 58 pairs in each palette: 116 checks, none failing. "page" means the host page's background (white, or the dark stand-in `#16191d`). The lowest result in each group:
+`scripts/check-contrast.js` (`npm run contrast`; `npm run lint` runs it) reads the token blocks from `src/src/lib/sdt.css` and checks 58 pairs in each palette: 116 checks, none failing. "page" means the host page's background (white, or the dark stand-in `#16191d`). The lowest result in each group:
 
 | Group | Needs | Lowest light | Lowest dark |
 |---|---|---|---|
@@ -621,7 +621,7 @@ Behaviour follows #6: 250 ms delay on hover or focus, one at a time, cancelled b
 - **axe-core:** `@axe-core/playwright` with `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and `wcag22aa`, scoped to `.sdt` on host pages and to the whole popup and options page, in `colorScheme` `"light"` and `"dark"`. Zero violations.
 - **Dark host page:** the fake server serves a dark `main.css` when a test asks for it, so tests can check that in-page additions switch palette. The dark block in `host-standin.css` shows the shape.
 - **Keyboard-only tests:** each interactive feature driven with Tab, Enter, Space, arrow keys and Escape, with no mouse events.
-- **Contrast:** `check-contrast.js` moves to `scripts/` and runs in CI, so a token change can't drop below AA.
+- **Contrast:** `scripts/check-contrast.js` runs in CI (#13), so a token change can't drop below AA.
 - **Screen readers, once before release:** VoiceOver on macOS and NVDA on Windows, through the popup (search, results, switches, Reload page) and both side panels (target, lists, inserting, statistics).
 
 **Already checked on the mockups:**
@@ -913,6 +913,6 @@ All images come from scripts in `docs/design/scripts/`, run from the repository 
 
 - **"Before" screenshots:** `node docs/design/scripts/capture-before.js` (about 50 s). It loads `src/` into Playwright's Chromium, answers every request from `tests/fixtures/fake-arcgis.js` with three extra routes (the stand-in stylesheet, `export`/`exportImage`, and an invented preview SVG), aborts every other host, and writes `images/before-*.png`.
 - **"After" screenshots:** `node docs/design/scripts/capture-after.js` renders each mockup in both schemes to `images/after-*.png`. With `AXE_PATH=/path/to/axe.min.js` it also runs axe-core with the WCAG 2.2 AA tags and fails on any violation. axe-core isn't a repository dependency, so install it anywhere (`npm install axe-core`).
-- **Contrast:** `node docs/design/scripts/check-contrast.js` prints the full table from section 4.3.
+- **Contrast:** `npm run contrast` prints the full table from section 4.3, for `src/src/lib/sdt.css`; `node scripts/check-contrast.js docs/design/mockups/sdt.css` checks the mockup copy.
 
 The mockups are plain HTML and CSS in `docs/design/mockups/` and open directly in a browser, where they follow the system's light or dark setting. `host-standin.css` is an invented page style; real Services Directory pages differ between 10.9 and 11.x, so the owner should compare the result against a real server by eye before Phase 5 starts.

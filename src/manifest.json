@@ -32,6 +32,7 @@
         "*://*/*/rest/services/*"
       ],
       "css": [
+        "src/lib/sdt.css",
         "src/inject/inject.css"
       ]
     },
@@ -52,6 +53,8 @@
         "src/lib/net.js",
         "src/lib/page.js",
         "src/lib/settings.js",
+        "src/lib/theme.js",
+        "src/lib/icon.js",
         "src/inject/inject.js",
         "src/inject/status.js",
         "src/inject/mapImages.js"
@@ -76,6 +79,8 @@
         "src/lib/net.js",
         "src/lib/page.js",
         "src/lib/settings.js",
+        "src/lib/theme.js",
+        "src/lib/icon.js",
         "src/inject/queryTest.js"
       ]
     },
@@ -106,6 +111,8 @@
         "src/lib/net.js",
         "src/lib/page.js",
         "src/lib/settings.js",
+        "src/lib/theme.js",
+        "src/lib/icon.js",
         "src/inject/printTask.js"
       ]
     }

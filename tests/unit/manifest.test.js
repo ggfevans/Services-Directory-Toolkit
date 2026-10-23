@@ -69,3 +69,41 @@ test("the options page loads the guard, the settings schema and the writer befor
   const scripts = [...page.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(([, src]) => src);
   assert.deepEqual(scripts, ["../lib/guard.js", "../lib/settings.js", "../lib/writer.js", "options.js"]);
 });
+
+test("the shared stylesheet loads first: in every content-script css list, and in both extension pages", () => {
+  for (const [index, group] of manifest.content_scripts.entries()) {
+    if (group.css) {
+      assert.equal(group.css[0], "src/lib/sdt.css", `group ${index}`);
+    }
+  }
+  assert.ok(manifest.content_scripts.some((group) => group.css), "no content-script css list");
+  for (const page of ["src/src/page_action/page_action.html", "src/src/options/options.html"]) {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const sheets = [...html.matchAll(/<link\b[^>]*\bhref="([^"]+\.css)"/g)].map(([, href]) => href);
+    assert.equal(sheets[0], "../lib/sdt.css", page);
+    // The first stylesheet comes before any <style> element.
+    assert.ok(!html.includes("<style") || html.indexOf("../lib/sdt.css") < html.indexOf("<style"), page);
+  }
+});
+
+test("both extension pages follow the system's colour scheme: <html data-sdt-theme=\"system\">", () => {
+  for (const page of ["src/src/page_action/page_action.html", "src/src/options/options.html"]) {
+    assert.match(readFileSync(join(ROOT, page), "utf8"), /<html\b[^>]*\bdata-sdt-theme="system"/, page);
+  }
+});
+
+test("every content-script group loads the theme check", () => {
+  for (const [index, group] of manifest.content_scripts.entries()) {
+    if (group.js) {
+      assert.ok(group.js.includes("src/lib/theme.js"), `group ${index}`);
+    }
+  }
+});
+
+test("every content-script group loads the icons", () => {
+  for (const [index, group] of manifest.content_scripts.entries()) {
+    if (group.js) {
+      assert.ok(group.js.includes("src/lib/icon.js"), `group ${index}`);
+    }
+  }
+});

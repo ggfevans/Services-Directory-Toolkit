@@ -59,8 +59,12 @@ export const test = base.extend({
   extraLaunchArgs: [[], { option: true }],
   droppedDefaultArgs: [[], { option: true }],
 
-  fakeServer: async ({}, use) => {
-    await use(createFakeArcGIS());
+  // The fake pages' own stylesheet: "light", or "dark" for a page that is dark from the start
+  // (HOST_STYLES in tests/fixtures/fake-arcgis.js). Set with test.use().
+  hostStyle: ["light", { option: true }],
+
+  fakeServer: async ({ hostStyle }, use) => {
+    await use(createFakeArcGIS(undefined, undefined, { hostStyle }));
   },
 
   // Console errors a test expects, such as the browser's own report of an HTTP 502 it injected.

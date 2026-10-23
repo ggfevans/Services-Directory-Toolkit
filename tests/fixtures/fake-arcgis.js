@@ -33,7 +33,29 @@ const ONLINE_SITE = { restPath: ONLINE_REST_PATH, crumbPath: `/${ONLINE_ORG}/Arc
 const SERVICE_TYPES = ["MapServer", "FeatureServer", "ImageServer", "GPServer"];
 const ENTERPRISE_PAGES = createPages();
 const FAVICON = { status: 204, contentType: "image/x-icon", body: "" };
-const STYLESHEET = { status: 200, contentType: "text/css; charset=utf-8", body: "body { font-family: sans-serif; }\n" };
+
+// The pages' own stylesheet, /arcgis/rest/static/main.css, in each style createFakeArcGIS takes.
+// "light" is the default. Its body.dark and body.grey rules let a test restyle the page by changing
+// <body>'s class, as a page's own script or a tool like Dark Reader might. "dark" serves a page that
+// is dark from the start. All of it is invented, like the rest of the fixtures.
+export const HOST_STYLES = {
+  light: `body { font-family: sans-serif; }
+body.dark { background: #16191d; color: #d8dde3; }
+body.grey { background: #808080; color: #000000; }
+`,
+  dark: `:root { color-scheme: dark; }
+body { font-family: sans-serif; background: #16191d; color: #d8dde3; }
+a { color: #8ab4f8; }
+`
+};
+
+const stylesheet = (style) => {
+  if (!Object.hasOwn(HOST_STYLES, style)) {
+    throw new TypeError(`unknown host style ${style}`);
+  }
+  return { status: 200, contentType: "text/css; charset=utf-8", body: HOST_STYLES[style] };
+};
+
 const INVALID_TOKEN = { code: 498, message: "Invalid Token" };
 const TOKEN_REQUIRED = { code: 499, message: "Token Required" };
 const FORBIDDEN = { code: 403, message: "You do not have permissions to access this resource or perform this operation." };
@@ -231,7 +253,7 @@ const serverSelf = (username) => {
   return { username, roles, privilege };
 };
 
-const route = (catalog, url, params, cookies, problems) => {
+const route = (catalog, url, params, cookies, problems, style) => {
   // ArcGIS Server matches the instance name in any case, so /ArcGIS/rest/services works too.
   const pathname = url.pathname.replace(/^\/arcgis(?=\/|$)/i, "/arcgis");
   const format = params.get("f") || "html";
@@ -239,7 +261,7 @@ const route = (catalog, url, params, cookies, problems) => {
     return FAVICON;
   }
   if (pathname === "/arcgis/rest/static/main.css") {
-    return STYLESHEET;
+    return stylesheet(style);
   }
   if (pathname === "/other/page") {
     return html(otherPage());
@@ -300,12 +322,12 @@ const onlineInfo = (online) => ({
   authInfo: { isTokenBasedSecurity: true, tokenServicesUrl: `${PORTAL_ORIGIN}/sharing/rest/generateToken` }
 });
 
-const onlineRoute = (online, url, params, problems) => {
+const onlineRoute = (online, url, params, problems, style) => {
   if (url.pathname === "/favicon.ico") {
     return FAVICON;
   }
   if (url.pathname === "/arcgis/rest/static/main.css") {
-    return STYLESHEET;
+    return stylesheet(style);
   }
   const [org, instance, rest, ...tail] = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
   const format = params.get("f") || "html";
@@ -372,9 +394,11 @@ const portalRoute = (online, url, params, headers) => {
 /**
  * Creates a fake server. respond(request, headers) takes a Playwright Request and returns options
  * for route.fulfill(), or null when nothing matches. An override's handler may be async, and then
- * respond() returns its Promise.
+ * respond() returns its Promise. hostStyle picks the pages' stylesheet from HOST_STYLES.
  */
-export const createFakeArcGIS = (catalog = defaultCatalog, online = defaultOnlineCatalog) => {
+export const createFakeArcGIS = (catalog = defaultCatalog, online = defaultOnlineCatalog, { hostStyle = "light" } = {}) => {
+  // Fails here, not on the first stylesheet request, for a style that doesn't exist.
+  stylesheet(hostStyle);
   const overrides = [];
   const requests = [];
   const calls = [];
@@ -433,10 +457,10 @@ export const createFakeArcGIS = (catalog = defaultCatalog, online = defaultOnlin
         return override.handler(url, params);
       }
       if (url.origin === FAKE_ORIGIN) {
-        return route(catalog, url, params, cookies, problems);
+        return route(catalog, url, params, cookies, problems, hostStyle);
       }
       if (url.origin === ONLINE_ORIGIN) {
-        return onlineRoute(online, url, params, problems);
+        return onlineRoute(online, url, params, problems, hostStyle);
       }
       if (url.origin === PORTAL_ORIGIN) {
         return portalRoute(online, url, params, headers);
