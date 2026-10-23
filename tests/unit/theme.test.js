@@ -150,7 +150,19 @@ const fakePage = () => {
       }
     }
   };
-  page.doc = { defaultView: view, documentElement: html, body, head };
+  page.docListeners = [];
+  page.doc = {
+    defaultView: view,
+    documentElement: html,
+    body,
+    head,
+    addEventListener: (type, listener, options) => page.docListeners.push({ type, listener, options }),
+    removeEventListener: (type, listener) => {
+      page.docListeners = page.docListeners.filter((entry) => !(entry.type === type && entry.listener === listener));
+    }
+  };
+  /** Fires a load event from an element, as a capturing document listener sees it. */
+  page.load = (target) => page.docListeners.filter(({ type }) => type === "load").forEach(({ listener }) => listener({ type: "load", target }));
   page.html = html;
   page.body = body;
   /** Delivers records to the observer, as the browser does after a change. */
@@ -218,6 +230,20 @@ test("watch ignores the first busy class on a <body> that had no class attribute
   page.body.setAttribute("class", "sdt-loading-metadata");
   page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: null });
   assert.equal(page.timers.length, 0);
+});
+
+test("watch checks again when a stylesheet finishes loading, and not for other loads", () => {
+  const page = fakePage();
+  const stop = theme.watch(page.doc);
+  assert.equal(page.docListeners.filter(({ type, options }) => type === "load" && options?.capture === true).length, 1);
+  page.load({ localName: "img", relList: { contains: () => false } });
+  assert.equal(page.timers.length, 0);
+  page.background = "rgb(22, 25, 29)";
+  page.load({ localName: "link", relList: { contains: (value) => value === "stylesheet" } });
+  assert.equal(page.runTimers(), 1);
+  assert.equal(page.html.getAttribute("data-sdt-theme"), "dark");
+  stop();
+  assert.equal(page.docListeners.length, 0);
 });
 
 test("a batch with its own write and a page change still checks once", () => {

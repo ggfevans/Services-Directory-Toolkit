@@ -2,7 +2,7 @@
 // popup and the options page follow the system. The content script runs in an isolated world, so
 // these tests watch what it does to the DOM: the attributes on <html>, and the token values that
 // sdt.css then gives <html>, which the page can read.
-import { test, expect, REST_ROOT } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, REST_ROOT } from "./fixtures.js";
 
 const PRINT_TASK = `${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute`;
 const LIGHT_BG = "#ffffff";
@@ -103,6 +103,24 @@ test("a stylesheet added to <head> triggers a recheck, as Dark Reader's would", 
   await openQuietPage(page);
   await page.addStyleTag({ content: "body { background: #16191d; }" });
   await expect.poll(() => theme(page)).toBe("dark");
+});
+
+test("a stylesheet that finishes loading after the 500 ms check still triggers a recheck", async ({ page, fakeServer }) => {
+  fakeServer.override(/^\/late-dark\.css$/, async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return { status: 200, contentType: "text/css", body: "body { background: #16191d; }" };
+  });
+  await openQuietPage(page);
+  await page.evaluate((href) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  }, `${FAKE_ORIGIN}/late-dark.css`);
+  // The insertion's own check, 500 ms later, still sees the light background.
+  await page.waitForTimeout(900);
+  expect(await theme(page)).toBe("light");
+  await expect.poll(() => theme(page), { timeout: 5000 }).toBe("dark");
 });
 
 test("a mid-grey page gets data-sdt-contrast=\"more\", and muted text takes the text colour", async ({ page }) => {

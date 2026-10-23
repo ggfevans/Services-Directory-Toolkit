@@ -95,6 +95,8 @@ test("clicks the page dispatches on the indicator reach no extension handler", a
   await page.goto(REST_ROOT);
   const ring = page.getByRole("img", { name: NAME });
   await expect(ring).toBeVisible();
+  // Let the page finish loading first, so the status line can't change while the test watches.
+  await expect(page.getByRole("status")).toHaveText(DONE);
   const before = { storage: await readStorage(), html: await ring.evaluate((element) => element.parentElement.outerHTML), pages: context.pages().length };
   // A page script can click any element, including through the extension's own nodes.
   await page.evaluate(() => {

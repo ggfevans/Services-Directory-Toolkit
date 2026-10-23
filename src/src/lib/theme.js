@@ -125,7 +125,8 @@ SDT.theme = {
 
   /**
    * Checks doc now, then again whenever its style may have changed: attributes of <html> or <body>,
-   * elements added to or removed from <head>, or the system's colour scheme. Changes within DELAY_MS
+   * elements added to or removed from <head>, a stylesheet finishing loading, or the system's colour
+   * scheme. Changes within DELAY_MS
    * of the first are checked together, once. Records for the check's own attributes are ignored, so
    * it never reacts to its own writes, and so are <body> class changes that only add or remove the
    * extension's sdt- classes. Returns a function that stops watching.
@@ -163,10 +164,15 @@ SDT.theme = {
       observer.observe(doc.head, { childList: true });
     }
     const unlisten = SDT.guard.listen(view.matchMedia("(prefers-color-scheme: dark)"), "change", schedule);
+    // A stylesheet can finish loading after the check its insertion caused. Load events don't
+    // bubble, but a capturing listener on the document sees every link's.
+    const isStylesheet = (target) => target?.localName === "link" && target.relList?.contains("stylesheet");
+    const unlistenLoads = SDT.guard.listen(doc, "load", (event) => isStylesheet(event.target) && schedule(), { capture: true });
     check();
     return () => {
       observer.disconnect();
       unlisten();
+      unlistenLoads();
       if (timer !== null) {
         view.clearTimeout(timer);
         timer = null;

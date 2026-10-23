@@ -1095,7 +1095,19 @@ const fakePage = () => {
       }
     }
   };
-  page.doc = { defaultView: view, documentElement: html, body, head };
+  page.docListeners = [];
+  page.doc = {
+    defaultView: view,
+    documentElement: html,
+    body,
+    head,
+    addEventListener: (type, listener, options) => page.docListeners.push({ type, listener, options }),
+    removeEventListener: (type, listener) => {
+      page.docListeners = page.docListeners.filter((entry) => !(entry.type === type && entry.listener === listener));
+    }
+  };
+  /** Fires a load event from an element, as a capturing document listener sees it. */
+  page.load = (target) => page.docListeners.filter(({ type }) => type === "load").forEach(({ listener }) => listener({ type: "load", target }));
   page.html = html;
   page.body = body;
   /** Delivers records to the observer, as the browser does after a change. */
@@ -1163,6 +1175,20 @@ test("watch ignores the first busy class on a <body> that had no class attribute
   page.body.setAttribute("class", "sdt-loading-metadata");
   page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: null });
   assert.equal(page.timers.length, 0);
+});
+
+test("watch checks again when a stylesheet finishes loading, and not for other loads", () => {
+  const page = fakePage();
+  const stop = theme.watch(page.doc);
+  assert.equal(page.docListeners.filter(({ type, options }) => type === "load" && options?.capture === true).length, 1);
+  page.load({ localName: "img", relList: { contains: () => false } });
+  assert.equal(page.timers.length, 0);
+  page.background = "rgb(22, 25, 29)";
+  page.load({ localName: "link", relList: { contains: (value) => value === "stylesheet" } });
+  assert.equal(page.runTimers(), 1);
+  assert.equal(page.html.getAttribute("data-sdt-theme"), "dark");
+  stop();
+  assert.equal(page.docListeners.length, 0);
 });
 
 test("a batch with its own write and a page change still checks once", () => {
@@ -1352,7 +1378,8 @@ SDT.theme = {
 
   /**
    * Checks doc now, then again whenever its style may have changed: attributes of <html> or <body>,
-   * elements added to or removed from <head>, or the system's colour scheme. Changes within DELAY_MS
+   * elements added to or removed from <head>, a stylesheet finishing loading, or the system's colour
+   * scheme. Changes within DELAY_MS
    * of the first are checked together, once. Records for the check's own attributes are ignored, so
    * it never reacts to its own writes. Returns a function that stops watching.
    */
@@ -1389,10 +1416,15 @@ SDT.theme = {
       observer.observe(doc.head, { childList: true });
     }
     const unlisten = SDT.guard.listen(view.matchMedia("(prefers-color-scheme: dark)"), "change", schedule);
+    // A stylesheet can finish loading after the check its insertion caused. Load events don't
+    // bubble, but a capturing listener on the document sees every link's.
+    const isStylesheet = (target) => target?.localName === "link" && target.relList?.contains("stylesheet");
+    const unlistenLoads = SDT.guard.listen(doc, "load", (event) => isStylesheet(event.target) && schedule(), { capture: true });
     check();
     return () => {
       observer.disconnect();
       unlisten();
+      unlistenLoads();
       if (timer !== null) {
         view.clearTimeout(timer);
         timer = null;
@@ -1781,7 +1813,7 @@ Create `tests/e2e/theme.spec.js`:
 // popup and the options page follow the system. The content script runs in an isolated world, so
 // these tests watch what it does to the DOM: the attributes on <html>, and the token values that
 // sdt.css then gives <html>, which the page can read.
-import { test, expect, REST_ROOT } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, REST_ROOT } from "./fixtures.js";
 
 const PRINT_TASK = `${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute`;
 const LIGHT_BG = "#ffffff";
@@ -1882,6 +1914,24 @@ test("a stylesheet added to <head> triggers a recheck, as Dark Reader's would", 
   await openQuietPage(page);
   await page.addStyleTag({ content: "body { background: #16191d; }" });
   await expect.poll(() => theme(page)).toBe("dark");
+});
+
+test("a stylesheet that finishes loading after the 500 ms check still triggers a recheck", async ({ page, fakeServer }) => {
+  fakeServer.override(/^\/late-dark\.css$/, async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return { status: 200, contentType: "text/css", body: "body { background: #16191d; }" };
+  });
+  await openQuietPage(page);
+  await page.evaluate((href) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  }, `${FAKE_ORIGIN}/late-dark.css`);
+  // The insertion's own check, 500 ms later, still sees the light background.
+  await page.waitForTimeout(900);
+  expect(await theme(page)).toBe("light");
+  await expect.poll(() => theme(page), { timeout: 5000 }).toBe("dark");
 });
 
 test("a mid-grey page gets data-sdt-contrast=\"more\", and muted text takes the text colour", async ({ page }) => {
@@ -2246,3 +2296,8 @@ No finding in Appendix A closes in full. This issue delivers part of one, and th
 - **The watcher ignores the extension's own `sdt-` classes on `<body>`.** `inject.js`, `mapImages.js` and `queryTest.js` toggle `sdt-loading-*` on `<body>`, and each toggle scheduled a recheck: two style reads every 500 ms while a page loaded. `<body>` is now observed with `attributeOldValue`, and a class change whose non-`sdt-` classes are the same before and after counts as the extension's own. Unit test: "watch ignores the extension's own sdt- classes on <body>, such as the busy classes", which failed first.
 - **`status.js` starts the theme check last,** after enabling the toolbar button and building the indicator, so neither depends on it.
 - **A `<body>` with no class attribute.** Its first `sdt-` class arrives with a null `oldValue`, which the filter first treated as a page change (CodeAnt). A null now counts as no classes; only a missing `oldValue` (records without it) still counts as a page change. Unit test: "watch ignores the first busy class on a <body> that had no class attribute".
+
+### After review of PR #65
+
+- **A stylesheet that finishes loading late.** `watch` also listens for `load` on the document in the capture phase, and schedules a check when the target is a stylesheet `<link>`. That covers links already in `<head>` and ones added later, and the stop function removes it. CodeAnt and CodeRabbit both raised this, and it was open risk 10 in PR #65. Unit test: "watch checks again when a stylesheet finishes loading, and not for other loads"; browser test: "a stylesheet that finishes loading after the 500 ms check still triggers a recheck", whose stylesheet answers 1.5 s late. Both failed first.
+- **A `<body>` with no class attribute** (CodeAnt), as in the section above.
