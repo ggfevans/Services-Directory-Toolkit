@@ -27,7 +27,8 @@ reviews:
         Requests go through SDT.net.fetchJson; automatic ones through SDT.net.pageLimiter().
         Flag fetch or XMLHttpRequest outside src/src/lib/, any token placed in a URL, the DOM or
         a console message, and a token sent to a URL whose SDT.auth.scopeOf differs from the
-        page's. Classes the extension injects start with sdt-.
+        page's. Classes the extension injects start with sdt: the shared components' root class
+        sdt, or sdt-.
     - path: "src/src/lib/**"
       instructions: |
         Shared classic scripts. Each starts with globalThis.SDT ??= {} and assigns one SDT namespace;
@@ -37,7 +38,16 @@ reviews:
         exception: only the service worker loads it, with importScripts. writer.js is loaded only
         by the options page (and the popup from Phase 9); flag a content_scripts group that lists
         it. settings.js holds every setting's default, allowed values and label; flag a default
-        written anywhere else.
+        written anywhere else. theme.js decides the in-page palette from computed colours and
+        must ignore its own attribute writes; icon.js builds SVG with createElementNS only.
+    - path: "src/src/lib/sdt.css"
+      instructions: |
+        The shared stylesheet loads into every Services Directory page, the popup and the options
+        page. Flag any selector that doesn't name an sdt class (except the :root token blocks,
+        which may set only --sdt-* custom properties), colours written as literals instead of
+        --sdt-* tokens, a change to one dark token block that isn't made to the other, a colour
+        token that isn't a one-line hex value (scripts/check-contrast.js reads them), and
+        anything newer than Chrome 120, such as light-dark() or CSS nesting.
     - path: "src/src/inject/**"
       instructions: |
         Content scripts can outlive their extension after an update. Flag addEventListener calls,
@@ -59,7 +69,8 @@ reviews:
         .../query, and the GP group only GPServer/*/execute and GPServer/*/submitJob, each with
         or without a trailing slash and a query string. The
         version must match package.json. Every content_scripts group lists the lib files
-        first, in the order dom, guard, auth, url, net, page, settings.
+        first, in the order dom, guard, auth, url, net, page, settings, theme, icon, and the css
+        list starts with src/lib/sdt.css.
     - path: "src/src/options/**"
       instructions: |
         Static HTML with one control per SDT.settings key, whose name is the key;

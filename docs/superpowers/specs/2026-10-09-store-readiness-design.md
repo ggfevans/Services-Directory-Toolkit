@@ -86,6 +86,9 @@ These were established by experiment and the design depends on them.
   - A `set` with several items is all or nothing: one item over the limit stores none of them.
   - Chromium 141 reports quota failures with internal names ("Resource::kQuotaBytesPerItem quota exceeded"), so the options page checks the quotas itself first.
   - The 121st sync write in a minute fails with "This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota.", in both browsers, in a signed-out profile. Local writes are unaffected.
+- **#13 checks (2026-10-23), in Chromium 141 and Chrome for Testing 120:**
+  - Chrome 120 parses all of `sdt.css` and keeps every declaration.
+  - A page's own `getComputedStyle(document.documentElement)` reads the `--sdt-*` values from the content-script stylesheet, and a page's `MutationObserver` sees the content script's attribute writes, so browser tests can watch the theme check from the page.
 
 ## 4. Requirements for every phase
 
@@ -149,6 +152,7 @@ Introduced in Phase 2.
   |---|---|
   | 2 | DOM helpers, network helpers (`fetchJson`, request limiter, URL builder, token scope), page classifier, extension-context guard |
   | 4 | Settings schema (`SDT.settings`), and the writer (`SDT.writer`), which only extension pages load |
+  | 5 (#13, first) | Shared stylesheet (`sdt.css`), theme check (`SDT.theme`), icons (`SDT.icon`) |
   | 7 | Field picker |
 
 ## 6. Phases
@@ -454,6 +458,8 @@ The classifier therefore takes the type from the pathname and `document.contentT
 **Failure handling.** Count and detail chains use `fetchJson` and the limiter. A failed item shows an error line and the chain continues. Busy states clear in `finally`.
 
 **Shared style and theme:**
+Delivered early by #13, before the other Phase 5 work.
+
 - `src/src/lib/sdt.css` holds the design review's tokens and components (section 4). It comes first in every content-script `css` list and is linked by the popup and the options page.
 - `SDT.theme` sets `data-sdt-theme` on `<html>` from the page's computed background, and checks again when the page's styles change: attributes on `<html>` or `<body>`, or elements added to `<head>` (design review section 5.2). It writes its attributes only when their values change and ignores its own writes. The light-or-dark decision is a pure function of a colour, with a table-driven unit test.
 

@@ -8,8 +8,9 @@
  * The mockups use the media query for both, so one screenshot run with colorScheme "dark" shows
  * a dark host page with the dark palette.
  *
- * docs/design/scripts/check-contrast.js reads the two token blocks below and checks every
- * text and non-text pair against WCAG 2.2 AA. Keep each colour token on one line as a hex value.
+ * This mockup copy keeps the dark tokens under the media query. The extension's copy,
+ * src/src/lib/sdt.css (#13), keys them to data-sdt-theme; scripts/check-contrast.js checks it,
+ * and checks this file when given its path. Keep each colour token on one line as a hex value.
  */
 
 /* ---- Tokens: light ---- */

@@ -589,7 +589,7 @@ Expected: 130 pass, with the six known bugs as expected failures. `indicator.spe
 
 - [ ] **Step 7: Compare screenshots before and after (by hand, nothing committed)**
 
-Save this as `$TMPDIR/shots.mjs` (outside the repository). It runs the local Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; change `executablePath` to run it elsewhere.
+Save this as `$TMPDIR/shots.mjs` (outside the repository). It runs the local Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; change `executablePath` to run it elsewhere. It makes its browser profiles under `PROFILES`, or the system temp folder when that is unset. Don't point `TMPDIR` at a long path to move them: Chromium puts its own sockets there too, and with a long `TMPDIR` it exits with SIGTRAP at startup.
 
 ```js
 // Screenshots of every surface the extension touches, for comparing two builds pixel by pixel.
@@ -613,7 +613,7 @@ const PAGES = {
 };
 
 for (const scheme of ["light", "dark"]) {
-  const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "shots-")), {
+  const context = await chromium.launchPersistentContext(mkdtempSync(join(process.env.PROFILES ?? tmpdir(), "shots-")), {
     executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
     headless: true,
     colorScheme: scheme,
@@ -2209,4 +2209,5 @@ No finding in Appendix A closes in full. This issue delivers part of one, and th
 
 ## Changes made while implementing
 
-None yet.
+- **Task 1, Step 7 (screenshot script).** `shots.mjs` makes its browser profiles under `PROFILES` when set, instead of always under `os.tmpdir()`, so the profiles can live in a scratch folder. Setting `TMPDIR` to that long scratch path instead made Chromium exit with SIGTRAP at startup, because it puts its own sockets under `TMPDIR` too. The base for the "before" screenshots was a worktree of the plan commit (02acb24), whose `src/` is the same as `main`'s at 2ec673e. All 14 screenshots were byte-identical before and after Task 1, and again after Task 6. With `.sdt-visually-hidden` made visible in a copy of `sdt.css`, the six host pages that show a status message (root, service and layer, light and dark) differed and the other eight didn't, so the comparison sees a change.
+- **Task 7, `.coderabbit.yaml`.** The `src/**/*.js` instructions also changed: "Classes the extension injects start with sdt-." now says they start with `sdt`, the shared components' root class `sdt` or `sdt-`, to match the same change in `CLAUDE.md`. Without it, CodeRabbit would flag Phase 5's `sdt` root class.
