@@ -91,3 +91,11 @@ test("both extension pages follow the system's colour scheme: <html data-sdt-the
     assert.match(readFileSync(join(ROOT, page), "utf8"), /<html\b[^>]*\bdata-sdt-theme="system"/, page);
   }
 });
+
+test("every content-script group loads the theme check", () => {
+  for (const [index, group] of manifest.content_scripts.entries()) {
+    if (group.js) {
+      assert.ok(group.js.includes("src/lib/theme.js"), `group ${index}`);
+    }
+  }
+});
