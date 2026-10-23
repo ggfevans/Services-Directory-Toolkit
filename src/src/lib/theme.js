@@ -127,7 +127,8 @@ SDT.theme = {
    * Checks doc now, then again whenever its style may have changed: attributes of <html> or <body>,
    * elements added to or removed from <head>, or the system's colour scheme. Changes within DELAY_MS
    * of the first are checked together, once. Records for the check's own attributes are ignored, so
-   * it never reacts to its own writes. Returns a function that stops watching.
+   * it never reacts to its own writes, and so are <body> class changes that only add or remove the
+   * extension's sdt- classes. Returns a function that stops watching.
    */
   watch(doc) {
     const view = doc.defaultView;
@@ -142,7 +143,13 @@ SDT.theme = {
         timer = view.setTimeout(SDT.guard.wrap(check), SDT.theme.DELAY_MS);
       }
     };
-    const own = (record) => record.type === "attributes" && record.target === root && SDT.theme.ATTRIBUTES.includes(record.attributeName);
+    const pageClasses = (value) => (value ?? "").split(/\s+/).filter((name) => name && !name.startsWith("sdt-")).sort().join(" ");
+    // The check's own attributes on <html>, and a change to <body>'s class that adds or removes only
+    // the extension's own sdt- classes, such as the busy classes the content scripts toggle.
+    const own = (record) => record.type === "attributes" && (
+      (record.target === root && SDT.theme.ATTRIBUTES.includes(record.attributeName)) ||
+      (record.target === doc.body && record.attributeName === "class" && typeof record.oldValue === "string" &&
+        pageClasses(record.oldValue) === pageClasses(record.target.getAttribute("class"))));
     const observer = new view.MutationObserver(SDT.guard.wrap((records) => {
       if (records.some((record) => !own(record))) {
         schedule();
@@ -150,7 +157,7 @@ SDT.theme = {
     }));
     observer.observe(root, { attributes: true });
     if (doc.body) {
-      observer.observe(doc.body, { attributes: true });
+      observer.observe(doc.body, { attributes: true, attributeOldValue: true });
     }
     if (doc.head) {
       observer.observe(doc.head, { childList: true });

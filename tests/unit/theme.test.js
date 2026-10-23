@@ -172,7 +172,7 @@ test("watch checks at once and observes <html>, <body> and <head>", () => {
   theme.watch(page.doc);
   assert.equal(page.checks, 1);
   assert.equal(page.html.getAttribute("data-sdt-theme"), "light");
-  assert.deepEqual(page.observers[0].targets, [["html", { attributes: true }], ["body", { attributes: true }], ["head", { childList: true }]]);
+  assert.deepEqual(page.observers[0].targets, [["html", { attributes: true }], ["body", { attributes: true, attributeOldValue: true }], ["head", { childList: true }]]);
 });
 
 test("watch checks once for several changes in a row, 500 ms after the first", () => {
@@ -195,6 +195,20 @@ test("watch ignores its own attribute writes, so it never reacts to itself", () 
   assert.equal(page.timers.length, 0);
   // The same attribute names on <body> are not its own writes.
   page.mutate({ type: "attributes", target: page.body, attributeName: "data-sdt-theme" });
+  assert.equal(page.timers.length, 1);
+});
+
+test("watch ignores the extension's own sdt- classes on <body>, such as the busy classes", () => {
+  const page = fakePage();
+  theme.watch(page.doc);
+  page.body.setAttribute("class", "claro sdt-loading-metadata");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: "claro" });
+  page.body.setAttribute("class", "claro");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: "claro sdt-loading-metadata" });
+  assert.equal(page.timers.length, 0);
+  // A change to the page's own classes still counts, even alongside a busy class.
+  page.body.setAttribute("class", "dark sdt-loading-metadata");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: "claro" });
   assert.equal(page.timers.length, 1);
 });
 

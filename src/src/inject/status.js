@@ -86,8 +86,6 @@
     if (type === "jsonView" || type === "other") {
       return;
     }
-    // Match the extension's palette to this page's background, now and when the page's style changes.
-    SDT.theme.watch(document);
     SDT.guard.whenActive(enableAction);
     SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
 
@@ -97,6 +95,9 @@
     indicator.appendChild(message);
     document.body.appendChild(indicator);
     watch(document.body, indicator, message);
+    // Match the extension's palette to this page's background, now and when the page's style changes.
+    // Last, so the toolbar button and the indicator never depend on it.
+    SDT.theme.watch(document);
   };
 
   SDT.guard.run(start);

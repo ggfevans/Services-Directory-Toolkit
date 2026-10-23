@@ -1117,7 +1117,7 @@ test("watch checks at once and observes <html>, <body> and <head>", () => {
   theme.watch(page.doc);
   assert.equal(page.checks, 1);
   assert.equal(page.html.getAttribute("data-sdt-theme"), "light");
-  assert.deepEqual(page.observers[0].targets, [["html", { attributes: true }], ["body", { attributes: true }], ["head", { childList: true }]]);
+  assert.deepEqual(page.observers[0].targets, [["html", { attributes: true }], ["body", { attributes: true, attributeOldValue: true }], ["head", { childList: true }]]);
 });
 
 test("watch checks once for several changes in a row, 500 ms after the first", () => {
@@ -1140,6 +1140,20 @@ test("watch ignores its own attribute writes, so it never reacts to itself", () 
   assert.equal(page.timers.length, 0);
   // The same attribute names on <body> are not its own writes.
   page.mutate({ type: "attributes", target: page.body, attributeName: "data-sdt-theme" });
+  assert.equal(page.timers.length, 1);
+});
+
+test("watch ignores the extension's own sdt- classes on <body>, such as the busy classes", () => {
+  const page = fakePage();
+  theme.watch(page.doc);
+  page.body.setAttribute("class", "claro sdt-loading-metadata");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: "claro" });
+  page.body.setAttribute("class", "claro");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: "claro sdt-loading-metadata" });
+  assert.equal(page.timers.length, 0);
+  // A change to the page's own classes still counts, even alongside a busy class.
+  page.body.setAttribute("class", "dark sdt-loading-metadata");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: "claro" });
   assert.equal(page.timers.length, 1);
 });
 
@@ -1347,7 +1361,13 @@ SDT.theme = {
         timer = view.setTimeout(SDT.guard.wrap(check), SDT.theme.DELAY_MS);
       }
     };
-    const own = (record) => record.type === "attributes" && record.target === root && SDT.theme.ATTRIBUTES.includes(record.attributeName);
+    const pageClasses = (value) => (value ?? "").split(/\s+/).filter((name) => name && !name.startsWith("sdt-")).sort().join(" ");
+    // The check's own attributes on <html>, and a change to <body>'s class that adds or removes only
+    // the extension's own sdt- classes, such as the busy classes the content scripts toggle.
+    const own = (record) => record.type === "attributes" && (
+      (record.target === root && SDT.theme.ATTRIBUTES.includes(record.attributeName)) ||
+      (record.target === doc.body && record.attributeName === "class" && typeof record.oldValue === "string" &&
+        pageClasses(record.oldValue) === pageClasses(record.target.getAttribute("class"))));
     const observer = new view.MutationObserver(SDT.guard.wrap((records) => {
       if (records.some((record) => !own(record))) {
         schedule();
@@ -1355,7 +1375,7 @@ SDT.theme = {
     }));
     observer.observe(root, { attributes: true });
     if (doc.body) {
-      observer.observe(doc.body, { attributes: true });
+      observer.observe(doc.body, { attributes: true, attributeOldValue: true });
     }
     if (doc.head) {
       observer.observe(doc.head, { childList: true });
@@ -1898,10 +1918,11 @@ Expected: 8 fail, at the `data-sdt-theme` wait in `openQuietPage` or the first `
 
 - [ ] **Step 4: Start the theme check from `status.js`**
 
-In `src/src/inject/status.js`, in `start`, after the `if (type === "jsonView" || type === "other") { return; }` block, add:
+In `src/src/inject/status.js`, at the end of `start`, after `watch(document.body, indicator, message);`, add:
 
 ```js
     // Match the extension's palette to this page's background, now and when the page's style changes.
+    // Last, so the toolbar button and the indicator never depend on it.
     SDT.theme.watch(document);
 ```
 
@@ -2211,3 +2232,8 @@ No finding in Appendix A closes in full. This issue delivers part of one, and th
 
 - **Task 1, Step 7 (screenshot script).** `shots.mjs` makes its browser profiles under `PROFILES` when set, instead of always under `os.tmpdir()`, so the profiles can live in a scratch folder. Setting `TMPDIR` to that long scratch path instead made Chromium exit with SIGTRAP at startup, because it puts its own sockets under `TMPDIR` too. The base for the "before" screenshots was a worktree of the plan commit (02acb24), whose `src/` is the same as `main`'s at 2ec673e. All 14 screenshots were byte-identical before and after Task 1, and again after Task 6. With `.sdt-visually-hidden` made visible in a copy of `sdt.css`, the six host pages that show a status message (root, service and layer, light and dark) differed and the other eight didn't, so the comparison sees a change.
 - **Task 7, `.coderabbit.yaml`.** The `src/**/*.js` instructions also changed: "Classes the extension injects start with sdt-." now says they start with `sdt`, the shared components' root class `sdt` or `sdt-`, to match the same change in `CLAUDE.md`. Without it, CodeRabbit would flag Phase 5's `sdt` root class.
+
+### After the independent review
+
+- **The watcher ignores the extension's own `sdt-` classes on `<body>`.** `inject.js`, `mapImages.js` and `queryTest.js` toggle `sdt-loading-*` on `<body>`, and each toggle scheduled a recheck: two style reads every 500 ms while a page loaded. `<body>` is now observed with `attributeOldValue`, and a class change whose non-`sdt-` classes are the same before and after counts as the extension's own. Unit test: "watch ignores the extension's own sdt- classes on <body>, such as the busy classes", which failed first.
+- **`status.js` starts the theme check last,** after enabling the toolbar button and building the indicator, so neither depends on it.
