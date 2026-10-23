@@ -148,7 +148,7 @@ SDT.theme = {
     // the extension's own sdt- classes, such as the busy classes the content scripts toggle.
     const own = (record) => record.type === "attributes" && (
       (record.target === root && SDT.theme.ATTRIBUTES.includes(record.attributeName)) ||
-      (record.target === doc.body && record.attributeName === "class" && typeof record.oldValue === "string" &&
+      (record.target === doc.body && record.attributeName === "class" && record.oldValue !== undefined &&
         pageClasses(record.oldValue) === pageClasses(record.target.getAttribute("class"))));
     const observer = new view.MutationObserver(SDT.guard.wrap((records) => {
       if (records.some((record) => !own(record))) {

@@ -1157,6 +1157,14 @@ test("watch ignores the extension's own sdt- classes on <body>, such as the busy
   assert.equal(page.timers.length, 1);
 });
 
+test("watch ignores the first busy class on a <body> that had no class attribute", () => {
+  const page = fakePage();
+  theme.watch(page.doc);
+  page.body.setAttribute("class", "sdt-loading-metadata");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: null });
+  assert.equal(page.timers.length, 0);
+});
+
 test("a batch with its own write and a page change still checks once", () => {
   const page = fakePage();
   theme.watch(page.doc);
@@ -1366,7 +1374,7 @@ SDT.theme = {
     // the extension's own sdt- classes, such as the busy classes the content scripts toggle.
     const own = (record) => record.type === "attributes" && (
       (record.target === root && SDT.theme.ATTRIBUTES.includes(record.attributeName)) ||
-      (record.target === doc.body && record.attributeName === "class" && typeof record.oldValue === "string" &&
+      (record.target === doc.body && record.attributeName === "class" && record.oldValue !== undefined &&
         pageClasses(record.oldValue) === pageClasses(record.target.getAttribute("class"))));
     const observer = new view.MutationObserver(SDT.guard.wrap((records) => {
       if (records.some((record) => !own(record))) {
@@ -2237,3 +2245,4 @@ No finding in Appendix A closes in full. This issue delivers part of one, and th
 
 - **The watcher ignores the extension's own `sdt-` classes on `<body>`.** `inject.js`, `mapImages.js` and `queryTest.js` toggle `sdt-loading-*` on `<body>`, and each toggle scheduled a recheck: two style reads every 500 ms while a page loaded. `<body>` is now observed with `attributeOldValue`, and a class change whose non-`sdt-` classes are the same before and after counts as the extension's own. Unit test: "watch ignores the extension's own sdt- classes on <body>, such as the busy classes", which failed first.
 - **`status.js` starts the theme check last,** after enabling the toolbar button and building the indicator, so neither depends on it.
+- **A `<body>` with no class attribute.** Its first `sdt-` class arrives with a null `oldValue`, which the filter first treated as a page change (CodeAnt). A null now counts as no classes; only a missing `oldValue` (records without it) still counts as a page change. Unit test: "watch ignores the first busy class on a <body> that had no class attribute".

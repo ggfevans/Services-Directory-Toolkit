@@ -212,6 +212,14 @@ test("watch ignores the extension's own sdt- classes on <body>, such as the busy
   assert.equal(page.timers.length, 1);
 });
 
+test("watch ignores the first busy class on a <body> that had no class attribute", () => {
+  const page = fakePage();
+  theme.watch(page.doc);
+  page.body.setAttribute("class", "sdt-loading-metadata");
+  page.mutate({ type: "attributes", target: page.body, attributeName: "class", oldValue: null });
+  assert.equal(page.timers.length, 0);
+});
+
 test("a batch with its own write and a page change still checks once", () => {
   const page = fakePage();
   theme.watch(page.doc);
