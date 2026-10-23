@@ -3,7 +3,8 @@
   // scripts are busy, and a status line for screen readers. Busy means a class starting sdt-loading-
   // is on <body>, which inject.js, mapImages.js and queryTest.js set. The indicator takes no clicks
   // and has no click handler (SEC-1, ADV-3); settings live on the options page. Phase 5 moves it
-  // into the page as the status bar (#14).
+  // into the page as the status bar (#14). It also starts the theme check (src/src/lib/theme.js),
+  // because it runs on every Services Directory page and on no other.
   const SVG = "http://www.w3.org/2000/svg";
   const NAME = "Services Directory Toolkit";
   const LOADING = "SD Toolkit: loading";
@@ -85,6 +86,8 @@
     if (type === "jsonView" || type === "other") {
       return;
     }
+    // Match the extension's palette to this page's background, now and when the page's style changes.
+    SDT.theme.watch(document);
     SDT.guard.whenActive(enableAction);
     SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
 

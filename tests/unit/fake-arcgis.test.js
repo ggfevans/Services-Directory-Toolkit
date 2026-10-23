@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  arcgisError, createFakeArcGIS, FAKE_ORIGIN, html, json, ONLINE_ORG, ONLINE_ORIGIN, ONLINE_REST_PATH, ONLINE_TOKENS,
+  arcgisError, createFakeArcGIS, FAKE_ORIGIN, HOST_STYLES, html, json, ONLINE_ORG, ONLINE_ORIGIN, ONLINE_REST_PATH, ONLINE_TOKENS,
   PORTAL_ORIGIN, SERVER_TOKENS, whereMatcher
 } from "../fixtures/fake-arcgis.js";
 import { createPages, loginPage, messagePage, tokensPage } from "../fixtures/pages.js";
@@ -138,6 +138,22 @@ test("static assets, the non-REST page and unknown paths", () => {
   assert.equal(get(server, "/arcgis/rest/services/NoSuchService/MapServer"), null);
   assert.equal(get(server, "/arcgis/rest/services/Parcels/MapServer/9"), null);
   assert.equal(get(server, "/somewhere/else"), null);
+});
+
+test("the pages' stylesheet is light by default, and dark when the server is created with hostStyle dark", () => {
+  const light = get(createFakeArcGIS(), "/arcgis/rest/static/main.css");
+  assert.equal(light.contentType, "text/css; charset=utf-8");
+  assert.equal(light.body, HOST_STYLES.light);
+  assert.match(light.body, /^body\.dark \{ background: #16191d;/m);
+  assert.match(light.body, /^body\.grey \{ background: #808080;/m);
+  const dark = createFakeArcGIS(undefined, undefined, { hostStyle: "dark" });
+  assert.equal(get(dark, "/arcgis/rest/static/main.css").body, HOST_STYLES.dark);
+  assert.equal(dark.respond(request("/arcgis/rest/static/main.css", { origin: ONLINE_ORIGIN })).body, HOST_STYLES.dark);
+  assert.match(HOST_STYLES.dark, /^body \{[^}]*background: #16191d;/m);
+});
+
+test("an unknown host style is refused when the server is created", () => {
+  assert.throws(() => createFakeArcGIS(undefined, undefined, { hostStyle: "sepia" }), /unknown host style sepia/);
 });
 
 test("overrides take precedence, and every request is recorded", () => {
