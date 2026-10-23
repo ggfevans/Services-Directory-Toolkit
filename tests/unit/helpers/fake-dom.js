@@ -40,5 +40,7 @@ class FakeNode {
 
 export const fakeDocument = () => ({
   createElement: (tag) => new FakeNode(1, tag.toUpperCase()),
+  // SVG elements keep their case, as in a browser.
+  createElementNS: (namespaceURI, tag) => Object.assign(new FakeNode(1, tag), { namespaceURI }),
   createTextNode: (data) => Object.assign(new FakeNode(3, "#text"), { data: String(data) })
 });

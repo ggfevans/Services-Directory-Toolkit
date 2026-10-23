@@ -99,3 +99,11 @@ test("every content-script group loads the theme check", () => {
     }
   }
 });
+
+test("every content-script group loads the icons", () => {
+  for (const [index, group] of manifest.content_scripts.entries()) {
+    if (group.js) {
+      assert.ok(group.js.includes("src/lib/icon.js"), `group ${index}`);
+    }
+  }
+});

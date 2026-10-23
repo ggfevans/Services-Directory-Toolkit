@@ -54,6 +54,7 @@
         "src/lib/page.js",
         "src/lib/settings.js",
         "src/lib/theme.js",
+        "src/lib/icon.js",
         "src/inject/inject.js",
         "src/inject/status.js",
         "src/inject/mapImages.js"
@@ -79,6 +80,7 @@
         "src/lib/page.js",
         "src/lib/settings.js",
         "src/lib/theme.js",
+        "src/lib/icon.js",
         "src/inject/queryTest.js"
       ]
     },
@@ -110,6 +112,7 @@
         "src/lib/page.js",
         "src/lib/settings.js",
         "src/lib/theme.js",
+        "src/lib/icon.js",
         "src/inject/printTask.js"
       ]
     }
