@@ -1,6 +1,8 @@
 // The status bar that replaces the corner ring (#14, design review section 6.3): one line in the page
 // flow under the page's first <h2>, with a throttled role="status" message, a spinner that stops under
-// reduced motion, and no listener except its Load more button's.
+// reduced motion, and no listener except its Load more button's. Work that only <body>'s busy classes
+// report (map previews, the Query and Find Helpers) shows no bar: a visually hidden status line
+// announces it instead.
 import { test, expect, html, json, REST_ROOT } from "./fixtures.js";
 import { catalog } from "../fixtures/catalog.js";
 import { folderPage } from "../fixtures/pages.js";
@@ -9,6 +11,10 @@ import { axeViolations } from "./axe.js";
 const ROOT_PAGE = /^\/arcgis\/rest\/services$/;
 const LAYER_PAGE = `${REST_ROOT}/Parcels/MapServer/0`;
 const PRINT_TASK = `${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute`;
+const QUERY_PAGE = `${REST_ROOT}/Parcels/MapServer/0/query`;
+const IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=#preview";
+const HIDDEN_LOADING = "SD Toolkit: loading";
+const HIDDEN_DONE = "SD Toolkit: finished loading";
 const NO_VIOLATIONS = { light: [], dark: [] };
 
 // The services on the root page that get automatic requests: map, feature and image services.
@@ -16,6 +22,22 @@ const ROOT_SERVICES = catalog.services.filter((service) => !service.name.include
 
 const bar = (page) => page.locator(".sdt-statusbar");
 const message = (page) => bar(page).getByRole("status");
+const hiddenLine = (page) => page.locator(".sdt-visually-hidden[role=status]");
+
+/** Records every text the hidden status line shows, with its time. Call before the work starts. */
+const recordHiddenLine = (page) => page.evaluate(() => {
+  const line = document.querySelector(".sdt-visually-hidden[role=status]");
+  globalThis.hiddenSeen = [];
+  new MutationObserver(() => globalThis.hiddenSeen.push({ at: performance.now(), text: line.textContent }))
+    .observe(line, { childList: true, characterData: true, subtree: true });
+});
+const hiddenSeen = (page) => page.evaluate(() => globalThis.hiddenSeen.map((change) => change.text));
+
+/** Answers each matching request after delay ms, with body. */
+const late = (delay, body) => async () => {
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return json(body);
+};
 
 /** The extension's own requests: every one asks for f=json, in its query string or its form body. */
 const extensionCalls = (fakeServer) => fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json");
@@ -80,16 +102,12 @@ test("a page with nothing to load shows no bar", async ({ page, fakeServer }) =>
   await expect(bar(page)).toHaveCount(0);
 });
 
-test("the message changes at most once a second, and its last state always lands", async ({ page }) => {
+test("the hidden status line changes at most once a second, and its last state always lands, with no bar", async ({ page }) => {
   await page.goto(PRINT_TASK);
-  await expect(page.locator("html[data-sdt-theme]")).toBeAttached();
-  await expect(bar(page)).toHaveCount(0);
-  // The first busy class on <body> creates the bar.
-  await page.evaluate(() => document.body.classList.add("sdt-loading-test"));
-  await expect(bar(page)).toBeVisible();
-  // Toggle a busy class on <body> every 100 ms for 2.5 s, and record each change to the message.
+  await expect(hiddenLine(page)).toBeAttached();
+  // Toggle a busy class on <body> every 100 ms for 2.5 s, and record each change to the hidden line.
   const changes = await page.evaluate(async () => {
-    const status = document.querySelector(".sdt-statusbar [role=status]");
+    const status = document.querySelector(".sdt-visually-hidden[role=status]");
     const seen = [];
     new MutationObserver(() => seen.push({ at: performance.now(), text: status.textContent }))
       .observe(status, { childList: true, characterData: true, subtree: true });
@@ -105,8 +123,51 @@ test("the message changes at most once a second, and its last state always lands
   for (let i = 1; i < changes.length; i++) {
     expect(changes[i].at - changes[i - 1].at).toBeGreaterThanOrEqual(990);
   }
-  expect(changes.map((change) => change.text)).toContain("Loading");
-  expect(changes.at(-1).text).toBe("Finished loading");
+  expect(changes.map((change) => change.text)).toContain(HIDDEN_LOADING);
+  expect(changes.at(-1).text).toBe(HIDDEN_DONE);
+  await expect(bar(page)).toHaveCount(0);
+});
+
+test("a Query Helper value load shows no bar; the hidden line says loading, then finished", async ({ page, fakeServer }) => {
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/0\/query\?.*returnDistinctValues=true/,
+    late(1500, { features: [{ attributes: { OWNER_NAME: "A. Example" } }] }));
+  await page.goto(QUERY_PAGE);
+  await expect(page.getByText("Query Helper", { exact: true })).toBeVisible();
+  await recordHiddenLine(page);
+  await page.locator("select:has(option[value='OWNER_NAME'])").selectOption("OWNER_NAME");
+  await expect(hiddenLine(page)).toHaveText(HIDDEN_LOADING);
+  await expect(page.locator("option", { hasText: "A. Example" })).toBeAttached();
+  await expect(hiddenLine(page)).toHaveText(HIDDEN_DONE);
+  expect(await hiddenSeen(page)).toEqual([HIDDEN_LOADING, HIDDEN_DONE]);
+  await expect(bar(page)).toHaveCount(0);
+});
+
+test("a map preview on a folder page with service details off shows no bar; the hidden line says loading, then finished", async ({ page, fakeServer, seedStorage }) => {
+  await seedStorage({ autoMetadata: false });
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/\?f=json$/, late(1500, { initialExtent: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 } }));
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/export\?/, () => json({ href: IMAGE }));
+  await page.goto(REST_ROOT);
+  await expect(page.locator("html[data-sdt-theme]")).toBeAttached();
+  await recordHiddenLine(page);
+  await page.getByRole("link", { name: "Parcels", exact: true }).first().hover();
+  await expect(hiddenLine(page)).toHaveText(HIDDEN_LOADING);
+  await expect(page.locator("#mapimage")).toHaveAttribute("src", IMAGE);
+  await expect(hiddenLine(page)).toHaveText(HIDDEN_DONE);
+  expect(await hiddenSeen(page)).toEqual([HIDDEN_LOADING, HIDDEN_DONE]);
+  await expect(bar(page)).toHaveCount(0);
+});
+
+test("a map preview after the job has finished leaves the bar's message alone", async ({ page, fakeServer }) => {
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/\?f=json$/, late(1500, { initialExtent: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 } }));
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/export\?/, () => json({ href: IMAGE }));
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText(/^Loaded details for/);
+  const done = await message(page).textContent();
+  await page.getByRole("link", { name: "Parcels", exact: true }).first().hover();
+  await expect(page.locator("#mapimage")).toHaveAttribute("src", IMAGE);
+  await page.waitForTimeout(1200);
+  await expect(message(page)).toHaveText(done);
+  await expect(bar(page)).toHaveAttribute("data-tone", "ok");
 });
 
 test("under reduced motion the spinner doesn't animate", async ({ page, fakeServer }) => {
@@ -202,11 +263,19 @@ test("Load more is reachable with Tab and works with Enter, and a second press w
   });
   await page.keyboard.press("Tab");
   await expect(button).toBeFocused();
+  // Count the clicks that reach the button, to prove the second Enter lands on it.
+  await button.evaluate((element) => {
+    globalThis.loadMoreClicks = 0;
+    element.addEventListener("click", () => {
+      globalThis.loadMoreClicks += 1;
+    });
+  });
   await page.keyboard.press("Enter");
-  await expect(button).toBeDisabled();
+  await expect(button).toHaveAttribute("aria-disabled", "true");
+  await expect(button).toBeFocused();
   await expect.poll(() => bulkCalls(fakeServer).length).toBe(54);
   await page.keyboard.press("Enter");
-  await button.dispatchEvent("click");
+  expect(await page.evaluate(() => globalThis.loadMoreClicks)).toBe(2);
   await page.waitForTimeout(300);
   expect(bulkCalls(fakeServer)).toHaveLength(54);
   release();
@@ -215,4 +284,6 @@ test("Load more is reachable with Tab and works with Enter, and a second press w
   expect(bulkCalls(fakeServer)).toHaveLength(60);
   await expect(bar(page).getByRole("button")).toHaveCount(0);
   await expect(bar(page)).toHaveAttribute("data-tone", "ok");
+  // The button went away while it had focus, so focus moved to the bar's message, not to <body>.
+  expect(await page.evaluate(() => document.activeElement === document.querySelector(".sdt-statusbar [role=status]"))).toBe(true);
 });
