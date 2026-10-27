@@ -67,7 +67,7 @@
     padding: 0.4em 0.8em;
     margin:  0.2em 0.4em 0.2em 0;
     background-color: #336;
-    color: White;
+    color: white;
     font-weight: bold;
     z-index: inherit;
 }
@@ -161,7 +161,7 @@ textarea.sdt-hidden {
 }
 
 .sdt-map-image-panel {
-    position:fixed;
+    position: fixed;
     top:0;
     right:0;
     border:1px solid #bbb;
@@ -171,8 +171,6 @@ textarea.sdt-hidden {
     width: 20%;
     height: 20%;
     overflow: visible;
-    display: table-cell;
-    vertical-align: bottom;
     text-align: center;
 }
 
@@ -188,5 +186,5 @@ textarea.sdt-hidden {
 
 .sdt-map-image-panel > p {
     text-align: center;
-    size: 0.8em;
+    font-size: 0.8em;
 }

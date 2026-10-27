@@ -9,13 +9,7 @@ const label = (page, text) => page.locator("b", { hasText: new RegExp(`^${text}`
 // "Number of features: N" and "Features with shapes: N" items inside it.
 const layerItem = (page, name) => page.locator("li", { has: page.getByRole("link", { name, exact: true }) });
 
-// The list item for a field on a layer page: the children of the list that follows the "Fields:" label.
-// The extension nests the count items inside it.
-const field = (page, name) => page
-  .locator("xpath=//b[starts-with(normalize-space(.), 'Fields:')]/following-sibling::ul[1]/li")
-  .filter({ hasText: new RegExp(`^\\s*${name}\\b`) });
-
-// A nested list item whose text matches, such as "Features with values: 3 Response time: 12ms".
+// A nested list item whose text matches, such as "Number of features: 3".
 const item = (parent, pattern) => parent.locator("li", { hasText: pattern });
 
 test("the services root shows the status indicator, spatial reference badges and service details", async ({ page }) => {
@@ -54,22 +48,27 @@ test("a MapServer page shows details and feature counts for each layer", async (
   }
 });
 
-test("a layer page counts values for every field and every coded value", async ({ page }) => {
+test("a layer page sends no automatic field or domain count queries", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0`);
-  await expect(label(page, "Features with values:")).toHaveCount(6);
-  await expect(label(page, "Features without empty values:")).toHaveCount(3);
-  await expect(label(page, "Residential:")).toHaveCount(1);
-  await expect(label(page, "Commercial:")).toHaveCount(1);
-  const withValues = { OBJECTID: 3, SHAPE: 2, PARCEL_ID: 3, OWNER_NAME: 2, LAND_USE: 3, ACRES: 2 };
-  for (const [name, count] of Object.entries(withValues)) {
-    await expect(item(field(page, name), new RegExp(`^Features with values:\\s+${count}\\s`))).toHaveCount(1);
-  }
-  const withoutEmpty = { PARCEL_ID: 3, OWNER_NAME: 1, LAND_USE: 3 };
-  for (const [name, count] of Object.entries(withoutEmpty)) {
-    await expect(item(field(page, name), new RegExp(`^Features without empty values:\\s+${count}\\s`))).toHaveCount(1);
-  }
-  await expect(item(field(page, "LAND_USE"), /^Residential:\s+2\b/)).toHaveCount(1);
-  await expect(item(field(page, "LAND_USE"), /^Commercial:\s+1\b/)).toHaveCount(1);
+  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
+  await page.waitForTimeout(500);
+  expect(fakeServer.calls.filter((call) => /\/query$/.test(call.path) && (call.query.where || call.body.where))).toEqual([]);
+  await expect(label(page, "Features with values:")).toHaveCount(0);
+});
+
+// getColor kept colours in a plain object, so a spatial reference named like a prototype property
+// returned Object.prototype and threw, which left the other rows without their details.
+test("a service whose spatial reference wkid is \"__proto__\" still gets its badge (SEC-8)", async ({ page, fakeServer }) => {
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\?f=json$/, () => ({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ serviceDescription: "Odd service.", spatialReference: { wkid: "__proto__" } })
+  }));
+  await page.goto(REST_ROOT);
+  await expect(page.getByRole("link", { name: "__proto__" })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "3857" })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "4326" })).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
 
