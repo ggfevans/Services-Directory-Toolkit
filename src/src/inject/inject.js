@@ -355,9 +355,14 @@
         if (outcome !== "skipped") {
           outcome = "failed";
         }
+      } else if (result.data === null || typeof result.data !== "object" || Array.isArray(result.data)) {
+        row.notes.push(ul.appendChild(failure({ error: { message: "The server's answer was not a count." } }, { type: count.type })));
+        if (outcome !== "skipped") {
+          outcome = "failed";
+        }
       } else {
         row.counted.add(count.key);
-        if (result.data?.count !== undefined && result.data?.count !== null) {
+        if (result.data.count !== undefined && result.data.count !== null) {
           ul.appendChild(li(count.label, result.data.count));
         }
       }

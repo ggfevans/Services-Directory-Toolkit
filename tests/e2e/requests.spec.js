@@ -354,6 +354,24 @@ for (const [title, body] of [
   });
 }
 
+// A row whose total-count query answers literal null is a failed count: an error line, not a silent
+// success that Load more would never retry.
+test("a count whose body is literal null shows an error line and fails the row", async ({ page, fakeServer, bulkRoot }) => {
+  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk03\/MapServer\?f=json$/, () => json({
+    currentVersion: catalog.currentVersion,
+    objectIdField: "OBJECTID",
+    fields: [{ name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID" }]
+  }));
+  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk03\/MapServer\/query\?/, () => ({ status: 200, headers: { "content-type": "application/json" }, body: "null" }));
+  bulkRoot(6);
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText("Loaded details for 5 services in 7 requests. 1 failed.");
+  await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+  await expect(page.getByText(/not a count/)).toHaveCount(1);
+  await expect(page.locator(".sdt-datablock")).toHaveCount(6);
+  await page.waitForTimeout(300);
+});
+
 test("pagehide cancels pending requests", async ({ page, fakeServer }) => {
   // The Bulk requests answer only once the test releases them, after the pagehide.
   let release;
