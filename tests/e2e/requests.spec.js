@@ -336,16 +336,32 @@ test("a Load more batch whose row throws re-enables the bar, with no unhandled r
 });
 
 test("pagehide cancels pending requests", async ({ page, fakeServer }) => {
-  fakeServer.override(BULK_JSON, never);
+  // The Bulk requests answer only once the test releases them, after the pagehide.
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  fakeServer.override(BULK_JSON, async () => {
+    await held;
+    return bulkService();
+  });
   bulkListing(fakeServer, 12);
   await page.goto(REST_ROOT);
   await expect(message(page)).toHaveText("Loading details: 0 of 12 services");
   await expect(message(page).locator(".sdt-spinner")).toBeVisible();
   expect(await axeViolations(page, { include: ".sdt-statusbar", hostPage: true })).toEqual(NO_VIOLATIONS);
   expect(bulkCalls(fakeServer)).toHaveLength(4);
-  await page.goto(LAYER_PAGE);
+  // Fire pagehide in the live document (the isolated world sees the same DOM events), so the page
+  // stays to show what happened, then let the four requests in flight answer.
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+  release();
   await page.waitForTimeout(800);
   expect(bulkCalls(fakeServer)).toHaveLength(4);
+  // The eight queued rows were never sent, and say so; the four in flight were cancelled.
+  await expect(page.getByText("Not loaded: the page was left.")).toHaveCount(8);
+  await expect(page.locator(".sdt-datablock")).toHaveCount(0);
+  await expect(message(page)).toHaveText("Loaded details for 0 services in 4 requests");
+  expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
 });
 
 test.describe("with the back/forward cache on", () => {
@@ -383,11 +399,11 @@ test.describe("with the back/forward cache on", () => {
       // A restore is a new page view: the twelve rows the page left get Load more, with a fresh budget.
       const button = bar(page).getByRole("button", { name: "Load 12 more services" });
       await expect(button).toBeVisible();
-      await expect(message(page)).toHaveText("Paused after 12 automatic requests. 12 services not loaded yet.");
+      await expect(message(page)).toHaveText("Paused after 4 automatic requests. 12 services not loaded yet.");
       expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
       expect(bulkCalls(fakeServer)).toHaveLength(4);
       await pressLoadMore(button);
-      await expect(message(page)).toHaveText("Loaded details for 12 services in 24 requests");
+      await expect(message(page)).toHaveText("Loaded details for 12 services in 16 requests");
       expect(bulkCalls(fakeServer)).toHaveLength(16);
     } else {
       await expect(message(page)).toHaveText("Loaded details for 12 services in 12 requests");

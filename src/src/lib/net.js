@@ -148,6 +148,8 @@ SDT.net = {
    * A queue for automatic requests. It sends only to URLs in scope, accepts at most max, keeps at
    * most concurrency in flight, cancels everything on target's pagehide, and stops for good after an
    * HTTP 429 or 503. fetchJson(url, options) takes SDT.net.fetchJson's options and never rejects.
+   * options.onSend, if given, is the limiter's own: it runs once, just before the request is sent,
+   * and never for a request that is refused or drained from the queue.
    */
   createLimiter({ max = SDT.net.BUDGET.max, concurrency = SDT.net.BUDGET.concurrency, scope = null, target = null, fetchJson = (url, options) => SDT.net.fetchJson(url, options) } = {}) {
     const controller = new AbortController();
@@ -185,8 +187,10 @@ SDT.net = {
         const job = queue.shift();
         state.active += 1;
         state.peak = Math.max(state.peak, state.active);
-        const signal = job.options.signal ? AbortSignal.any([job.options.signal, controller.signal]) : controller.signal;
-        Promise.resolve(fetchJson(job.url, { ...job.options, signal })).then(
+        const { onSend, ...options } = job.options;
+        const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+        onSend?.();
+        Promise.resolve(fetchJson(job.url, { ...options, signal })).then(
           (result) => finish(job, result),
           () => finish(job, refusal("network", "The request failed before the server answered.", job.url))
         );

@@ -50,15 +50,15 @@ SDT.status = {
       SDT.status.notify();
     };
     state.job = {
-      async fetch(url, options) {
-        const limiter = SDT.net.pageLimiter();
-        const before = limiter.stats().accepted;
-        const promise = limiter.fetchJson(url, options);
-        if (limiter.stats().accepted > before) {
-          state.requests += 1;
-          SDT.status.notify();
-        }
-        return promise;
+      /** Sends through the page limiter. requests counts what reaches the server, not what was queued. */
+      async fetch(url, options = {}) {
+        return SDT.net.pageLimiter().fetchJson(url, {
+          ...options,
+          onSend: () => {
+            state.requests += 1;
+            SDT.status.notify();
+          }
+        });
       },
       done: report("done"),
       failed: report("failed"),

@@ -111,7 +111,7 @@ test("message: no job and nothing reported returns null", () => {
   assert.equal(plain(SDT.status.message({ total: 0, done: 0, failed: 0, skipped: 0, requests: 0, kind: "services" })), null);
 });
 
-test("job.fetch counts accepted requests only: a refused \"limit\" result adds nothing", async () => {
+test("job.fetch counts sent requests only: a refused \"limit\" result adds nothing", async () => {
   const SDT = setup({ max: 2 });
   const job = SDT.status.job("services", 3);
   assert.equal((await job.fetch(at(1))).data !== undefined, true);
@@ -273,4 +273,21 @@ test("after pagehide, a back/forward restore (resetPageLimiter) offers Load more
   await SDT.status.loadMore();
   assert.equal(calls, 1);
   assert.equal(SDT.state.pageLimiter.stats().max, 100);
+});
+
+test("requests counts what was sent: rows pagehide drains from the queue add nothing", async () => {
+  const context = loadLib();
+  const { SDT } = context;
+  const listeners = [];
+  const target = { addEventListener: (type, fn) => type === "pagehide" && listeners.push(fn) };
+  SDT.state = { pageLimiter: SDT.net.createLimiter({ scope: SCOPE, target, fetchJson: (url, { signal }) => new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve({ error: { type: "aborted", message: "cancelled", url } }));
+  }) }) };
+  const job = SDT.status.job("services", 6);
+  const results = Array.from({ length: 6 }, (_, i) => job.fetch(at(i)));
+  await flush();
+  assert.equal(plain(SDT.status.snapshot()).requests, 4);
+  listeners.forEach((fn) => fn());
+  await Promise.all(results);
+  assert.equal(plain(SDT.status.snapshot()).requests, 4);
 });

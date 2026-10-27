@@ -245,3 +245,29 @@ test("resetPageLimiter keeps a limiter stopped by pushback: a 429 holds for the 
   assert.strictEqual(SDT.net.resetPageLimiter(), stopped);
   assert.strictEqual(SDT.net.pageLimiter(), stopped);
 });
+
+test("onSend runs once for each request sent, just before it goes, and never for a queued one pagehide drains", async () => {
+  const fake = fakeFetch();
+  const target = pageTarget();
+  const limiter = net.createLimiter({ scope: SCOPE, target, fetchJson: fake.fetchJson });
+  const sent = [];
+  const results = Array.from({ length: 6 }, (_, i) => limiter.fetchJson(at(i), { params: { f: "json" }, onSend: () => sent.push(i) }));
+  await flush();
+  assert.deepEqual(sent, [0, 1, 2, 3]);
+  // The callback is the limiter's: SDT.net.fetchJson never sees it.
+  assert.ok(fake.open.every((job) => !("onSend" in job.options) && job.options.params.f === "json"));
+  target.fire("pagehide");
+  await Promise.all(results);
+  assert.deepEqual(sent, [0, 1, 2, 3]);
+});
+
+test("onSend never runs for a queued request that a 429 drains", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ scope: SCOPE, fetchJson: fake.fetchJson });
+  let sent = 0;
+  const results = Array.from({ length: 6 }, (_, i) => limiter.fetchJson(at(i), { onSend: () => (sent += 1) }));
+  await flush();
+  fake.open[0].finish({ error: { type: "http", status: 429, message: "HTTP 429", url: at(0) } });
+  await Promise.all(results);
+  assert.equal(sent, 4);
+});
