@@ -57,8 +57,8 @@ reviews:
         Content scripts never write to chrome.storage (set, remove or clear); lint enforces it.
         They read settings only with await SDT.settings.read(keys), which validates; lint rejects
         chrome.storage.*.get here.
-        The status bar in status.js has one listener, on its Load more button, added through
-        SDT.guard; flag any other handler. Requests go through SDT.net.fetchJson or an SDT.status
+        The status bar in status.js has one listener on the bar, its Load more button's click, plus a
+        pageshow listener on window, both added through SDT.guard; flag any other handler. Requests go through SDT.net.fetchJson or an SDT.status
         job's fetch (the identifier name job is reserved for it); flag any other fetch call.
     - path: "src/manifest.json"
       instructions: |
