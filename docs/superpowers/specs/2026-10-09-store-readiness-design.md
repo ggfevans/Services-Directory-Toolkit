@@ -455,6 +455,8 @@ The classifier therefore takes the type from the pathname and `document.contentT
 
 ### Phase 5: Service and layer pages (`inject.js`, excluding the Find Helper)
 
+Phase 5 ships as three pull requests: part 1 is the request chains and the status bar (#45, #14); part 2 is #15 and #16; part 3 is the Count values button (#17).
+
 **Failure handling.** Count and detail chains use `fetchJson` and the limiter. A failed item shows an error line and the chain continues. Busy states clear in `finally`.
 
 **Shared style and theme:**
@@ -788,7 +790,7 @@ Delivered early by #13, before the other Phase 5 work.
 | CWS-3 | M | Content-script patterns count as all-sites access | 3, S | Fix (patterns in 3, justification in S) |
 | SEC-4 | M | Web-accessible resources (duplicate of MAN-1) | 3 | Fix |
 | CWS-4 | M | `short_name` over 12 characters (duplicate of MAN-4) | 3 | Fix |
-| SEC-5 | L | Automatic requests to any origin, unbounded | 2, 5 | Fix (same origin and limiter in 2, lazy loading in 5) |
+| SEC-5 | L | Automatic requests to any origin, unbounded | 2, 5 | Fix (same origin and limiter in 2, Load more in 5) |
 | SEC-6 | L | Unencoded query building (duplicate of INJ-5, QRY-2) | 5, 7 | Fix |
 | SEC-7 | L | Export `href` as image source; http basemap default; http spatialreference link | 5, 6 | Fix; basemap default moot (empty default) |
 | SEC-8 | L | Prototype keys in the colour map stall metadata | 5 | Fix |

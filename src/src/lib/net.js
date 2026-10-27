@@ -145,7 +145,7 @@ SDT.net = {
   },
 
   /**
-   * A queue for automatic requests. It sends only to URLs in scope, accepts at most max, keeps at
+   * A queue for automatic requests. It sends only to URLs in scope, accepts at most max (extend(n) raises it, for Load more), keeps at
    * most concurrency in flight, cancels everything on target's pagehide, and stops for good after an
    * HTTP 429 or 503. fetchJson(url, options) takes SDT.net.fetchJson's options and never rejects.
    * options.onSend, if given, is the limiter's own: it runs once, just before the request is sent,

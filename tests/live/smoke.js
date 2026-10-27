@@ -106,7 +106,7 @@ try {
   // 3. Content scripts on each page type.
   const other = await open("non-REST page", "https://example.com/");
   const root = await open("services root", BASE);
-  record("services root: status bar injected", (await count(root.locator(".sdt-statusbar"))) > 0);
+  record("services root: extension started", (await count(root.locator("html[data-sdt-theme]"))) > 0);
   const srLinks = await count(root.locator("a[href*='spatialreference.org']"));
   record("services root: spatial reference links rendered", srLinks > 0);
 
