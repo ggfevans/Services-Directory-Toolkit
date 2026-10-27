@@ -151,3 +151,23 @@ test("only lib files pass defaults to chrome.storage.*.get", async () => {
 test("the options page may write to chrome.storage", async () => {
   assert.deepEqual(await ruleIds("chrome.storage.sync.set({ a: 1 });\n", "src/src/options/example.js"), []);
 });
+
+test("an HTML entity in a string or template is an error in extension code (TOOL-7)", async () => {
+  assert.deepEqual(await ruleIds("String(\"&copy; 2026\");\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("String(\"&COPY;\");\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("String(`a&nbsp;${1}`);\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("String(\"&#169;\");\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("String(\"&#xA9;\");\n"), ["no-restricted-syntax"]);
+  assert.deepEqual(await ruleIds("String(\"&#XA9;\");\n"), ["no-restricted-syntax"]);
+});
+
+test("ampersands that are not entities are allowed (TOOL-7)", async () => {
+  assert.deepEqual(await ruleIds("String(\"a & b\");\n"), []);
+  assert.deepEqual(await ruleIds("String(\"R&D\");\n"), []);
+  assert.deepEqual(await ruleIds("String(\"?a=1&b=2\");\n"), []);
+  assert.deepEqual(await ruleIds("String(`?a=${1}&b=2`);\n"), []);
+});
+
+test("the entity rule does not apply outside src/ (TOOL-7)", async () => {
+  assert.deepEqual(await ruleIds("String(\"&copy;\");\n", "tests/e2e/example.js"), []);
+});

@@ -33,6 +33,13 @@ test("the services root shows the status indicator, spatial reference badges and
   }
 });
 
+// Part 2 (#16) finishes INJ-11, which also shows server HTML as text. This case covers the entity literal.
+test("INJ-11: service details label the copyright text without a literal &copy;", async ({ page }) => {
+  await page.goto(REST_ROOT);
+  await expect(page.getByText("Example County GIS").first()).toBeAttached();
+  await expect(page.getByText("&copy;")).toHaveCount(0);
+});
+
 test("a MapServer page shows details and feature counts for each layer", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer`);
   await expect(page.locator(".sdt-datablock")).toHaveCount(2);

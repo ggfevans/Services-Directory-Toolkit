@@ -97,7 +97,7 @@
    * @returns {object} an HTML DOM node with the spatial reference data.
    */
   const showSpatialReferenceData = (data) => {
-    let val="&nbsp;No valid spatial reference available &nbsp;",
+    let val="\u00a0No valid spatial reference available \u00a0",
       nodeCSS,
       container = null,
       spatialRefNode,
@@ -196,7 +196,7 @@
         dF.appendChild(li("Service Description", data.serviceDescription));
       }
       if (Object.hasOwn(data, "copyrightText") && data.copyrightText) {
-        dF.appendChild(li("&copy;", data.copyrightText));
+        dF.appendChild(li("\u00a9", data.copyrightText));
       }
       if (Object.hasOwn(data, "layers")) {
         dF.appendChild(li("# Layers", data.layers.length));

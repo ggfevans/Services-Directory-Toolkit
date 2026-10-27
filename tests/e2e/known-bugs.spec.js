@@ -59,12 +59,6 @@ knownBug("INJ-3", "the Find Helper inserts the raw value even when no form field
   await expect(page.locator("#searchText")).toHaveValue("A. Example");
 });
 
-knownBug("INJ-11", "service details label the copyright text without a literal &copy;", async ({ page }) => {
-  await page.goto(REST_ROOT);
-  await expect(page.getByText("Example County GIS").first()).toBeAttached();
-  await expect(page.getByText("&copy;")).toHaveCount(0);
-});
-
 test("PRT-1: a geoprocessing JSON result gets no requests and no dialog", async ({ page, fakeServer }) => {
   await page.goto(`${PRINT_TASK}/execute?f=pjson&Format=PDF`);
   await page.waitForTimeout(1000);
