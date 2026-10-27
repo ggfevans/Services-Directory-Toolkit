@@ -112,7 +112,10 @@
       }
       loading = true;
       view.button.setAttribute("aria-disabled", "true");
-      SDT.status.loadMore().finally(SDT.guard.wrap(() => {
+      // A row that throws rejects the batch; its row already reported a failure, so only log it.
+      SDT.status.loadMore().catch(SDT.guard.wrap((error) => {
+        console.debug("SD Toolkit: Load more failed", error);
+      })).finally(SDT.guard.wrap(() => {
         loading = false;
         update();
       }));
@@ -198,7 +201,16 @@
       return;
     }
     SDT.guard.whenActive(enableAction);
-    SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
+    SDT.guard.listen(window, "pageshow", (evt) => {
+      if (!evt.persisted) {
+        return;
+      }
+      enableAction();
+      // A restore from the back/forward cache is a new page view, with its own request budget, so
+      // the rows the pagehide left out can be loaded again with Load more.
+      SDT.net.resetPageLimiter();
+      SDT.status.notify();
+    });
 
     watch(document.body);
     // Match the extension's palette to this page's background, now and when the page's style changes.

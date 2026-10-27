@@ -245,3 +245,32 @@ test("message: after pagehide, skipped rows get the done copy and no button", ()
     action: null
   });
 });
+
+test("after pagehide, a back/forward restore (resetPageLimiter) offers Load more for the rows the page left", async () => {
+  const listeners = [];
+  const window = { addEventListener: (type, fn) => type === "pagehide" && listeners.push(fn) };
+  const { SDT } = loadLib({ globals: { window, location: { href: `${SCOPE}/rest/services` } } });
+  const job = SDT.status.job("services", 3);
+  let calls = 0;
+  job.onLoadMore(async () => {
+    calls += 1;
+  });
+  SDT.net.pageLimiter();
+  job.done();
+  listeners.forEach((fn) => fn());
+  job.skipped();
+  job.skipped();
+  SDT.state.status.requests = 3;
+  assert.equal(plain(SDT.status.snapshot()).canLoadMore, false);
+  SDT.net.resetPageLimiter();
+  const snapshot = plain(SDT.status.snapshot());
+  assert.deepEqual([snapshot.aborted, snapshot.canLoadMore], [false, true]);
+  assert.deepEqual(plain(SDT.status.message(snapshot)), {
+    tone: "warn",
+    text: "Paused after 3 automatic requests. 2 services not loaded yet.",
+    action: "Load 2 more services"
+  });
+  await SDT.status.loadMore();
+  assert.equal(calls, 1);
+  assert.equal(SDT.state.pageLimiter.stats().max, 100);
+});

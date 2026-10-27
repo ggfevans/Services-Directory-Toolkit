@@ -230,5 +230,18 @@ SDT.net = {
     SDT.state ??= {};
     SDT.state.pageLimiter ??= SDT.net.createLimiter({ scope: SDT.auth.scopeOf(location.href), target: window });
     return SDT.state.pageLimiter;
+  },
+
+  /**
+   * Starts a new page view (spec 4.3 counts the budget per page view), for a page restored from the
+   * back/forward cache: the limiter its pagehide cancelled is replaced by a fresh one. A limiter
+   * stopped by an HTTP 429 or 503 stays, because pushback stops automatic work on the page for good.
+   */
+  resetPageLimiter() {
+    if (!SDT.state?.pageLimiter?.stats().stopped) {
+      SDT.state ??= {};
+      SDT.state.pageLimiter = null;
+    }
+    return SDT.net.pageLimiter();
   }
 };

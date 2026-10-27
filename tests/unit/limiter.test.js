@@ -214,3 +214,34 @@ test("stats().aborted is false until pagehide, then true", () => {
   target.fire("pagehide");
   assert.equal(limiter.stats().aborted, true);
 });
+
+/** A lib whose page limiter is built by SDT.net.pageLimiter() for a page in SCOPE, on a stand-in window. */
+const pageLib = () => {
+  const window = pageTarget();
+  const { SDT } = loadLib({ globals: { window, location: { href: `${SCOPE}/rest/services` } } });
+  return { SDT, window };
+};
+
+test("resetPageLimiter after pagehide starts a new page view: a fresh limiter with its own 50", async () => {
+  const { SDT, window } = pageLib();
+  const first = SDT.net.pageLimiter();
+  window.fire("pagehide");
+  assert.equal(first.stats().aborted, true);
+  const second = SDT.net.resetPageLimiter();
+  assert.notStrictEqual(second, first);
+  assert.strictEqual(SDT.net.pageLimiter(), second);
+  assert.deepEqual(plain(second.stats()), { accepted: 0, active: 0, peak: 0, stopped: null, max: 50, aborted: false });
+  // The new limiter cancels on the next pagehide, as the first did.
+  window.fire("pagehide");
+  assert.equal(second.stats().aborted, true);
+});
+
+test("resetPageLimiter keeps a limiter stopped by pushback: a 429 holds for the page", async () => {
+  const { SDT } = pageLib();
+  SDT.state = { pageLimiter: SDT.net.createLimiter({ scope: SCOPE, fetchJson: async () => ({ error: { type: "http", message: "HTTP 429", status: 429 } }) }) };
+  const stopped = SDT.net.pageLimiter();
+  await stopped.fetchJson(at(0));
+  assert.equal(stopped.stats().stopped, 429);
+  assert.strictEqual(SDT.net.resetPageLimiter(), stopped);
+  assert.strictEqual(SDT.net.pageLimiter(), stopped);
+});

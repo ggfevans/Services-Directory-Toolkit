@@ -4,6 +4,7 @@
 import { test, expect, FAKE_ORIGIN, html, json, ONLINE_ORIGIN, ONLINE_REST_ROOT, ONLINE_TOKENS, REST_ROOT, SERVER_TOKENS } from "./fixtures.js";
 import { catalog } from "../fixtures/catalog.js";
 import { folderPage } from "../fixtures/pages.js";
+import { axeViolations } from "./axe.js";
 
 const ROOT_PAGE = /^\/arcgis\/rest\/services$/;
 const LIMIT_NOTE = "Not loaded: request limit reached (50)";
@@ -149,4 +150,250 @@ test("hovering a link on this server shows its map preview, without the page's t
     expect(Object.keys(call.query)).not.toContain("token");
   }
   expect(previews[1].query).toEqual({ size: "300,200", format: "png32", f: "json", bbox: "0,0,10,10" });
+});
+
+// The request budget, Load more and server pushback, end to end (spec 4.3, design review 6.3).
+const LAYER_PAGE = `${REST_ROOT}/Parcels/MapServer/0`;
+const NO_VIOLATIONS = { light: [], dark: [] };
+const BULK_JSON = /^\/arcgis\/rest\/services\/Bulk\d+\/MapServer\?f=json$/;
+const bar = (page) => page.locator(".sdt-statusbar");
+const message = (page) => bar(page).getByRole("status");
+const bulkCalls = (fakeServer) => fakeServer.calls.filter((call) => /\/Bulk\d+\/MapServer$/.test(call.path));
+const bulkService = () => json({
+  currentVersion: catalog.currentVersion,
+  serviceDescription: "An invented bulk service.",
+  spatialReference: { wkid: 102100, latestWkid: 3857 },
+  layers: []
+});
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const never = () => new Promise(() => {});
+const bodyClasses = (page) => page.evaluate(() => document.body.className);
+/** The services root listing count Bulk MapServers, for a test that answers their JSON with its own override. */
+const bulkListing = (fakeServer, count) => {
+  const services = Array.from({ length: count }, (_, i) => ({ name: `Bulk${String(i + 1).padStart(2, "0")}`, type: "MapServer" }));
+  fakeServer.override(ROOT_PAGE, () => html(folderPage({ folder: "", folders: [], services, version: catalog.currentVersion })));
+  return services;
+};
+// The map preview panel sits over the top right of the page, where the bar's button is (IMG-3,
+// Phase 6), so the tests press Load more from the keyboard, as a keyboard user does.
+const pressLoadMore = (button) => button.press("Enter");
+const pushbackCopy = (status) => `The server asked for fewer requests (HTTP ${status}). Automatic requests stopped on this page.`;
+
+test("60 rows send exactly 50, the bar offers \"Load 10 more services\", and one click sends exactly 10 more", async ({ page, fakeServer, bulkRoot }) => {
+  bulkRoot(60);
+  await page.goto(REST_ROOT);
+  const button = bar(page).getByRole("button", { name: "Load 10 more services" });
+  await expect(button).toBeVisible();
+  expect(bulkCalls(fakeServer)).toHaveLength(50);
+  await pressLoadMore(button);
+  await expect(message(page)).toHaveText("Loaded details for 60 services in 60 requests");
+  await page.waitForTimeout(300);
+  expect(bulkCalls(fakeServer)).toHaveLength(60);
+  expect(new Set(bulkCalls(fakeServer).map((call) => call.path)).size).toBe(60);
+  await expect(page.getByText(/Not loaded/)).toHaveCount(0);
+  await expect(page.locator(".sdt-datablock")).toHaveCount(60);
+  await expect(bar(page).getByRole("button")).toHaveCount(0);
+});
+
+test("120 rows: Load more sends 50, then offers \"Load 20 more services\"", async ({ page, fakeServer, bulkRoot }) => {
+  bulkRoot(120);
+  await page.goto(REST_ROOT);
+  await pressLoadMore(bar(page).getByRole("button", { name: "Load 50 more services" }));
+  const next = bar(page).getByRole("button", { name: "Load 20 more services" });
+  await expect(next).toBeVisible();
+  await expect(message(page)).toHaveText("Paused after 100 automatic requests. 20 services not loaded yet.");
+  expect(bulkCalls(fakeServer)).toHaveLength(100);
+  await pressLoadMore(next);
+  await expect(message(page)).toHaveText("Loaded details for 120 services in 120 requests");
+  expect(bulkCalls(fakeServer)).toHaveLength(120);
+});
+
+test("a row cut off mid-chain gets only its missing count on Load more", async ({ page, fakeServer }) => {
+  // 49 one-request rows, then a layer row: its JSON is request 50, and the budget refuses its counts.
+  const services = Array.from({ length: 49 }, (_, i) => ({ name: `Bulk${String(i + 1).padStart(2, "0")}`, type: "MapServer" }));
+  services.push({ name: "Parcels", type: "MapServer/0" });
+  fakeServer.override(ROOT_PAGE, () => html(folderPage({ folder: "", folders: [], services, version: catalog.currentVersion })));
+  fakeServer.override(BULK_JSON, bulkService);
+  await page.goto(REST_ROOT);
+  const button = bar(page).getByRole("button", { name: "Load 1 more service" });
+  await expect(button).toBeVisible();
+  const layerJson = () => fakeServer.calls.filter((call) => call.path === "/arcgis/rest/services/Parcels/MapServer/0");
+  const counts = () => fakeServer.calls.filter((call) => call.path === "/arcgis/rest/services/Parcels/MapServer/0/query");
+  expect(layerJson()).toHaveLength(1);
+  expect(counts()).toHaveLength(0);
+  const layerRow = page.locator("li", { has: page.locator("a[href$=\"/Parcels/MapServer/0\"]") });
+  await expect(layerRow.getByText(LIMIT_NOTE)).toHaveCount(2);
+  await pressLoadMore(button);
+  await expect(message(page)).toHaveText("Loaded details for 50 services in 52 requests");
+  await expect(layerRow.locator("b", { hasText: /^Number of features:/ })).toHaveCount(1);
+  await expect(layerRow.locator("b", { hasText: /^Features with shapes:/ })).toHaveCount(1);
+  await page.waitForTimeout(300);
+  expect(counts()).toHaveLength(2);
+  expect(layerJson()).toHaveLength(1);
+  await expect(page.getByText(/Not loaded/)).toHaveCount(0);
+});
+
+test("no more than 4 requests are in flight", async ({ page, fakeServer }) => {
+  const spans = [];
+  fakeServer.override(BULK_JSON, async () => {
+    const span = { start: performance.now(), end: Infinity };
+    spans.push(span);
+    await pause(300);
+    span.end = performance.now();
+    return bulkService();
+  });
+  bulkListing(fakeServer, 12);
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText("Loaded details for 12 services in 12 requests");
+  expect(spans).toHaveLength(12);
+  // The peak overlap: the most spans open at any span's start.
+  const peak = Math.max(...spans.map(({ start }) => spans.filter((span) => span.start <= start && start < span.end).length));
+  expect(peak).toBe(4);
+});
+
+for (const status of [429, 503]) {
+  test(`HTTP ${status} stops automatic requests and the bar shows the pushback message`, async ({ page, fakeServer, expectedErrors }) => {
+    expectedErrors.push(new RegExp(`status of ${status}`));
+    // Bulk01 answers, so Bulk05 takes its place while Bulk02 to 04 are still in flight, and they
+    // never answer. Bulk05 pushes back at once: nothing after it may be sent.
+    fakeServer.override(/^\/arcgis\/rest\/services\/Bulk01\/MapServer\?f=json$/, bulkService);
+    fakeServer.override(/^\/arcgis\/rest\/services\/Bulk0[2-4]\/MapServer\?f=json$/, never);
+    fakeServer.override(/^\/arcgis\/rest\/services\/Bulk05\/MapServer\?f=json$/, () => ({ status, contentType: "text/plain", body: "Slow down" }));
+    bulkListing(fakeServer, 12);
+    await page.goto(REST_ROOT);
+    await expect(message(page)).toHaveText(pushbackCopy(status));
+    await expect(bar(page)).toHaveAttribute("data-tone", "error");
+    await expect(bar(page).getByRole("button")).toHaveCount(0);
+    await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+    await page.waitForTimeout(800);
+    expect(bulkCalls(fakeServer).map((call) => call.path.split("/")[4]).sort()).toEqual(["Bulk01", "Bulk02", "Bulk03", "Bulk04", "Bulk05"]);
+    // The rows in flight were cancelled, and the rest were never sent: each says why it is empty.
+    await expect(page.getByText(`Not loaded: the server answered HTTP ${status}, so automatic requests stopped`)).toHaveCount(11);
+    await expect(message(page)).toHaveText(pushbackCopy(status));
+    expect(await axeViolations(page, { include: ".sdt-statusbar", hostPage: true })).toEqual(NO_VIOLATIONS);
+  });
+}
+
+test("pushback during a Load more batch removes the button and leaves no row busy", async ({ page, fakeServer, bulkRoot, expectedErrors, seedStorage }) => {
+  expectedErrors.push(/status of 429/);
+  // No map preview panel, so the pointer can reach the button (IMG-3).
+  await seedStorage({ showMapImages: false });
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  // In the Load more batch, Bulk55 pushes back once the test has looked at the disabled button.
+  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk55\/MapServer\?f=json$/, async () => {
+    await held;
+    return { status: 429, contentType: "text/plain", body: "Slow down" };
+  });
+  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk(5[1-46-9]|60)\/MapServer\?f=json$/, async () => {
+    await held;
+    await pause(300);
+    return bulkService();
+  });
+  bulkRoot(60);
+  await page.goto(REST_ROOT);
+  const button = bar(page).getByRole("button", { name: "Load 10 more services" });
+  await expect(button).toBeVisible();
+  const background = () => button.evaluate((element) => getComputedStyle(element).backgroundColor);
+  const idle = await background();
+  await pressLoadMore(button);
+  await expect(button).toHaveAttribute("aria-disabled", "true");
+  // A button that does nothing doesn't look pressable: hovering it keeps its resting background.
+  await button.hover();
+  expect(await background()).toBe(idle);
+  release();
+  await expect(message(page)).toHaveText(pushbackCopy(429));
+  const sent = bulkCalls(fakeServer).length;
+  await expect(bar(page)).toHaveAttribute("data-tone", "error");
+  await expect(bar(page).getByRole("button")).toHaveCount(0);
+  await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+  // Every row of the batch settled: it loaded, or says the server stopped automatic requests.
+  for (let i = 51; i <= 60; i++) {
+    const row = page.locator("li", { has: page.getByRole("link", { name: `Bulk${i}`, exact: true }) });
+    await expect(row.locator(".sdt-datablock").or(row.getByText(/Not loaded: the server answered HTTP 429/))).toHaveCount(1);
+  }
+  // The button went away while it had focus: focus moved to the bar's message.
+  expect(await page.evaluate(() => document.activeElement === document.querySelector(".sdt-statusbar [role=status]"))).toBe(true);
+  // Nothing more went out after the pushback, and Bulk59 and 60 were never sent.
+  await page.waitForTimeout(500);
+  expect(bulkCalls(fakeServer)).toHaveLength(sent);
+  expect(sent).toBeLessThan(60);
+});
+
+test("a Load more batch whose row throws re-enables the bar, with no unhandled rejection", async ({ page, fakeServer, bulkRoot }) => {
+  // A null spatialReference makes inject.js throw while it draws Bulk55's row, so the batch rejects.
+  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk55\/MapServer\?f=json$/, () => json({ currentVersion: catalog.currentVersion, spatialReference: null }));
+  bulkRoot(60);
+  await page.goto(REST_ROOT);
+  await pressLoadMore(bar(page).getByRole("button", { name: "Load 10 more services" }));
+  await expect(message(page)).toHaveText("Loaded details for 59 services in 60 requests. 1 failed.");
+  await expect(bar(page).getByRole("button")).toHaveCount(0);
+  await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+  // The harness fails the test on the unhandled rejection, which the console reports as an error.
+  await page.waitForTimeout(300);
+});
+
+test("pagehide cancels pending requests", async ({ page, fakeServer }) => {
+  fakeServer.override(BULK_JSON, never);
+  bulkListing(fakeServer, 12);
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText("Loading details: 0 of 12 services");
+  await expect(message(page).locator(".sdt-spinner")).toBeVisible();
+  expect(await axeViolations(page, { include: ".sdt-statusbar", hostPage: true })).toEqual(NO_VIOLATIONS);
+  expect(bulkCalls(fakeServer)).toHaveLength(4);
+  await page.goto(LAYER_PAGE);
+  await page.waitForTimeout(800);
+  expect(bulkCalls(fakeServer)).toHaveLength(4);
+});
+
+test.describe("with the back/forward cache on", () => {
+  // Playwright turns the back/forward cache off by default.
+  test.use({ droppedDefaultArgs: ["--disable-back-forward-cache"] });
+
+  test("back/forward restore after leaving mid-load leaves no row busy and no sdt-loading- class", async ({ page, fakeServer }, testInfo) => {
+    // The first view's requests never answer, so the page is left mid-load; after that they answer.
+    let hold = true;
+    fakeServer.override(BULK_JSON, async () => {
+      if (hold) {
+        await never();
+      }
+      return bulkService();
+    });
+    bulkListing(fakeServer, 12);
+    await page.goto(REST_ROOT);
+    await expect(message(page)).toHaveText("Loading details: 0 of 12 services");
+    await expect.poll(() => bulkCalls(fakeServer).length).toBe(4);
+    await page.evaluate(() => {
+      window.restoredFromCache = false;
+      window.addEventListener("pageshow", (event) => {
+        window.restoredFromCache = event.persisted;
+      });
+    });
+    await page.goto(LAYER_PAGE);
+    hold = false;
+    // A page restored from the cache fires no load event, so wait only for the commit.
+    await page.goBack({ waitUntil: "commit" });
+    await page.waitForFunction(() => document.readyState === "complete");
+    // A restored page keeps its first navigation entry, so the pageshow flag is what tells.
+    const restored = await page.evaluate(() => window.restoredFromCache === true);
+    testInfo.annotations.push({ type: "bfcache", description: restored ? "restored from the back/forward cache" : "reloaded" });
+    if (restored) {
+      // A restore is a new page view: the twelve rows the page left get Load more, with a fresh budget.
+      const button = bar(page).getByRole("button", { name: "Load 12 more services" });
+      await expect(button).toBeVisible();
+      await expect(message(page)).toHaveText("Paused after 12 automatic requests. 12 services not loaded yet.");
+      expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
+      expect(bulkCalls(fakeServer)).toHaveLength(4);
+      await pressLoadMore(button);
+      await expect(message(page)).toHaveText("Loaded details for 12 services in 24 requests");
+      expect(bulkCalls(fakeServer)).toHaveLength(16);
+    } else {
+      await expect(message(page)).toHaveText("Loaded details for 12 services in 12 requests");
+    }
+    await expect(page.getByText(/Not loaded/)).toHaveCount(0);
+    await expect(page.locator(".sdt-datablock")).toHaveCount(12);
+    expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
+  });
 });
