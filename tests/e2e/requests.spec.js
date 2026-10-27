@@ -19,7 +19,12 @@ const rootWith = (extraItems) => folderPage({
   version: catalog.currentVersion
 }).replace("<b>Services: </b>\n<ul>\n", `<b>Services: </b>\n<ul>\n${extraItems}`);
 
-const ONLINE_LINKS = `<li><a href="${ONLINE_REST_ROOT}/Parcels/FeatureServer">Online parcels</a> (FeatureServer)</li>
+const BAD_GATEWAY = () => ({ status: 502, contentType: "text/html", body: "<html><body>Bad Gateway</body></html>" });
+
+/** A service's row on a folder page: the list item that holds the link to it. */
+const serviceRow = (page, path) => page.locator("li", { has: page.locator(`a[href$="/rest/services/${path}"]`) });
+
+const ONLINE_LINKS =`<li><a href="${ONLINE_REST_ROOT}/Parcels/FeatureServer">Online parcels</a> (FeatureServer)</li>
 <li><a href="${ONLINE_REST_ROOT}/Parcels/MapServer">Online parcels map</a> (MapServer)</li>
 `;
 
@@ -46,6 +51,40 @@ test("a page with 60 service links sends 50 requests, and the other rows say why
   expect(fakeServer.calls.filter((call) => /\/Bulk\d+\/MapServer$/.test(call.path))).toHaveLength(50);
   const lastRow = page.locator("li", { has: page.getByRole("link", { name: "Bulk60", exact: true }) });
   await expect(lastRow).toContainText(LIMIT_NOTE);
+});
+
+test("one failed service request shows an error on its row, and the other rows load (INJ-2)", async ({ page, fakeServer, expectedErrors }) => {
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\?f=json$/, BAD_GATEWAY);
+  expectedErrors.push(/status of 502/);
+  await page.goto(REST_ROOT);
+  // Visible on the row, not tucked into a collapsed details block.
+  await expect(serviceRow(page, "Parcels/MapServer").getByText(/HTTP 502/)).toBeVisible();
+  for (const path of ["Parcels/FeatureServer", "Elevation/ImageServer"]) {
+    await expect(serviceRow(page, path).locator(".sdt-datablock")).toHaveCount(1);
+  }
+  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
+});
+
+test("a service that answers 200 with an ArcGIS error body fails its row with the server's message", async ({ page, fakeServer }) => {
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\?f=json$/, () => json({ error: { code: 499, message: "Token Required", details: [] } }));
+  await page.goto(REST_ROOT);
+  await expect(serviceRow(page, "Parcels/MapServer").getByText(/Token Required/)).toBeVisible();
+  for (const path of ["Parcels/FeatureServer", "Elevation/ImageServer"]) {
+    await expect(serviceRow(page, path).locator(".sdt-datablock")).toHaveCount(1);
+  }
+  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
+});
+
+test("count queries send the where clause as a param, not spliced into the URL (INJ-5)", async ({ page, fakeServer }) => {
+  await page.goto(`${REST_ROOT}/Parcels/MapServer`);
+  await expect(page.locator("b", { hasText: /^Features with shapes:/ })).toHaveCount(2);
+  const counts = fakeServer.calls.filter((call) => call.query.returnCountOnly === "true");
+  expect(counts).toHaveLength(4);
+  for (const call of counts) {
+    expect(call.path).toMatch(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/\d+\/query$/);
+    expect(call.query.where).toMatch(/^\w+ IS NOT NULL$/);
+  }
+  expect(counts.map((call) => call.query.where).sort()).toEqual(["OBJECTID IS NOT NULL", "OBJECTID IS NOT NULL", "SHAPE IS NOT NULL", "SHAPE IS NOT NULL"]);
 });
 
 test("a page opened with ?token= sends the token in each metadata request's POST body, not its URL", async ({ page, fakeServer }) => {

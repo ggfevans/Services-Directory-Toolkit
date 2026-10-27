@@ -50,11 +50,11 @@ const GUARD_SELECTORS = [
 ];
 
 // Every request goes through SDT.net.fetchJson, which checks the status, times out and keeps a token
-// out of the URL.
+// out of the URL. SDT.status's job.fetch is allowed: it sends through the page limiter.
 const NETWORK = "Send requests with SDT.net.fetchJson (src/src/lib/net.js).";
 const NETWORK_SELECTORS = [
   { selector: "CallExpression[callee.name='fetch']", message: NETWORK },
-  { selector: "CallExpression[callee.property.name='fetch']", message: NETWORK },
+  { selector: "CallExpression[callee.property.name='fetch']:not([callee.object.name='job'])", message: NETWORK },
   { selector: "NewExpression[callee.name='XMLHttpRequest']", message: NETWORK },
   { selector: "NewExpression[callee.property.name='XMLHttpRequest']", message: NETWORK }
 ];

@@ -6,6 +6,8 @@
   // Set in the load handler: the page's token, and the limiter every automatic request goes through.
   let token = null;
   let limiter = null;
+  // The page's progress job (SDT.status): every request in a row's chain goes through it.
+  let job = null;
 
   // A row that the request budget left out, or that automatic work skipped after server pushback.
   const skippedNote = (error, tag) => loadElement(tag, { "class": "sdt-note" }, tag === "span" ? ` ${error.message}` : error.message);
@@ -282,68 +284,85 @@
     return null;
   };
 
-  /**
-   * Queries for the feature count and the features with geometries
-   * @function getLayerCount
-   * @param {string} url - map service url
-   * @param {object} data - the JSON data collected from the map service
-   * @param {function} callback - callback function once the query is complete.
-   */
-  const getLayerCount = (url, data, callback) => {
-    const ul = document.createElement("ul");
-    let oid, shape;
+  /** True when a row's request was left out: by the budget, after pushback, or because the page was left. */
+  const isLeftOut = (result) => SDT.net.isSkipped(result) || result?.error?.type === "aborted";
 
-    if (data && Object.hasOwn(data, "objectIdField") && data.objectIdField) {
+  /** The row's list of counts and errors, created once, after the row's other details. */
+  const rowList = (row) => {
+    if (!row.list) {
+      row.list = document.createElement("ul");
+      row.parent.appendChild(row.list);
+    }
+    return row.list;
+  };
+
+  /** Shows a failed request's error on its row: the server's ArcGIS error, or the request's message. */
+  const failure = (result, field) => {
+    const response = SDT.net.legacyResponse(result);
+    return reportError(response?.error ?? { message: result.error.message }, field);
+  };
+
+  /**
+   * Counts a layer's features, and those with shapes, through the page's job. Each count that
+   * finishes goes into row.counted, so Load more sends only the ones still missing.
+   * @function getLayerCount
+   * @param {string} url - the layer's url
+   * @param {object} data - the layer's JSON
+   * @param {object} row - the row: its counts and errors go in row.list
+   * @returns {Promise<"done" | "failed" | "skipped">}
+   */
+  const getLayerCount = async (url, data, row) => {
+    let oid, shape;
+    if (data.objectIdField) {
       oid = data.objectIdField;
     }
-    if (data && Object.hasOwn(data, "fields") && data.fields.length) {
-      data.fields.some((field) => {
-        switch(field.type) {
-          case "esriFieldTypeOID":
-          case "":
-            oid = field.name;
-            break;
-          case "esriFieldTypeGeometry":
-            shape = field.name;
-            break;
-        }
-        return oid && shape;
-      });
+    for (const field of data.fields) {
+      if (field.type === "esriFieldTypeOID" || field.type === "") {
+        oid = field.name;
+      } else if (field.type === "esriFieldTypeGeometry") {
+        shape ??= field.name;
+      }
     }
+    shape ??= data.geometryField?.name;
 
-    const count = async (field, label, fieldType) => {
-      const result = await limiter.fetchJson(`${url}/query`, {
-        params: { where: `not ${field} is null`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
-        token
-      });
-      if (SDT.net.isSkipped(result)) {
-        ul.appendChild(skippedNote(result.error, "li"));
-        return;
-      }
-      const response = SDT.net.legacyResponse(result);
-      if (response === null) {
-        return; // INJ-2: Phase 5 shows an error line here.
-      }
-      if (response.count !== undefined && response.count !== null) {
-        ul.appendChild(li(label, response.count));
-      }
-      if (Object.hasOwn(response, "error") && response.error) {
-        ul.appendChild(reportError(response.error, { "type": fieldType }));
-      }
-    };
-
-    if (oid) {
-      count(oid, "Number of features", "esriFieldTypeOID");
-    } else {
+    const firstRun = !row.list;
+    const ul = rowList(row);
+    if (firstRun && !oid) {
       ul.appendChild(li("No way to query features."));
     }
-    if (shape) {
-      count(shape, "Features with shapes", "esriFieldTypeGeometry");
-    } else if (!/\/featureserver\//i.test(url) && (data.type && data.type !== "Table")) {
+    if (firstRun && !shape && data.type && data.type !== "Table") {
       ul.appendChild(li("No visible shape field available."));
     }
 
-    callback(ul);
+    const counts = [
+      oid && { key: "total", field: oid, label: "Number of features", type: "esriFieldTypeOID" },
+      shape && { key: "shape", field: shape, label: "Features with shapes", type: "esriFieldTypeGeometry" }
+    ].filter((count) => count && !row.counted.has(count.key));
+    const queryUrl = `${url.replace(/\/+$/, "")}/query`;
+    const results = await Promise.all(counts.map((count) => job.fetch(queryUrl, {
+      params: { where: `${count.field} IS NOT NULL`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
+      token
+    })));
+
+    let outcome = "done";
+    counts.forEach((count, i) => {
+      const result = results[i];
+      if (isLeftOut(result)) {
+        row.notes.push(ul.appendChild(skippedNote(result.error, "li")));
+        outcome = "skipped";
+      } else if (result.error) {
+        row.notes.push(ul.appendChild(failure(result, { type: count.type })));
+        if (outcome !== "skipped") {
+          outcome = "failed";
+        }
+      } else {
+        row.counted.add(count.key);
+        if (result.data.count !== undefined && result.data.count !== null) {
+          ul.appendChild(li(count.label, result.data.count));
+        }
+      }
+    });
+    return outcome;
   };
 
   /**
@@ -681,40 +700,81 @@
         && SDT.auth.scopeOf(item.url) === pageScope
         && /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url));
 
-    /** Collects and shows each linked service's details, through the limiter. */
-    const collectMetaData = async (items, canCountFeatures) => {
-      await Promise.all(items.map(async (item) => {
-        const parent = tags[item.i].parentNode;
-        const result = await limiter.fetchJson(item.url, { params: { f: "json" }, token });
-        if (SDT.net.isSkipped(result)) {
-          parent.appendChild(skippedNote(result.error, "span"));
-          return;
+    // One row per link. A row keeps what it has loaded, so Load more sends only what is missing.
+    const rows = urls.map((item) => ({
+      anchor: tags[item.i],
+      parent: tags[item.i].parentNode,
+      url: item.url,
+      data: null,
+      counted: new Set(),
+      list: null,
+      notes: [],
+      outcome: null
+    }));
+    const canCountFeatures = settings.autoFeatureCounts;
+
+    /** Sends the requests the row is missing, and reports exactly one outcome for it to the job. */
+    const loadRow = async (row) => {
+      let outcome = "failed";
+      try {
+        // A Load more run replaces the notes and errors from the last one.
+        for (const note of row.notes.splice(0)) {
+          note.remove();
         }
-        if (result.error?.type === "aborted") {
-          return;
+        if (!row.data) {
+          const result = await job.fetch(row.url, { params: { f: "json" }, token });
+          if (isLeftOut(result)) {
+            row.notes.push(row.parent.appendChild(skippedNote(result.error, "span")));
+            outcome = "skipped";
+            return;
+          }
+          if (result.error) {
+            row.notes.push(rowList(row).appendChild(failure(result)));
+            return;
+          }
+          row.data = result.data;
+          const spatialReferenceNode = showSpatialReferenceData(row.data),
+            metadata = showMetadata(row.data);
+          if (spatialReferenceNode !== null) {
+            row.parent.insertBefore(spatialReferenceNode, row.list);
+          }
+          if (metadata !== null) {
+            row.parent.insertBefore(metadata, row.list);
+          }
         }
-        const response = SDT.net.legacyResponse(result) ?? { error: { message: result.error.message } };
-        const spatialReferenceNode = showSpatialReferenceData(response),
-          metadata = showMetadata(response);
-        if (spatialReferenceNode !== null) {
-          parent.appendChild(spatialReferenceNode);
-        }
-        if (metadata !== null) {
-          parent.appendChild(metadata);
-        }
-        // if the service has fields, get the layer count
-        if (response.fields && response.fields.length && canCountFeatures) {
-          getLayerCount(item.url, response, (countList) => {
-            parent.appendChild(countList);
-          });
-        }
-      }));
-      notifyLoading(false, LOADING_METADATA_CSS);
+        // Only a layer's JSON has fields, so only layer rows get counts.
+        outcome = canCountFeatures && row.data.fields?.length
+          ? await getLayerCount(row.url, row.data, row)
+          : "done";
+      } finally {
+        row.outcome = outcome;
+        job[outcome]();
+      }
     };
 
-    if (urls.length && settings.autoMetadata) {
+    /** Loads the rows, with the busy class on <body> until every one has settled. */
+    const collectMetaData = async (batch) => {
       notifyLoading(true, LOADING_METADATA_CSS);
-      collectMetaData(urls, settings.autoFeatureCounts);
+      try {
+        const results = await Promise.allSettled(batch.map(loadRow));
+        const thrown = results.find((result) => result.status === "rejected");
+        if (thrown) {
+          throw thrown.reason;
+        }
+      } finally {
+        notifyLoading(false, LOADING_METADATA_CSS);
+      }
+    };
+
+    if (rows.length && settings.autoMetadata) {
+      job = SDT.status.job(type === "service" ? "layers" : "services", rows.length);
+      // Load more re-runs each row the budget or pushback left out.
+      job.onLoadMore(() => {
+        const skipped = rows.filter((row) => row.outcome === "skipped");
+        job.retrying(skipped.length);
+        return collectMetaData(skipped);
+      });
+      collectMetaData(rows);
     }
 
     if (type === "find") {

@@ -91,6 +91,10 @@ export const whereMatcher = (where) => {
   if (/^1\s*=\s*1$/.test(clause)) {
     return () => true;
   }
+  if ((match = clause.match(/^(\w+)\s+is\s+not\s+null$/i))) {
+    const [, field] = match;
+    return (row) => row[field] != null;
+  }
   if ((match = clause.match(/^not\s+(\w+)\s+is\s+null$/i))) {
     const [, field] = match;
     return (row) => row[field] != null;

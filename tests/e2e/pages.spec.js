@@ -48,6 +48,19 @@ test("a MapServer page shows details and feature counts for each layer", async (
   }
 });
 
+// A FeatureServer layer names its shape field in geometryField, not in fields, so INJ-15's old
+// FeatureServer exclusion left these rows without the shape count.
+test("a FeatureServer layer row shows \"Features with shapes\" (INJ-15)", async ({ page }) => {
+  await page.goto(`${REST_ROOT}/Parcels/FeatureServer`);
+  await expect(page.locator(".sdt-datablock")).toHaveCount(2);
+  const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
+  for (const [name, { features, shapes }] of Object.entries(counts)) {
+    await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);
+    await expect(item(layerItem(page, name), new RegExp(`^Features with shapes: ${shapes}$`))).toHaveCount(1);
+  }
+  await expect(page.getByText("No visible shape field available.")).toHaveCount(0);
+});
+
 test("a layer page sends no automatic field or domain count queries", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0`);
   await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();

@@ -170,10 +170,20 @@ export const SERVER_TOKENS = { jsmith: "sdt-server.jsmith-0001", viewer1: "sdt-s
 
 const byToken = (tokens) => Object.fromEntries(Object.entries(tokens).map(([username, token]) => [token, username]));
 
+// A FeatureServer layer names its shape field in geometryField and leaves it out of fields.
+const featureLayer = (layer) => {
+  const shape = layer.fields.find((field) => field.type === "esriFieldTypeGeometry");
+  return {
+    ...layer,
+    fields: layer.fields.filter((field) => field !== shape),
+    geometryField: { name: shape.name, type: shape.type, alias: shape.alias }
+  };
+};
+
 const parcelsFeatureServer = {
   name: "Parcels",
   type: "FeatureServer",
-  layers: [parcels, addresses],
+  layers: [featureLayer(parcels), featureLayer(addresses)],
   info: {
     serviceDescription: "Editable parcel boundaries for an invented county.",
     description: "",

@@ -106,6 +106,9 @@ test("scripts send requests through SDT.net, not fetch or XMLHttpRequest", async
   assert.deepEqual(await ruleIds("{\n  window.fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  new window.XMLHttpRequest();\n}\n", "src/src/page_action/example.js"), ["no-restricted-syntax"]);
   assert.deepEqual(await ruleIds("{\n  SDT.net.fetchJson(\"/x\");\n}\n", INJECT), []);
+  // SDT.status's job.fetch goes through the page limiter, so a content script may call it.
+  assert.deepEqual(await ruleIds("{\n  const job = SDT.status.job(\"layers\", 1);\n  job.fetch(\"/x\");\n}\n", INJECT), []);
+  assert.deepEqual(await ruleIds("{\n  self.fetch(\"/x\");\n}\n", INJECT), ["no-restricted-syntax"]);
 });
 
 test("content scripts use await, not inline promise callbacks", async () => {
