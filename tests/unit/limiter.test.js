@@ -164,3 +164,45 @@ test("once the extension context is gone, pagehide settles none of the queued or
   await flush();
   assert.equal(settled, 0);
 });
+
+test("extend raises the cap: a third request is refused at max 2, then two more are accepted after extend(2)", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, fetchJson: fake.fetchJson });
+  limiter.fetchJson(at(0));
+  limiter.fetchJson(at(1));
+  assert.equal((await limiter.fetchJson(at(2))).error.type, "limit");
+  limiter.extend(2);
+  limiter.fetchJson(at(3));
+  limiter.fetchJson(at(4));
+  const refused = await limiter.fetchJson(at(5));
+  assert.equal(refused.error.type, "limit");
+  assert.equal(fake.sent(), 4);
+});
+
+test("extend after a 429 changes nothing: the next request settles as stopped", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, fetchJson: fake.fetchJson });
+  const first = limiter.fetchJson(at(0));
+  fake.open[0].finish({ error: { type: "http", message: "Too many", url: at(0), status: 429 } });
+  await first;
+  limiter.extend(5);
+  assert.equal(limiter.stats().max, 2);
+  assert.equal((await limiter.fetchJson(at(1))).error.type, "stopped");
+});
+
+test("extend after pagehide changes nothing: the next request settles as aborted", async () => {
+  const fake = fakeFetch();
+  const target = pageTarget();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, target, fetchJson: fake.fetchJson });
+  target.fire("pagehide");
+  limiter.extend(5);
+  assert.equal(limiter.stats().max, 2);
+  assert.equal((await limiter.fetchJson(at(0))).error.type, "aborted");
+});
+
+test("stats().max reports the cap: 50 by default, 100 after extend(50)", () => {
+  const limiter = net.createLimiter({ scope: SCOPE, fetchJson: fakeFetch().fetchJson });
+  assert.equal(limiter.stats().max, 50);
+  limiter.extend(50);
+  assert.equal(limiter.stats().max, 100);
+});

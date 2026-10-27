@@ -152,7 +152,7 @@ SDT.net = {
   createLimiter({ max = SDT.net.BUDGET.max, concurrency = SDT.net.BUDGET.concurrency, scope = null, target = null, fetchJson = (url, options) => SDT.net.fetchJson(url, options) } = {}) {
     const controller = new AbortController();
     const queue = [];
-    const state = { accepted: 0, active: 0, peak: 0, stopped: null };
+    const state = { accepted: 0, active: 0, peak: 0, stopped: null, max };
     const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: SDT.url.withoutToken(url), ...extra } });
     const halted = (url) => (state.stopped
       ? refusal("stopped", SDT.net.stoppedNote(state.stopped), url, { status: state.stopped })
@@ -203,14 +203,21 @@ SDT.net = {
         if (!scope || SDT.auth.scopeOf(url) !== scope) {
           return Promise.resolve(refusal("destination", "Not requested: the link is on another server.", url));
         }
-        if (state.accepted >= max) {
-          return Promise.resolve(refusal("limit", SDT.net.limitNote(max), url, { max }));
+        if (state.accepted >= state.max) {
+          return Promise.resolve(refusal("limit", SDT.net.limitNote(state.max), url, { max: state.max }));
         }
         state.accepted += 1;
         return new Promise((resolve) => {
           queue.push({ url, options, resolve });
           pump();
         });
+      },
+      /** Raises the accepted cap by n. It does nothing once the limiter has stopped or been aborted. */
+      extend(n) {
+        if (state.stopped || controller.signal.aborted) {
+          return;
+        }
+        state.max += n;
       },
       stats() {
         return { ...state };
