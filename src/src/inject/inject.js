@@ -357,7 +357,7 @@
         }
       } else {
         row.counted.add(count.key);
-        if (result.data.count !== undefined && result.data.count !== null) {
+        if (result.data?.count !== undefined && result.data?.count !== null) {
           ul.appendChild(li(count.label, result.data.count));
         }
       }
@@ -732,6 +732,10 @@
             row.notes.push(rowList(row).appendChild(failure(result)));
             return;
           }
+          if (result.data === null || typeof result.data !== "object") {
+            row.notes.push(rowList(row).appendChild(failure({ error: { message: "The server's answer was not a service description." } })));
+            return;
+          }
           row.data = result.data;
           const spatialReferenceNode = showSpatialReferenceData(row.data),
             metadata = showMetadata(row.data);
@@ -743,9 +747,14 @@
           }
         }
         // Only a layer's JSON has fields, so only layer rows get counts.
-        outcome = canCountFeatures && row.data.fields?.length
+        outcome = canCountFeatures && row.data?.fields?.length
           ? await getLayerCount(row.url, row.data, row)
           : "done";
+      } catch (error) {
+        // A row that cannot be drawn fails alone, with an error line, and the others carry on.
+        console.debug("SD Toolkit: could not show a row", error);
+        row.notes.push(rowList(row).appendChild(failure({ error: { message: "Could not show this row's details." } })));
+        outcome = "failed";
       } finally {
         row.outcome = outcome;
         job[outcome]();
@@ -774,7 +783,7 @@
         job.retrying(skipped.length);
         return collectMetaData(skipped);
       });
-      collectMetaData(rows);
+      collectMetaData(rows).catch(SDT.guard.wrap((error) => console.debug("SD Toolkit: loading details stopped", error)));
     }
 
     if (type === "find") {

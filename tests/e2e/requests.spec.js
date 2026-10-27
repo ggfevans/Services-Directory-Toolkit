@@ -335,6 +335,25 @@ test("a Load more batch whose row throws re-enables the bar, with no unhandled r
   await page.waitForTimeout(300);
 });
 
+// A row whose JSON is unusable on the first automatic batch: no unhandled rejection, an error line on
+// that row, the other rows load, and the bar settles in the done state.
+for (const [title, body] of [
+  ["a null spatialReference", () => json({ currentVersion: catalog.currentVersion, spatialReference: null })],
+  ["a literal null body", () => ({ status: 200, headers: { "content-type": "application/json" }, body: "null" })]
+]) {
+  test(`the first batch survives a row with ${title}: it shows an error line and the bar finishes`, async ({ page, fakeServer, bulkRoot }) => {
+    fakeServer.override(/^\/arcgis\/rest\/services\/Bulk03\/MapServer\?f=json$/, body);
+    bulkRoot(6);
+    await page.goto(REST_ROOT);
+    await expect(message(page)).toHaveText("Loaded details for 5 services in 6 requests. 1 failed.");
+    await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+    await expect(page.getByText(/Could not show this row|not a service description/)).toHaveCount(1);
+    await expect(page.locator(".sdt-datablock")).toHaveCount(5);
+    // The harness fails the test on an unhandled rejection, which the console reports as an error.
+    await page.waitForTimeout(300);
+  });
+}
+
 test("pagehide cancels pending requests", async ({ page, fakeServer }) => {
   // The Bulk requests answer only once the test releases them, after the pagehide.
   let release;
