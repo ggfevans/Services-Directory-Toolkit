@@ -1,6 +1,6 @@
 // Content scripts read settings through SDT.settings.read (Phase 4): validated values, with the
 // schema's defaults for anything missing or invalid, from the storage area each setting lives in.
-import { test, expect, json, REST_ROOT } from "./fixtures.js";
+import { test, expect, json, REST_ROOT, toolkitStarted } from "./fixtures.js";
 
 const QUERY = `${REST_ROOT}/Parcels/MapServer/0/query`;
 const PRINT = `${REST_ROOT}/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task/execute`;
@@ -46,8 +46,8 @@ test.describe("content scripts read validated settings", () => {
   test("with service details off, the root page asks for none", async ({ page, fakeServer, seedStorage }) => {
     await seedStorage({ autoMetadata: false });
     await page.goto(REST_ROOT);
-    // status.js shows its indicator once the content-script group, inject.js included, has run.
-    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
+    // status.js runs last in the content-script group, after inject.js has started.
+    await expect(toolkitStarted(page)).toBeAttached();
     await page.waitForTimeout(1000);
     await expect(page.locator(".sdt-datablock")).toHaveCount(0);
     expect(fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json")).toEqual([]);
@@ -63,7 +63,7 @@ test.describe("content scripts read validated settings", () => {
     await seedStorage({ autoFeatureCounts: false });
     await page.goto(`${REST_ROOT}/Parcels/MapServer`);
     await expect(page.locator(".sdt-datablock")).toHaveCount(2);
-    await expect(page.getByRole("status")).toHaveText("SD Toolkit: finished loading");
+    await expect(page.locator(".sdt-statusbar").getByRole("status")).toHaveText(/^Loaded details for/);
     await expect(page.locator("b", { hasText: /^Number of features:/ })).toHaveCount(0);
   });
 

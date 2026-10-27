@@ -80,8 +80,10 @@ SDT.status = {
   snapshot() {
     const state = SDT.status.state();
     const stats = SDT.net.pageLimiter().stats();
+    const busy = state.done + state.failed + state.skipped < state.total;
+    const aborted = stats.aborted === true;
     return {
-      busy: state.done + state.failed + state.skipped < state.total,
+      busy,
       kind: state.kind,
       total: state.total,
       done: state.done,
@@ -89,8 +91,11 @@ SDT.status = {
       skipped: state.skipped,
       requests: state.requests,
       stopped: stats.stopped ?? null,
+      aborted,
       max: stats.max,
-      canLoadMore: state.skipped > 0 && !stats.stopped && typeof state.callback === "function"
+      // Not while rows are pending (a second batch would overlap the first), and not once the page
+      // was left, when the limiter refuses everything.
+      canLoadMore: state.skipped > 0 && !busy && !stats.stopped && !aborted && typeof state.callback === "function"
     };
   },
 
@@ -125,7 +130,7 @@ SDT.status = {
 
   /** The status bar's copy for a snapshot, or null while there is nothing to say. */
   message(snapshot) {
-    const { kind, total, done, failed, skipped, requests, stopped } = snapshot;
+    const { kind, total, done, failed, skipped, requests, stopped, aborted } = snapshot;
     if (!kind || (total === 0 && done + failed + skipped === 0)) {
       return null;
     }
@@ -145,7 +150,8 @@ SDT.status = {
         action: null
       };
     }
-    if (skipped > 0) {
+    // After pagehide the limiter refuses everything, so there is nothing to offer: say what loaded.
+    if (skipped > 0 && !aborted) {
       return {
         tone: "warn",
         text: `Paused after ${plural(requests, "automatic request")}. ${plural(skipped, noun)} not loaded yet.`,

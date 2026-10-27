@@ -206,3 +206,11 @@ test("stats().max reports the cap: 50 by default, 100 after extend(50)", () => {
   limiter.extend(50);
   assert.equal(limiter.stats().max, 100);
 });
+
+test("stats().aborted is false until pagehide, then true", () => {
+  const target = pageTarget();
+  const limiter = net.createLimiter({ scope: SCOPE, target, fetchJson: fakeFetch().fetchJson });
+  assert.equal(limiter.stats().aborted, false);
+  target.fire("pagehide");
+  assert.equal(limiter.stats().aborted, true);
+});

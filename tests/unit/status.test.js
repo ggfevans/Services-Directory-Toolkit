@@ -128,6 +128,8 @@ test("loadMore extends the limiter by 50, then calls the callback once, even whe
   const SDT = setup({ max: 1 });
   const job = SDT.status.job("services", 3);
   await job.fetch(at(1));
+  job.done();
+  job.done();
   job.skipped();
   let calls = 0;
   let release;
@@ -195,4 +197,51 @@ test("running the file twice keeps the same state", async () => {
   runFile(context, "src/lib/status.js");
   const snapshot = plain(context.SDT.status.snapshot());
   assert.deepEqual([snapshot.total, snapshot.done, snapshot.kind], [4, 1, "layers"]);
+});
+
+test("no Load more while rows are still pending, even with rows skipped", () => {
+  const { job, snap } = withJob("services", 3);
+  job.skipped();
+  job.onLoadMore(async () => {});
+  job.done();
+  assert.equal(snap().busy, true);
+  assert.equal(snap().canLoadMore, false);
+  job.done();
+  assert.equal(snap().canLoadMore, true);
+});
+
+/** A lib whose page limiter listens for pagehide on a stand-in window, and a job with rows skipped. */
+const leftPage = () => {
+  const context = loadLib();
+  const { SDT } = context;
+  const listeners = [];
+  const target = { addEventListener: (type, fn) => type === "pagehide" && listeners.push(fn) };
+  SDT.state = { pageLimiter: SDT.net.createLimiter({ scope: SCOPE, target, fetchJson: async () => ({ data: {} }) }) };
+  const job = SDT.status.job("services", 3);
+  job.onLoadMore(async () => {});
+  job.done();
+  job.skipped();
+  job.skipped();
+  return { SDT, hide: () => listeners.forEach((fn) => fn()) };
+};
+
+test("no Load more after pagehide: the snapshot says aborted and loadMore calls nothing", async () => {
+  const { SDT, hide } = leftPage();
+  assert.equal(plain(SDT.status.snapshot()).canLoadMore, true);
+  hide();
+  const snapshot = plain(SDT.status.snapshot());
+  assert.deepEqual([snapshot.aborted, snapshot.canLoadMore], [true, false]);
+  await SDT.status.loadMore();
+  assert.equal(SDT.state.pageLimiter.stats().max, 50);
+});
+
+test("message: after pagehide, skipped rows get the done copy and no button", () => {
+  const { SDT, hide } = leftPage();
+  SDT.state.status.requests = 1;
+  hide();
+  assert.deepEqual(plain(SDT.status.message(SDT.status.snapshot())), {
+    tone: "ok",
+    text: "Loaded details for 1 service in 1 request",
+    action: null
+  });
 });

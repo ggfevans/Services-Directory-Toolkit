@@ -220,7 +220,7 @@ SDT.net = {
         state.max += n;
       },
       stats() {
-        return { ...state };
+        return { ...state, aborted: controller.signal.aborted };
       }
     };
   },

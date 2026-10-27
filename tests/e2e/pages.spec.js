@@ -1,6 +1,6 @@
 // What the extension does today on each kind of page. These tests pass on the current code; a
 // later phase that changes a behaviour on purpose updates the matching test.
-import { test, expect, FAKE_ORIGIN, REST_ROOT } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, REST_ROOT, toolkitStarted } from "./fixtures.js";
 
 // Labels the content scripts write in <b> elements, such as "Number of features: ".
 const label = (page, text) => page.locator("b", { hasText: new RegExp(`^${text}`) });
@@ -12,9 +12,9 @@ const layerItem = (page, name) => page.locator("li", { has: page.getByRole("link
 // A nested list item whose text matches, such as "Number of features: 3".
 const item = (parent, pattern) => parent.locator("li", { hasText: pattern });
 
-test("the services root shows the status indicator, spatial reference badges and service details", async ({ page }) => {
+test("the services root shows the status bar, spatial reference badges and service details", async ({ page }) => {
   await page.goto(REST_ROOT);
-  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
+  await expect(page.locator(".sdt-statusbar")).toBeVisible();
   await expect(page.getByRole("link", { name: "3857" })).toHaveCount(2);
   await expect(page.getByRole("link", { name: "4326" })).toHaveCount(1);
   await expect(page.locator(".sdt-datablock")).toHaveCount(3);
@@ -63,7 +63,7 @@ test("a FeatureServer layer row shows \"Features with shapes\" (INJ-15)", async 
 
 test("a layer page sends no automatic field or domain count queries", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0`);
-  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
+  await expect(toolkitStarted(page)).toBeAttached();
   await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
   await page.waitForTimeout(500);
   expect(fakeServer.calls.filter((call) => /\/query$/.test(call.path) && (call.query.where || call.body.where))).toEqual([]);
@@ -128,12 +128,13 @@ const extensionRequests = (fakeServer, page) => {
 };
 
 for (const path of ["?f=json", "/Parcels/MapServer?f=pjson", "/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task?f=pjson"]) {
-  test(`a JSON view gets no requests, no indicator and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
+  test(`a JSON view gets no requests, no status bar and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
     await page.goto(`${REST_ROOT}${path}`);
     // Nothing on a JSON view signals that the scripts are done, so give them a moment.
     await page.waitForTimeout(1000);
     expect(extensionRequests(fakeServer, page)).toEqual([]);
-    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toHaveCount(0);
+    await expect(toolkitStarted(page)).toHaveCount(0);
+    await expect(page.locator(".sdt-statusbar")).toHaveCount(0);
     expect(await page.evaluate(() => document.body.className)).not.toMatch(/sdt-/);
     expect(await actionEnabled(page)).toBe(false);
   });
@@ -143,7 +144,8 @@ test("a page whose REST path is only in its query string gets nothing (TOK-6)", 
   // The content-script patterns match this URL, because they also test the query string.
   await page.goto(`${FAKE_ORIGIN}/other/page?x=/arcgis/rest/services/`);
   await page.waitForTimeout(1000);
-  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toHaveCount(0);
+  await expect(toolkitStarted(page)).toHaveCount(0);
+  await expect(page.locator(".sdt-statusbar")).toHaveCount(0);
   expect(await actionEnabled(page)).toBe(false);
   expect(extensionRequests(fakeServer)).toEqual([]);
 });

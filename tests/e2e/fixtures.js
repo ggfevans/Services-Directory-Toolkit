@@ -34,8 +34,16 @@ import {
   arcgisError, createFakeArcGIS, FAKE_ORIGIN, FAKE_ORIGINS, html, json, ONLINE_ORIGIN, ONLINE_REST_ROOT, ONLINE_TOKENS,
   PORTAL_ORIGIN, REST_ROOT, SERVER_TOKENS
 } from "../fixtures/fake-arcgis.js";
+import { catalog } from "../fixtures/catalog.js";
+import { folderPage } from "../fixtures/pages.js";
 
 export { arcgisError, expect, FAKE_ORIGIN, html, json, ONLINE_ORIGIN, ONLINE_REST_ROOT, ONLINE_TOKENS, PORTAL_ORIGIN, REST_ROOT, SERVER_TOKENS };
+
+/**
+ * html[data-sdt-theme]: status.js sets it last of all on every Services Directory page, and on no
+ * other, so it says the content scripts have started even where the status bar has nothing to show.
+ */
+export const toolkitStarted = (page) => page.locator("html[data-sdt-theme]");
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -250,6 +258,21 @@ export const test = base.extend({
       secure: true,
       sameSite: "Lax"
     }]));
+  },
+
+  // bulkRoot(count) makes the services root list count MapServers, Bulk01 onwards, each answering
+  // its JSON request with a small service and no layers. Call it before page.goto(REST_ROOT).
+  bulkRoot: async ({ fakeServer }, use) => {
+    await use((count) => {
+      const services = Array.from({ length: count }, (_, i) => ({ name: `Bulk${String(i + 1).padStart(2, "0")}`, type: "MapServer" }));
+      fakeServer.override(/^\/arcgis\/rest\/services$/, () => html(folderPage({ folder: "", folders: [], services, version: catalog.currentVersion })));
+      fakeServer.override(/^\/arcgis\/rest\/services\/Bulk\d+\/MapServer\?f=json$/, () => json({
+        currentVersion: catalog.currentVersion,
+        serviceDescription: "An invented bulk service.",
+        spatialReference: { wkid: 102100, latestWkid: 3857 },
+        layers: []
+      }));
+    });
   },
 
   // Whether the toolbar button is enabled for the page's tab. Brings the page to the front first,

@@ -1,11 +1,10 @@
 // The URL-pattern matrix (store-readiness spec, Phase 3): what the extension does on each kind of URL
-// the fake server can serve. A Services Directory page gets the status indicator and an enabled
+// the fake server can serve. A Services Directory page gets the extension's scripts and an enabled
 // toolbar button, and its own helper where it has one. A JSON view, or a page that only has
 // /rest/services in its path, gets nothing. tests/unit/url-patterns.test.js checks the patterns
 // themselves against many more URLs.
-import { test, expect, FAKE_ORIGIN, REST_ROOT, SERVER_TOKENS } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, REST_ROOT, SERVER_TOKENS, toolkitStarted } from "./fixtures.js";
 
-const NAME = "Services Directory Toolkit";
 const TOKEN = SERVER_TOKENS.jsmith;
 
 // helper: the extension's own addition on that page, if any: "query" for the Query Helper, "gp" for
@@ -36,14 +35,14 @@ const gpDropdown = (page) => page.locator("select:has(option[value='PNG32']), se
 for (const { title, url, sd, helper } of CASES) {
   test(`URL patterns: ${title}`, async ({ page, actionEnabled }) => {
     await page.goto(url);
-    const ring = page.getByRole("img", { name: NAME });
     if (sd) {
-      await expect(ring).toBeVisible();
+      await expect(toolkitStarted(page)).toBeAttached();
       await expect.poll(() => actionEnabled(page)).toBe(true);
     } else {
       // Nothing signals that the scripts have decided to do nothing, so give them a moment.
       await page.waitForTimeout(1000);
-      await expect(ring).toHaveCount(0);
+      await expect(toolkitStarted(page)).toHaveCount(0);
+      await expect(page.locator(".sdt-statusbar")).toHaveCount(0);
       expect(await actionEnabled(page)).toBe(false);
     }
     await expect(queryHelper(page)).toHaveCount(helper === "query" ? 1 : 0);

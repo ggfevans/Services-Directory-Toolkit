@@ -1,16 +1,9 @@
-// axe-core and keyboard-only checks for what Phase 3 adds: the status indicator and the popup
-// (store-readiness spec, section 4.2).
+// axe-core and keyboard-only checks for the status bar and the popup (store-readiness spec, section
+// 4.2). status-bar.spec.js runs axe on the bar in each tone, and on light and dark host pages.
 import { test, expect, REST_ROOT } from "./fixtures.js";
 import { axeViolations } from "./axe.js";
 
-const NAME = "Services Directory Toolkit";
 const NO_VIOLATIONS = { light: [], dark: [] };
-
-test("axe finds nothing wrong with the status indicator, on a light and a dark page", async ({ page }) => {
-  await page.goto(REST_ROOT);
-  await expect(page.getByRole("status")).toHaveText("SD Toolkit: finished loading");
-  expect(await axeViolations(page, { include: ".sdt-indicator", hostPage: true })).toEqual(NO_VIOLATIONS);
-});
 
 test("axe finds nothing wrong with the popup, in light and dark", async ({ openPopupTab }) => {
   // f=html can be trimmed, so the URL tools show too.
@@ -19,15 +12,14 @@ test("axe finds nothing wrong with the popup, in light and dark", async ({ openP
   expect(await axeViolations(popup)).toEqual(NO_VIOLATIONS);
 });
 
-test("the keyboard never reaches the status indicator", async ({ page }) => {
+test("without Load more, the keyboard never stops in the status bar", async ({ page }) => {
   await page.goto(REST_ROOT);
-  await expect(page.getByRole("img", { name: NAME })).toBeVisible();
+  await expect(page.locator(".sdt-statusbar").getByRole("status")).toHaveText(/^Loaded details for/);
   const links = await page.locator("a[href]").count();
   for (let i = 0; i <= links; i++) {
     await page.keyboard.press("Tab");
-    // The indicator is the ring's parent element.
-    const inIndicator = await page.evaluate((name) => document.querySelector(`[aria-label="${name}"]`).parentElement.contains(document.activeElement), NAME);
-    expect(inIndicator).toBe(false);
+    const inBar = await page.evaluate(() => document.querySelector(".sdt-statusbar").contains(document.activeElement));
+    expect(inBar).toBe(false);
   }
 });
 

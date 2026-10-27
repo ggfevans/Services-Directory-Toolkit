@@ -1,16 +1,18 @@
 {
-  // The status indicator: a small ring in the bottom-right corner that spins while the extension's
-  // scripts are busy, and a status line for screen readers. Busy means a class starting sdt-loading-
-  // is on <body>, which inject.js, mapImages.js and queryTest.js set. The indicator takes no clicks
-  // and has no click handler (SEC-1, ADV-3); settings live on the options page. Phase 5 moves it
-  // into the page as the status bar (#14). It also starts the theme check (src/src/lib/theme.js),
-  // because it runs on every Services Directory page and on no other.
-  const SVG = "http://www.w3.org/2000/svg";
-  const NAME = "Services Directory Toolkit";
-  const LOADING = "SD Toolkit: loading";
-  const DONE = "SD Toolkit: finished loading";
-  // The status line changes at most once a second, so screen readers aren't flooded (WCAG 4.1.3).
+  // The status bar (design review section 6.3, #14): one line in the page flow, right after the
+  // page's first <h2>, or first in <body> when there is none. It shows the glyph, "SD Toolkit" and
+  // the message from SDT.status.message(), in a role="status" live region. While only <body>'s busy
+  // classes say the page is working (a class starting sdt-loading-, which mapImages.js and
+  // queryTest.js set), it says "Loading". The bar appears with the first message or busy class, so
+  // a page with nothing to report has none. Its only listener is the Load more button's (SEC-1,
+  // ADV-3); settings live on the options page. It also starts the theme check
+  // (src/src/lib/theme.js), because it runs on every Services Directory page and on no other.
+  const NAME = "SD Toolkit";
+  const LOADING = "Loading";
+  const FINISHED = "Finished loading";
+  // The message changes at most once a second, so screen readers aren't flooded (WCAG 4.1.3).
   const THROTTLE_MS = 1000;
+  const ICONS = { ok: "check", warn: "warn", error: "error" };
   const isBusy = (className) => /(?:^|\s)sdt-loading-/.test(className ?? "");
 
   // Enable the toolbar button for this tab (see src/src/bg/background.js). Re-send when the page is
@@ -19,64 +21,140 @@
   // aren't active.
   const enableAction = () => chrome.runtime.sendMessage({ type: "enableAction" });
 
-  /** An SVG element with the given attributes. */
-  const svgElement = (tag, attributes) => {
-    const element = document.createElementNS(SVG, tag);
-    for (const [name, value] of Object.entries(attributes)) {
-      element.setAttribute(name, String(value));
+  /** The bar, built empty: the glyph and name, then the live region holding an icon and a text node. */
+  const build = (body) => {
+    const bar = SDT.dom.loadElement("div", { "class": "sdt sdt-statusbar" });
+    const name = SDT.dom.loadElement("span", { "class": "sdt-statusbar__name" });
+    name.appendChild(SDT.icon("glyph"));
+    name.appendChild(SDT.dom.text(NAME));
+    const status = SDT.dom.loadElement("p", { "class": "sdt-status", role: "status" });
+    const text = SDT.dom.text("");
+    status.appendChild(text);
+    bar.appendChild(name);
+    bar.appendChild(status);
+    const heading = body.querySelector("h2");
+    if (heading) {
+      heading.after(bar);
+    } else {
+      body.prepend(bar);
     }
-    return element;
-  };
-
-  /** The ring: an opaque disc, a grey track and a teal arc from twelve o'clock (see inject.css). */
-  const ring = () => {
-    const svg = svgElement("svg", { "class": "sdt-indicator__ring", role: "img", "aria-label": NAME, viewBox: "0 0 24 24", width: 24, height: 24 });
-    svg.appendChild(svgElement("circle", { "class": "sdt-indicator__disc", cx: 12, cy: 12, r: 11.5 }));
-    svg.appendChild(svgElement("circle", { "class": "sdt-indicator__track", cx: 12, cy: 12, r: 7, "stroke-width": 3 }));
-    svg.appendChild(svgElement("circle", { "class": "sdt-indicator__arc", cx: 12, cy: 12, r: 7, "stroke-width": 3, transform: "rotate(-90 12 12)" }));
-    return svg;
+    return { bar, status, text, icon: null, iconName: null, actions: null, button: null };
   };
 
   /**
-   * Keeps the indicator in step with <body>'s busy classes. The spin follows at once; the status
-   * line is empty until the first busy state, then says loading or finished, changing at most once a
-   * second. A change inside the wait is applied when the wait ends, so the last state always lands.
+   * Keeps the bar in step with SDT.status and <body>'s busy classes. Each write shows the whole
+   * state, at most once a second; a change inside the wait is applied when the wait ends, so the
+   * last state always lands.
    */
-  const watch = (body, indicator, message) => {
+  const watch = (body) => {
+    let view = null;
     let seenBusy = false;
-    // A live region announces changes, not what it holds when it appears, so the first message
-    // also waits a second.
-    let lastWrite = performance.now();
+    // True from a Load more click until its batch settles: the button stays disabled meanwhile.
+    let loading = false;
+    let lastWrite = 0;
     let timer = null;
+    let shown = null;
 
+    /** What the bar should say, or null while there is nothing to report. */
     const wanted = () => {
-      if (isBusy(body.className)) {
-        return LOADING;
+      const message = SDT.status.message(SDT.status.snapshot());
+      if (message) {
+        return message;
       }
-      return seenBusy ? DONE : "";
+      if (isBusy(body.className)) {
+        return { tone: undefined, text: LOADING, action: null };
+      }
+      return seenBusy ? { tone: "ok", text: FINISHED, action: null } : null;
+    };
+    const keyOf = (state) => JSON.stringify([state.tone ?? null, state.text, state.action, loading]);
+
+    const loadMore = () => {
+      if (loading) {
+        return;
+      }
+      loading = true;
+      view.button.disabled = true;
+      SDT.status.loadMore().finally(SDT.guard.wrap(() => {
+        loading = false;
+        update();
+      }));
+    };
+
+    /** Shows the icon for the tone (the spinner while busy), the text and the action button. */
+    const render = (state) => {
+      for (const element of [view.bar, view.status]) {
+        if (state.tone) {
+          element.setAttribute("data-tone", state.tone);
+        } else {
+          element.removeAttribute("data-tone");
+        }
+      }
+      // Replace the icon only when it changes, so the spinner keeps turning smoothly.
+      const iconName = ICONS[state.tone] ?? "spinner";
+      if (iconName !== view.iconName) {
+        const icon = iconName === "spinner"
+          ? SDT.dom.loadElement("span", { "class": "sdt-spinner", "aria-hidden": "true" })
+          : SDT.icon(iconName);
+        if (view.icon) {
+          view.icon.replaceWith(icon);
+        } else {
+          view.status.prepend(icon);
+        }
+        view.icon = icon;
+        view.iconName = iconName;
+      }
+      if (view.text.nodeValue !== state.text) {
+        view.text.nodeValue = state.text;
+      }
+      if (state.action && !view.actions) {
+        view.actions = SDT.dom.loadElement("span", { "class": "sdt-statusbar__actions" });
+        view.button = SDT.dom.loadElement("button", { "class": "sdt-button", type: "button" });
+        view.actions.appendChild(view.button);
+        view.bar.appendChild(view.actions);
+        SDT.guard.listen(view.button, "click", loadMore);
+      } else if (!state.action && view.actions) {
+        view.actions.remove();
+        view.actions = null;
+        view.button = null;
+      }
+      if (view.button) {
+        view.button.textContent = state.action;
+        view.button.disabled = loading;
+      }
     };
 
     const write = () => {
       timer = null;
-      const text = wanted();
-      if (text !== message.textContent) {
-        message.textContent = text;
+      const state = wanted();
+      if (state && keyOf(state) !== shown) {
+        render(state);
+        shown = keyOf(state);
         lastWrite = performance.now();
       }
     };
 
     const update = (records = []) => {
-      const busy = isBusy(body.className);
       // A busy class added and removed between two callbacks still counts as busy.
-      seenBusy ||= busy || records.some((record) => isBusy(record.oldValue));
-      indicator.classList.toggle("sdt-indicator--busy", busy);
-      if (timer !== null || wanted() === message.textContent) {
+      seenBusy ||= isBusy(body.className) || records.some((record) => isBusy(record?.oldValue));
+      const state = wanted();
+      if (!state) {
+        return;
+      }
+      if (!view) {
+        view = build(body);
+        // A live region announces changes, not what it holds when it appears, so the first message
+        // also waits a second. The icon shows at once.
+        render({ tone: state.tone, text: "", action: null });
+        lastWrite = performance.now();
+      }
+      if (timer !== null || keyOf(state) === shown) {
         return;
       }
       timer = setTimeout(SDT.guard.wrap(write), Math.max(0, lastWrite + THROTTLE_MS - performance.now()));
     };
 
     new MutationObserver(SDT.guard.wrap(update)).observe(body, { attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+    SDT.status.subscribe(() => update());
     update();
   };
 
@@ -89,14 +167,9 @@
     SDT.guard.whenActive(enableAction);
     SDT.guard.listen(window, "pageshow", (evt) => evt.persisted && enableAction());
 
-    const indicator = SDT.dom.loadElement("div", { "class": "sdt-indicator" });
-    const message = SDT.dom.loadElement("span", { "class": "sdt-visually-hidden", role: "status" });
-    indicator.appendChild(ring());
-    indicator.appendChild(message);
-    document.body.appendChild(indicator);
-    watch(document.body, indicator, message);
+    watch(document.body);
     // Match the extension's palette to this page's background, now and when the page's style changes.
-    // Last, so the toolbar button and the indicator never depend on it.
+    // Last, so the toolbar button and the status bar never depend on it.
     SDT.theme.watch(document);
   };
 

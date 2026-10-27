@@ -36,15 +36,8 @@ test("links to another server get no automatic requests", async ({ page, fakeSer
   expect(fakeServer.calls.filter((call) => call.origin !== FAKE_ORIGIN)).toEqual([]);
 });
 
-test("a page with 60 service links sends 50 requests, and the other rows say why they're empty", async ({ page, fakeServer }) => {
-  const bulk = Array.from({ length: 60 }, (_, i) => ({ name: `Bulk${String(i + 1).padStart(2, "0")}`, type: "MapServer" }));
-  fakeServer.override(ROOT_PAGE, () => html(folderPage({ folder: "", folders: [], services: bulk, version: catalog.currentVersion })));
-  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk\d+\/MapServer\?f=json$/, () => json({
-    currentVersion: catalog.currentVersion,
-    serviceDescription: "An invented bulk service.",
-    spatialReference: { wkid: 102100, latestWkid: 3857 },
-    layers: []
-  }));
+test("a page with 60 service links sends 50 requests, and the other rows say why they're empty", async ({ page, fakeServer, bulkRoot }) => {
+  bulkRoot(60);
   await page.goto(REST_ROOT);
   await expect(page.getByText(LIMIT_NOTE)).toHaveCount(10);
   await expect(page.locator(".sdt-datablock")).toHaveCount(50);

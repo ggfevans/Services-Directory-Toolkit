@@ -89,15 +89,17 @@ test("keyframes names start with sdt-", () => {
   }
 });
 
-test("sdt.css styles no class that the extension's older code uses, except sdt-visually-hidden", () => {
+// Files outside the lib that are written for sdt.css: the status bar (#14) uses its components.
+const BUILT_FOR_SDT_CSS = new Set(["src/inject/status.js"]);
+
+test("sdt.css styles no class that the extension's older code uses", () => {
   const styled = new Set(rules.flatMap(({ selectors }) => selectors.flatMap(classesIn)));
-  // Everything under src/ except the lib, whose new files are written for sdt.css.
+  // Everything under src/ except the lib and the files above, which are written for sdt.css.
   const older = listFiles(SRC)
-    .filter((file) => /\.(js|css|html)$/.test(file) && !file.startsWith("src/lib/"))
+    .filter((file) => /\.(js|css|html)$/.test(file) && !file.startsWith("src/lib/") && !BUILT_FOR_SDT_CSS.has(file))
     .flatMap((file) => [...readFileSync(join(SRC, file), "utf8").matchAll(/\bsdt-[\w-]+/g)].map(([name]) => name));
   const shared = [...new Set(older)].filter((name) => styled.has(name)).sort();
-  // status.js's hidden status line: inject.css's rule for it moved to sdt.css unchanged.
-  assert.deepEqual(shared, ["sdt-visually-hidden"]);
+  assert.deepEqual(shared, []);
 });
 
 test("no class or keyframes is defined in both sdt.css and another stylesheet", () => {
