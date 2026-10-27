@@ -40,9 +40,26 @@ test("a job of 3 rows is busy until all 3 report", () => {
 
 test("a second job call returns the same job with total added", () => {
   const { SDT, job } = withJob("services", 3);
-  SDT.status.job("services", 2);
-  assert.equal(plain(SDT.status.snapshot()).total, 5);
-  assert.ok(job);
+  assert.strictEqual(SDT.status.job("layers", 2), job);
+  const snapshot = plain(SDT.status.snapshot());
+  assert.deepEqual([snapshot.total, snapshot.kind], [5, "services"]);
+});
+
+test("a throwing subscriber breaks neither the report nor the other subscribers", () => {
+  const timers = [];
+  const context = loadLib({ globals: { setTimeout: (fn) => timers.push(fn) } });
+  const { SDT } = context;
+  SDT.state = { pageLimiter: SDT.net.createLimiter({ scope: SCOPE, fetchJson: async () => ({ data: {} }) }) };
+  const job = SDT.status.job("services", 2);
+  const seen = [];
+  SDT.status.subscribe(() => {
+    throw new Error("bad subscriber");
+  });
+  SDT.status.subscribe((snapshot) => seen.push(snapshot.done));
+  assert.doesNotThrow(() => job.done());
+  assert.deepEqual(seen, [1]);
+  assert.equal(timers.length, 1);
+  assert.throws(timers[0], /bad subscriber/);
 });
 
 test("message: busy \"Loading details: 2 of 8 services, 1 failed\"", () => {

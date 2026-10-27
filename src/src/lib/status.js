@@ -15,6 +15,7 @@ SDT.status = {
       skipped: 0,
       requests: 0,
       callback: null,
+      job: null,
       running: false,
       listeners: []
     };
@@ -24,21 +25,31 @@ SDT.status = {
   notify() {
     const snapshot = SDT.status.snapshot();
     for (const listener of [...SDT.status.state().listeners]) {
-      listener(snapshot);
+      try {
+        listener(snapshot);
+      } catch (error) {
+        // One bad subscriber must not break row reporting or the other listeners; surface it later.
+        setTimeout(() => {
+          throw error;
+        }, 0);
+      }
     }
   },
 
   /** Opens the page's job, or adds total to the one already open. */
   job(kind, total) {
     const state = SDT.status.state();
-    state.kind ??= kind;
+    state.kind ??= kind; // a later kind is ignored: a page has one job
     state.total += total;
-    SDT.status.notify();
+    if (state.job) {
+      SDT.status.notify();
+      return state.job;
+    }
     const report = (field) => () => {
       state[field] += 1;
       SDT.status.notify();
     };
-    return {
+    state.job = {
       async fetch(url, options) {
         const limiter = SDT.net.pageLimiter();
         const before = limiter.stats().accepted;
@@ -62,6 +73,8 @@ SDT.status = {
         SDT.status.notify();
       }
     };
+    SDT.status.notify();
+    return state.job;
   },
 
   snapshot() {
