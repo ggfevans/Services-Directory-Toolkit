@@ -124,7 +124,24 @@ test("job.fetch counts sent requests only: a refused \"limit\" result adds nothi
   assert.equal(plain(SDT.status.snapshot()).requests, 2);
 });
 
-test("loadMore extends the limiter by 50, then calls the callback once, even when called twice before it settles", async () => {
+test("loadMore on a fresh limiter (after a bfcache restore) sends exactly 50 of 150 skipped rows", async () => {
+  const SDT = setup();
+  const job = SDT.status.job("services", 150);
+  for (let i = 0; i < 150; i += 1) {
+    job.skipped();
+  }
+  SDT.state.status.requests = 50;
+  let sent = 0;
+  job.onLoadMore(async () => {
+    const results = await Promise.all(Array.from({ length: 150 }, (_, i) => job.fetch(at(i))));
+    sent = results.filter((r) => r.data).length;
+  });
+  assert.equal(plain(SDT.status.message(SDT.status.snapshot())).action, "Load 50 more services");
+  await SDT.status.loadMore();
+  assert.equal(sent, 50);
+});
+
+test("loadMore grants 50 more requests, then calls the callback once, even when called twice before it settles", async () => {
   const SDT = setup({ max: 1 });
   const job = SDT.status.job("services", 3);
   await job.fetch(at(1));
@@ -272,7 +289,7 @@ test("after pagehide, a back/forward restore (resetPageLimiter) offers Load more
   });
   await SDT.status.loadMore();
   assert.equal(calls, 1);
-  assert.equal(SDT.state.pageLimiter.stats().max, 100);
+  assert.equal(SDT.state.pageLimiter.stats().max, 50);
 });
 
 test("requests counts what was sent: rows pagehide drains from the queue add nothing", async () => {

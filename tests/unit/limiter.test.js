@@ -200,6 +200,33 @@ test("extend after pagehide changes nothing: the next request settles as aborted
   assert.equal((await limiter.fetchJson(at(0))).error.type, "aborted");
 });
 
+test("grant(n) allows n more requests from now: after 1 accepted at max 3, grant(2) lets exactly 2 more through", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 3, scope: SCOPE, fetchJson: fake.fetchJson });
+  limiter.fetchJson(at(0));
+  limiter.grant(2);
+  assert.equal(limiter.stats().max, 3);
+  limiter.fetchJson(at(1));
+  limiter.fetchJson(at(2));
+  assert.equal((await limiter.fetchJson(at(3))).error.type, "limit");
+  assert.equal(fake.sent(), 3);
+});
+
+test("grant after a 429 or pagehide changes nothing", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, fetchJson: fake.fetchJson });
+  const first = limiter.fetchJson(at(0));
+  fake.open[0].finish({ error: { type: "http", message: "Too many", url: at(0), status: 429 } });
+  await first;
+  limiter.grant(5);
+  assert.equal(limiter.stats().max, 2);
+  const target = pageTarget();
+  const aborted = net.createLimiter({ max: 2, scope: SCOPE, target, fetchJson: fake.fetchJson });
+  target.fire("pagehide");
+  aborted.grant(5);
+  assert.equal(aborted.stats().max, 2);
+});
+
 test("stats().max reports the cap: 50 by default, 100 after extend(50)", () => {
   const limiter = net.createLimiter({ scope: SCOPE, fetchJson: fakeFetch().fetchJson });
   assert.equal(limiter.stats().max, 50);

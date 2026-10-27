@@ -112,7 +112,7 @@ SDT.status = {
     };
   },
 
-  /** Raises the budget by one batch and re-runs the skipped rows. A second press while it runs does nothing. */
+  /** Grants one more batch from now (so a fresh limiter after a bfcache restore still allows 50) and re-runs the skipped rows. A second press while it runs does nothing. */
   async loadMore() {
     const state = SDT.status.state();
     if (state.running || !SDT.status.snapshot().canLoadMore) {
@@ -120,7 +120,7 @@ SDT.status = {
     }
     state.running = true;
     try {
-      SDT.net.pageLimiter().extend(SDT.net.BUDGET.max);
+      SDT.net.pageLimiter().grant(SDT.net.BUDGET.max);
       await state.callback();
     } finally {
       state.running = false;
