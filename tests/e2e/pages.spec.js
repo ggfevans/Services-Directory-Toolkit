@@ -2,15 +2,12 @@
 // later phase that changes a behaviour on purpose updates the matching test.
 import { test, expect, FAKE_ORIGIN, REST_ROOT, toolkitStarted } from "./fixtures.js";
 
-// Labels the content scripts write in <b> elements, such as "Number of features: ".
+// Labels the content scripts write in <b> elements, such as "Features with values: ".
 const label = (page, text) => page.locator("b", { hasText: new RegExp(`^${text}`) });
 
-// The list item for a layer on a service page: the one that holds the layer's link. The extension nests
-// "Number of features: N" and "Features with shapes: N" items inside it.
+// The list item for a layer on a service page: the one that holds the layer's link. The extension
+// adds "3 features" and "2 with shapes" to it.
 const layerItem = (page, name) => page.locator("li", { has: page.getByRole("link", { name, exact: true }) });
-
-// A nested list item whose text matches, such as "Number of features: 3".
-const item = (parent, pattern) => parent.locator("li", { hasText: pattern });
 
 test("the services root shows the status bar, spatial reference badges and service details", async ({ page }) => {
   await page.goto(REST_ROOT);
@@ -37,14 +34,11 @@ test("INJ-11: service details put the copyright text under a Copyright term, wit
 test("a MapServer page shows details and feature counts for each layer", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer`);
   await expect(page.locator("details.sdt-details")).toHaveCount(2);
-  await expect(label(page, "Number of features:")).toHaveCount(2);
-  await expect(label(page, "Features with shapes:")).toHaveCount(2);
   await expect(page.locator("dt:text-is(\"Display field\") + dd", { hasText: /^OWNER_NAME$/ })).toHaveCount(1);
   await expect(page.locator("dt:text-is(\"Display field\") + dd", { hasText: /^ADDRESS$/ })).toHaveCount(1);
   const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
   for (const [name, { features, shapes }] of Object.entries(counts)) {
-    await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);
-    await expect(item(layerItem(page, name), new RegExp(`^Features with shapes: ${shapes}$`))).toHaveCount(1);
+    await expect(layerItem(page, name).locator(".sdt-count")).toHaveText([`${features} features`, `${shapes} with shapes`]);
   }
 });
 
@@ -55,8 +49,7 @@ test("a FeatureServer layer row shows \"Features with shapes\" (INJ-15)", async 
   await expect(page.locator("details.sdt-details")).toHaveCount(2);
   const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
   for (const [name, { features, shapes }] of Object.entries(counts)) {
-    await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);
-    await expect(item(layerItem(page, name), new RegExp(`^Features with shapes: ${shapes}$`))).toHaveCount(1);
+    await expect(layerItem(page, name).locator(".sdt-count")).toHaveText([`${features} features`, `${shapes} with shapes`]);
   }
   await expect(page.getByText("No visible shape field available.")).toHaveCount(0);
 });

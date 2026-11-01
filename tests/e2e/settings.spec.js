@@ -64,7 +64,7 @@ test.describe("content scripts read validated settings", () => {
     await page.goto(`${REST_ROOT}/Parcels/MapServer`);
     await expect(page.locator("details.sdt-details")).toHaveCount(2);
     await expect(page.locator(".sdt-statusbar").getByRole("status")).toHaveText(/^Loaded details for/);
-    await expect(page.locator("b", { hasText: /^Number of features:/ })).toHaveCount(0);
+    await expect(page.locator(".sdt-count")).toHaveCount(0);
   });
 
   for (const [stored, size] of [[{ mapImageWidth: 640, mapImageHeight: 480 }, "640,480"], [{ mapImageWidth: 5000, mapImageHeight: "200px" }, "300,200"]]) {

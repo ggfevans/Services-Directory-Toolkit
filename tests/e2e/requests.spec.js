@@ -68,7 +68,7 @@ test("a service that answers 200 with an ArcGIS error body fails its row with th
 
 test("count queries send the where clause as a param, not spliced into the URL (INJ-5)", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer`);
-  await expect(page.locator("b", { hasText: /^Features with shapes:/ })).toHaveCount(2);
+  await expect(page.locator(".sdt-count", { hasText: "with shapes" })).toHaveCount(2);
   const counts = fakeServer.calls.filter((call) => call.query.returnCountOnly === "true");
   expect(counts).toHaveLength(4);
   for (const call of counts) {
@@ -226,8 +226,7 @@ test("a row cut off mid-chain gets only its missing count on Load more", async (
   await expect(layerRow.getByText(/Not loaded/)).toHaveCount(0);
   await pressLoadMore(button);
   await expect(message(page)).toHaveText("Loaded details for 50 services in 52 requests");
-  await expect(layerRow.locator("b", { hasText: /^Number of features:/ })).toHaveCount(1);
-  await expect(layerRow.locator("b", { hasText: /^Features with shapes:/ })).toHaveCount(1);
+  await expect(layerRow.locator(".sdt-count")).toHaveText(["3 features", "2 with shapes"]);
   await page.waitForTimeout(300);
   expect(counts()).toHaveLength(2);
   expect(layerJson()).toHaveLength(1);

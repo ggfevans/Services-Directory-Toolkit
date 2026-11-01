@@ -7,84 +7,15 @@
   // The page's progress job (SDT.status): every request in a row's chain goes through it.
   let job = null;
 
-  /**
-   * Adds a list item to a node if the property is there and maybe if a property is true.
-   * @function li
-   * @param {string} title - text to add in bold
-   * @param {string | object} content - data to add after title in regular format
-   * @param {string} [className] - if prsent, adds the class name to the list item
-   * @returns {object} - list item node;
-   */
-  const li = (title, content, className) => {
-    const node = loadElement("LI", {"class": className || ""});
-    if (content === undefined) {
-      node.appendChild(loadElement("b", {}, title));
-    } else {
-      node.appendChild(loadElement("b", {}, `${title}: `));
-      node.appendChild(document.createTextNode(content instanceof Object ? JSON.stringify(content) : content));
-    }
-    return node;
-  };
-
-  /**
-   * Adds a list item to a node with the title of the property, and then itemizes ovoer the content object get all its properties
-   * @function addSubList
-   * @param {string} title - title of the list
-   * @param {object} content - name, value pairs used to describe a feature.
-   * @param {string} [className] - if present, add this class name to the list item.
-   * @returns {object} - list item node containing list of properties.
-   */
-  const addSubList = (title, content, className) => {
-    const node = loadElement("LI", {"class": className || ""});
-    const ul = document.createElement("ul");
-    for (let i in content) {
-      ul.appendChild(li(SDT.row.unCamelCase(i), content[i]));
-    }
-    node.appendChild(loadElement("b", {}, title));
-    node.appendChild(ul);
-    return node;
-  };
+  // The counts in the order a row shows them, and the word its notes and errors use for each.
+  const COUNTS = [{ key: "total", label: "Feature count" }, { key: "shape", label: "Shape count" }];
+  // ArcGIS's "bad request", and its code for a shapefile that can't test its shape field.
+  const UNSUPPORTED_CODES = [400, -2147220985];
 
   /**
    * Returns whether a field is queryable
    */
   const isQueryableField = (field) => ["esriFieldTypeGeometry","esriFieldTypeBlob","esriFieldTypeXML","esriFieldTypeRaster"].indexOf(field.type) === -1;
-
-  /**
-   * Error reporting
-   * @function reportError
-   * @param {error} err0r - error object returned.
-   * @param {object} [field] - the field being queried, used to explain some 400 errors.
-   * @returns {object} an HTML node containing the error message.
-   */
-  const reportError = (err0r, field) => {
-    let codeNumber = -99999;
-
-    if (Object.hasOwn(err0r, "code")) {
-      codeNumber = err0r.code;
-    }
-    if (Object.hasOwn(err0r, "Code")) {
-      codeNumber = err0r.Code;
-    }
-
-    switch(codeNumber) {
-      case -2147220985:
-        return li("Cannot count features with valid shape fields in a shapefile");
-      case 400:
-        if (field) {
-          if (Object.hasOwn(field, "type")) {
-            switch(field.type) {
-              case "esriFieldTypeOID":
-                return li("Service does not support checking for null ObjectID");
-              case "esriFieldTypeGeometry": 
-                return li("Service data source does not support checking for null/empty geometry");
-            }
-          }
-        }
-    }
-
-    return addSubList("Error", err0r, "sdt-metadata-error");
-  };
 
   /** The spatial reference badge: a link for a WKID, a neutral span for WKT, or null for no badge. */
   const badgeNode = (sr) => {
@@ -130,67 +61,116 @@
     return details;
   };
 
+  /** A spinner and what the row is waiting for. */
+  const statusNode = (text) => {
+    const node = loadElement("span", { "class": "sdt-status" });
+    node.append(loadElement("span", { "class": "sdt-spinner", "aria-hidden": "true" }), document.createTextNode(text));
+    return node;
+  };
+
+  /** A failure on the row. Colour only repeats what the icon and the words say. */
+  const errorNode = (text) => {
+    const node = loadElement("span", { "class": "sdt-status", "data-tone": "error" });
+    node.append(SDT.icon("error"), document.createTextNode(text));
+    return node;
+  };
+
+  /** A count: its number in bold, or the warning badge for no features or rows at all. */
+  const countNode = (key, value, data) => {
+    const noun = `${data.type === "Table" ? "row" : "feature"}${value === 1 ? "" : "s"}`;
+    if (key === "total" && value === 0) {
+      const badge = loadElement("span", { "class": "sdt-badge sdt-badge--warn" });
+      badge.append(SDT.icon("warn"), loadElement("span", { "class": "sdt-visually-hidden" }, "Warning: "), document.createTextNode(`0 ${noun}`));
+      return badge;
+    }
+    const node = loadElement("span", { "class": "sdt-count" });
+    node.append(loadElement("b", {}, value.toLocaleString("en-CA")), document.createTextNode(key === "shape" ? " with shapes" : ` ${noun}`));
+    return node;
+  };
+
   /**
-   * Draws a row from its model. The annot's children are rebuilt each time. The disclosure is made
-   * once and never replaced, so one the user has open stays open. A row with nothing to show keeps
-   * no annot at all.
+   * Draws a row from its model. The annot's children are rebuilt each time, in the order badges,
+   * spinner, counts, then notes and errors. The disclosure is made once and never replaced, so one
+   * the user has open stays open. A row with nothing to show keeps no annot at all.
    * @function render
    * @param {object} row - the row model
    */
   const render = (row) => {
     row.annot ??= loadElement("span", { "class": "sdt sdt-annot" });
+    const badgeFocused = row.annot.querySelector("a:focus") !== null;
     cleanElement(row.annot);
     if (row.loading) {
-      const status = loadElement("span", { "class": "sdt-status" });
-      status.append(loadElement("span", { "class": "sdt-spinner", "aria-hidden": "true" }), document.createTextNode("Loading details"));
-      row.annot.appendChild(status);
+      row.annot.appendChild(statusNode("Loading details"));
     }
     if (row.data) {
       const badge = badgeNode(SDT.row.spatialReference(row.data));
       const cache = SDT.row.cacheLabel(row.data);
       if (badge) {
         row.annot.appendChild(badge);
+        if (badgeFocused) {
+          badge.focus({ preventScroll: true });
+        }
       }
       if (cache) {
         row.annot.appendChild(loadElement("span", { "class": "sdt-badge" }, cache));
       }
+      if (row.counting) {
+        row.annot.appendChild(statusNode("Counting features"));
+      }
+      for (const { key } of COUNTS) {
+        if (row.counts[key]?.value !== undefined) {
+          row.annot.appendChild(countNode(key, row.counts[key].value, row.data));
+        }
+      }
+      for (const note of row.fieldNotes) {
+        row.annot.appendChild(loadElement("span", { "class": "sdt-muted" }, note));
+      }
+      for (const { key, label } of COUNTS) {
+        if (row.counts[key]?.unsupported) {
+          row.annot.appendChild(loadElement("span", { "class": "sdt-muted" }, `${label} not supported by this data source`));
+        } else if (row.counts[key]?.error !== undefined) {
+          row.annot.appendChild(errorNode(`${label} failed: ${row.counts[key].error}`));
+        }
+      }
+    }
+    if (row.error !== null) {
+      row.annot.appendChild(errorNode(`Details unavailable: ${row.error}`));
     }
     if (!row.annot.firstChild) {
       row.annot.remove();
     } else if (!row.annot.isConnected) {
-      row.parent.insertBefore(row.annot, row.details ?? row.list);
+      row.parent.insertBefore(row.annot, row.details);
     }
     if (row.data && !row.details) {
       row.details = detailsNode(row.data);
-      row.parent.insertBefore(row.details, row.list);
+      row.parent.appendChild(row.details);
     }
   };
 
   /** True when a row's request was left out: by the budget, after pushback, or because the page was left. */
   const isLeftOut = (result) => SDT.net.isSkipped(result) || result?.error?.type === "aborted";
 
-  /** The row's list of counts and errors, created once, after the row's other details. */
-  const rowList = (row) => {
-    if (!row.list) {
-      row.list = document.createElement("ul");
-      row.parent.appendChild(row.list);
-    }
-    return row.list;
-  };
+  /** True for a JSON object: a service description, or the like. */
+  const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
-  /** Shows a failed request's error on its row: the server's ArcGIS error, or the request's message. */
-  const failure = (result, field) => {
-    const response = SDT.net.legacyResponse(result);
-    return reportError(response?.error ?? { message: result.error.message }, field);
+  /** True when the data source can't answer the count, which isn't the server failing. */
+  const isUnsupported = ({ error }) => error.status === 400 || UNSUPPORTED_CODES.includes(error.code ?? error.arcgis?.Code);
+
+  /** What a finished count request puts in row.counts. */
+  const countResult = (result) => {
+    if (result.error) {
+      return isUnsupported(result) ? { unsupported: true } : { error: SDT.row.failureText(result) };
+    }
+    return typeof result.data?.count === "number" ? { value: result.data.count } : { error: "The server's answer was not a count." };
   };
 
   /**
-   * Counts a layer's features, and those with shapes, through the page's job. Each count that
-   * finishes goes into row.counts, so Load more sends only the ones still missing.
+   * Counts a layer's features, and those with shapes, through the page's job. Each answer goes into
+   * row.counts, so Load more sends only the counts with no value and no unsupported note.
    * @function getLayerCount
    * @param {string} url - the layer's url
    * @param {object} data - the layer's JSON
-   * @param {object} row - the row: its counts and errors go in row.list
+   * @param {object} row - the row
    * @returns {Promise<"done" | "failed" | "skipped">}
    */
   const getLayerCount = async (url, data, row) => {
@@ -207,48 +187,37 @@
     }
     shape ??= data.geometryField?.name;
 
-    const firstRun = !row.list;
-    const ul = rowList(row);
-    if (firstRun && !oid) {
-      ul.appendChild(li("No way to query features."));
-    }
-    if (firstRun && !shape && data.type && data.type !== "Table") {
-      ul.appendChild(li("No visible shape field available."));
-    }
+    row.fieldNotes = [
+      !oid && "No way to query features.",
+      !shape && data.type && data.type !== "Table" && "No visible shape field available."
+    ].filter(Boolean);
 
-    const counts = [
-      oid && { key: "total", field: oid, label: "Number of features", type: "esriFieldTypeOID" },
-      shape && { key: "shape", field: shape, label: "Features with shapes", type: "esriFieldTypeGeometry" }
-    ].filter((count) => count && !Object.hasOwn(row.counts, count.key));
+    const fields = { total: oid, shape };
+    const missing = COUNTS.map(({ key }) => key)
+      .filter((key) => fields[key] && row.counts[key]?.value === undefined && !row.counts[key]?.unsupported);
+    for (const key of missing) {
+      delete row.counts[key];
+    }
+    row.counting = missing.length > 0;
+    render(row);
+
     const queryUrl = `${url.replace(/\/+$/, "")}/query`;
-    const results = await Promise.all(counts.map((count) => job.fetch(queryUrl, {
-      params: { where: `${count.field} IS NOT NULL`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
+    const results = await Promise.all(missing.map((key) => job.fetch(queryUrl, {
+      params: { where: `${fields[key]} IS NOT NULL`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
       token
     })));
 
-    let outcome = "done";
-    counts.forEach((count, i) => {
-      const result = results[i];
-      if (isLeftOut(result)) {
-        outcome = "skipped";
-      } else if (result.error) {
-        row.notes.push(ul.appendChild(failure(result, { type: count.type })));
-        if (outcome !== "skipped") {
-          outcome = "failed";
-        }
-      } else if (result.data === null || typeof result.data !== "object" || Array.isArray(result.data)) {
-        row.notes.push(ul.appendChild(failure({ error: { message: "The server's answer was not a count." } }, { type: count.type })));
-        if (outcome !== "skipped") {
-          outcome = "failed";
-        }
-      } else {
-        row.counts[count.key] = { value: result.data.count };
-        if (result.data.count !== undefined && result.data.count !== null) {
-          ul.appendChild(li(count.label, result.data.count));
-        }
+    row.counting = false;
+    results.forEach((result, i) => {
+      if (!isLeftOut(result)) {
+        row.counts[missing[i]] = countResult(result);
       }
     });
-    return outcome;
+    render(row);
+    if (results.some(isLeftOut)) {
+      return "skipped";
+    }
+    return Object.values(row.counts).some((count) => Object.hasOwn(count, "error")) ? "failed" : "done";
   };
 
   /**
@@ -590,12 +559,12 @@
       data: null,
       outcome: null,
       loading: false,
+      counting: false,
       error: null,
       counts: {},
+      fieldNotes: [],
       annot: null,
-      details: null,
-      list: null,
-      notes: []
+      details: null
     }));
     const canCountFeatures = settings.autoFeatureCounts;
 
@@ -603,31 +572,24 @@
     const loadRow = async (row) => {
       let outcome = "failed";
       try {
-        // A Load more run replaces the notes and errors from the last one.
-        for (const note of row.notes.splice(0)) {
-          note.remove();
-        }
         row.error = null;
         if (!row.data) {
           row.loading = true;
           render(row);
           const result = await job.fetch(row.url, { params: { f: "json" }, token });
           row.loading = false;
-          const usable = !result.error && result.data !== null && typeof result.data === "object";
-          if (usable) {
-            row.data = result.data;
-          }
-          render(row);
           if (isLeftOut(result)) {
             outcome = "skipped";
+            render(row);
             return;
           }
-          if (!usable) {
-            const failed = result.error ? result : { error: { message: "The server's answer was not a service description." } };
-            row.error = SDT.row.failureText(failed);
-            row.notes.push(rowList(row).appendChild(failure(failed)));
+          if (result.error || !isObject(result.data)) {
+            row.error = result.error ? SDT.row.failureText(result) : "The server's answer was not a service description.";
+            render(row);
             return;
           }
+          row.data = result.data;
+          render(row);
         }
         // Only a layer's JSON has fields, so only layer rows get counts.
         outcome = canCountFeatures && row.data?.fields?.length
@@ -636,8 +598,14 @@
       } catch (error) {
         // A row that cannot be drawn fails alone, with an error line, and the others carry on.
         console.debug("SD Toolkit: could not show a row", error);
+        row.loading = false;
+        row.counting = false;
         row.error = "Could not show this row's details.";
-        row.notes.push(rowList(row).appendChild(failure({ error: { message: row.error } })));
+        // With no disclosure drawn, the data is no use to the row: Retry has to fetch it again.
+        if (!row.details) {
+          row.data = null;
+        }
+        render(row);
         outcome = "failed";
       } finally {
         row.outcome = outcome;
