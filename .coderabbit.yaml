@@ -70,7 +70,7 @@ reviews:
         .../query, and the GP group only GPServer/*/execute and GPServer/*/submitJob, each with
         or without a trailing slash and a query string. The
         version must match package.json. Every content_scripts group lists the lib files
-        first, in the order dom, guard, auth, url, net, page, settings, theme, icon, and the css
+        first, in the order dom, guard, auth, url, net, status, page, settings, theme, icon, and the css
         list starts with src/lib/sdt.css.
     - path: "src/src/options/**"
       instructions: |

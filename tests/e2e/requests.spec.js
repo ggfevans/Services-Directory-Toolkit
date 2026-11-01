@@ -323,7 +323,7 @@ test("pushback during a Load more batch removes the button and leaves no row bus
 });
 
 test("a Load more batch whose row throws re-enables the bar, with no unhandled rejection", async ({ page, fakeServer, bulkRoot }) => {
-  // A null spatialReference makes inject.js throw while it draws Bulk55's row, so the batch rejects.
+  // A null spatialReference makes inject.js throw while it draws Bulk55's row, and the row reports failed.
   fakeServer.override(/^\/arcgis\/rest\/services\/Bulk55\/MapServer\?f=json$/, () => json({ currentVersion: catalog.currentVersion, spatialReference: null }));
   bulkRoot(60);
   await page.goto(REST_ROOT);
