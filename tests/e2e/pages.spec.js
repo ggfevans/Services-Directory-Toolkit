@@ -23,7 +23,7 @@ test("the services root shows the status bar, spatial reference badges and servi
     "Editable parcel boundaries for an invented county.",
     "An invented elevation surface."
   ]) {
-    await expect(page.locator("details.sdt-details", { hasText: description })).toHaveCount(1);
+    await expect(page.locator("dt:text-is(\"Service description\") + dd", { hasText: new RegExp(`^${description}$`) })).toHaveCount(1);
   }
 });
 
@@ -39,8 +39,8 @@ test("a MapServer page shows details and feature counts for each layer", async (
   await expect(page.locator("details.sdt-details")).toHaveCount(2);
   await expect(label(page, "Number of features:")).toHaveCount(2);
   await expect(label(page, "Features with shapes:")).toHaveCount(2);
-  await expect(page.locator("details.sdt-details", { hasText: "OWNER_NAME" })).toHaveCount(1);
-  await expect(page.locator("details.sdt-details", { hasText: "ADDRESS" })).toHaveCount(1);
+  await expect(page.locator("dt:text-is(\"Display field\") + dd", { hasText: /^OWNER_NAME$/ })).toHaveCount(1);
+  await expect(page.locator("dt:text-is(\"Display field\") + dd", { hasText: /^ADDRESS$/ })).toHaveCount(1);
   const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
   for (const [name, { features, shapes }] of Object.entries(counts)) {
     await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);

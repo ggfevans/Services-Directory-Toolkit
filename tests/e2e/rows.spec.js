@@ -153,6 +153,22 @@ test("server HTML shows as text, and entities as characters", async ({ page, fak
   await expect(detail(row, "Service description").locator("b")).toHaveCount(0);
 });
 
+for (const [title, description, text] of [
+  ["a script's source", "Intro<script>document.write(\"<b>x</b>\")</script> end", "Intro end"],
+  ["a style sheet", "Intro<style>p{margin:0}</style> end", "Intro end"],
+  ["adjacent blocks", "<div>Parcels</div><div>Updated weekly</div>", "Parcels Updated weekly"],
+  ["a line break", "Line one<br>Line two", "Line one Line two"],
+  ["list items", "<ul><li>A</li><li>B</li></ul>", "A B"],
+  ["text right before a block", "Intro<div>more</div>", "Intro more"]
+]) {
+  test(`server HTML as text: ${title}`, async ({ page, fakeServer }) => {
+    fakeServer.override(PARCELS_JSON, () => json({ serviceDescription: description, spatialReference: { wkid: 4326 } }));
+    await page.goto(REST_ROOT);
+    await expect(detail(serviceRow(page, "Parcels/MapServer"), "Service description")).toHaveText(text);
+    expect(await detail(serviceRow(page, "Parcels/MapServer"), "Service description").textContent()).toBe(text);
+  });
+}
+
 test("a <script> or <img onerror> in a description neither runs nor loads", async ({ page, fakeServer }) => {
   const image = "/arcgis/rest/static/injected.png";
   fakeServer.override(PARCELS_JSON, () => json({

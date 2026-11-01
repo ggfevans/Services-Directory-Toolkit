@@ -227,9 +227,18 @@ SDT.row = {
     return result;
   },
 
-  /** Server HTML as plain text, with whitespace collapsed. Parsed in an inert document, never inserted. */
+  /**
+   * Server HTML as plain text, with whitespace collapsed. Parsed in an inert document, never inserted.
+   * Content that is never shown goes, and line breaks and block edges become spaces, so words stay apart.
+   */
   text(html) {
     const parsed = new DOMParser().parseFromString(String(html), "text/html");
+    parsed.querySelectorAll("script, style, noscript, template, title, textarea, xmp, iframe, noembed, noframes").forEach((node) => node.remove());
+    parsed.querySelectorAll("br").forEach((node) => node.replaceWith(" "));
+    parsed.querySelectorAll("p, div, ul, ol, li, dl, dt, dd, table, tr, td, th, h1, h2, h3, h4, h5, h6, blockquote, pre").forEach((node) => {
+      node.before(" ");
+      node.after(" ");
+    });
     return (parsed.body.textContent || "").replace(/\s+/g, " ").trim();
   },
 

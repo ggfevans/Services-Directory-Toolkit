@@ -150,7 +150,7 @@ test("failureText prefers the ArcGIS message, then result.error.message", () => 
 });
 
 test("text collapses whitespace and strips markup through DOMParser", () => {
-  const withParser = loadLib({ globals: { DOMParser: class { parseFromString(html) { return { body: { textContent: html.replace(/<[^>]*>/g, "") } }; } } } });
+  const withParser = loadLib({ globals: { DOMParser: class { parseFromString(html) { return { querySelectorAll: () => [], body: { textContent: html.replace(/<[^>]*>/g, "") } }; } } } });
   assert.equal(withParser.SDT.row.text("  <p>a \n\n b</p>  "), "a b");
 });
 
