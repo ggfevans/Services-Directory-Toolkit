@@ -162,7 +162,7 @@ test("an ImageServer with fields is a service, and a Group Layer is a layer", ()
   const image = { fields: [], capabilities: "Image", maxRecordCount: 1000 };
   assert.equal(detailsOf(image)[0].group, "Service");
   assert.equal(row.summary(image), "max 1,000 records");
-  const group = { type: "Group Layer", geometryType: null, fields: null, subLayers: [] };
+  const group = { type: "Group Layer", geometryType: null, fields: null, description: "d" };
   assert.equal(detailsOf(group)[0].group, "Layer");
   assert.equal(row.summary(group), "Group Layer");
   assert.equal(row.summary({ type: "Feature Layer", geometryType: "esriGeometryPoint", fields: [1] }), "Point, 1 field");
