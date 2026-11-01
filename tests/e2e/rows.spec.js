@@ -262,6 +262,8 @@ const warnBadge = (row) => row.locator(".sdt-annot .sdt-badge--warn");
 const errorLine = (row) => row.locator(".sdt-annot .sdt-status[data-tone=\"error\"]");
 const noteLine = (row) => row.locator(".sdt-annot .sdt-muted");
 const nullBody = () => ({ status: 200, contentType: "application/json", body: "null" });
+// Truthy with a length, so the row counts it, and not iterable, so counting throws after Details is drawn.
+const NO_ITERABLE_FIELDS = { id: 0, name: "Parcels", type: "Feature Layer", spatialReference: { wkid: 4326 }, fields: { length: 1 } };
 const countCalls = (fakeServer, where) => fakeServer.calls.filter((call) => call.path === `/arcgis/rest/services/${LAYER}/query` && call.query.where === where);
 
 /** A services root of 48 one-request rows and one layer: the layer's total is request 50, and its shape count is refused. */
@@ -287,6 +289,18 @@ test("a large count is grouped the Canadian English way", async ({ page, fakeSer
   fakeServer.override(layerQuery("OBJECTID"), () => json({ count: 1234567 }));
   await page.goto(PARCELS_MAPSERVER);
   await expect(countsOf(serviceRow(page, LAYER)).first()).toHaveText("1,234,567 features");
+});
+
+test("a table row shows the neutral Table badge where the cache badge goes", async ({ page, fakeServer }) => {
+  fakeServer.override(layerJson(1), () => json({ id: 1, name: "Addresses", type: "Table", objectIdField: "OBJECTID", fields: [{ name: "OBJECTID", type: "esriFieldTypeOID" }] }));
+  fakeServer.override(layerQuery("OBJECTID", 1), () => json({ count: 58 }));
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, "Parcels/MapServer/1");
+  await expect(countsOf(row)).toHaveText(["58 rows"]);
+  await expect(cacheBadge(row)).toHaveText("Table");
+  expect(await cacheBadge(row).getAttribute("class")).toBe("sdt-badge");
+  const children = await row.locator(".sdt-annot").evaluate((annot) => [...annot.children].map((child) => child.className));
+  expect(children).toEqual(["sdt-badge", "sdt-count"]);
 });
 
 test("a table row says rows, and one feature says \"1 feature\"", async ({ page, fakeServer }) => {
@@ -392,7 +406,7 @@ test("an HTTP 500 on the shape count shows \"Shape count failed: HTTP 500\" besi
   await expect(countsOf(row)).toHaveText(["3 features"]);
   await expect(disclosure(row)).toHaveCount(1);
   const children = await row.locator(".sdt-annot").evaluate((annot) => [...annot.children].map((child) => child.classList[0]));
-  expect(children).toEqual(["sdt-badge", "sdt-count", "sdt-status"]);
+  expect(children).toEqual(["sdt-badge", "sdt-count", "sdt-status", "sdt-button"]);
   await expect(message(page)).toHaveText("Loaded details for 1 layer in 6 requests. 1 failed.");
 });
 
@@ -443,13 +457,22 @@ test("a row that can't be drawn says so in its annot, and keeps no half-drawn ba
 });
 
 test("a row that fails after its Details is drawn keeps them, with the error beside them", async ({ page, fakeServer }) => {
-  fakeServer.override(layerJson(0), () => json({ id: 0, name: "Parcels", type: "Feature Layer", spatialReference: { wkid: 4326 }, fields: [null] }));
+  fakeServer.override(layerJson(0), () => json(NO_ITERABLE_FIELDS));
   await page.goto(PARCELS_MAPSERVER);
   const row = serviceRow(page, LAYER);
   await expect(errorLine(row)).toHaveText("Details unavailable: Could not show this row's details.");
   await expect(disclosure(row)).toHaveCount(1);
   await expect(badge(row)).toHaveCount(1);
   await expect(row.locator(".sdt-spinner")).toHaveCount(0);
+});
+
+test("a null in a layer's fields gives the field notes, not a failed row", async ({ page, fakeServer }) => {
+  fakeServer.override(layerJson(0), () => json({ id: 0, name: "Parcels", type: "Feature Layer", spatialReference: { wkid: 4326 }, fields: [null] }));
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await expect(noteLine(row)).toHaveText(["No way to query features.", "No visible shape field available."]);
+  await expect(errorLine(row)).toHaveCount(0);
+  await expect(disclosure(row)).toHaveCount(1);
 });
 
 test("a layer with no shape field and no object ID says so, in muted text, and sends no count", async ({ page, fakeServer }) => {
@@ -494,6 +517,8 @@ test("a skipped row's failed count goes again on Load more", async ({ page, fake
   await page.goto(REST_ROOT);
   const row = serviceRow(page, LAYER);
   await expect(errorLine(row)).toHaveText("Feature count failed: HTTP 500");
+  // A row with a skipped request is Load more's: Retry is only for a row that failed outright.
+  await expect(row.getByRole("button")).toHaveCount(0);
   await loadMore(page).press("Enter");
   await expect(countsOf(row)).toHaveText(["3 features", "2 with shapes"]);
   await expect(errorLine(row)).toHaveCount(0);
@@ -541,4 +566,264 @@ test("with autoFeatureCounts off, a layer row has no counts and no \"Counting fe
   await expect(page.getByText("Counting features")).toHaveCount(0);
   await expect(warnBadge(row)).toHaveCount(0);
   expect(fakeServer.calls.filter((call) => call.query.returnCountOnly === "true")).toEqual([]);
+});
+
+// Retry (design review 6.5): on a failed row or count, through the limiter, with focus looked after.
+const PARCELS_ROW = "Parcels/MapServer";
+const BAD_GATEWAY = () => ({ status: 502, contentType: "text/html", body: "<html><body>Bad Gateway</body></html>" });
+const OOPS = () => ({ status: 500, contentType: "text/plain", body: "Oops" });
+const NOT_SUPPORTED = () => json({ error: { code: 400, message: "Unable to complete operation.", details: [] } });
+const parcelsCalls = (fakeServer) => fakeServer.calls.filter((call) => call.path === `/arcgis/rest/services/${PARCELS_ROW}`);
+const layerCalls = (fakeServer) => fakeServer.calls.filter((call) => call.path === `/arcgis/rest/services/${LAYER}`);
+const retryButton = (row) => row.locator(".sdt-annot").getByRole("button");
+const SERVICE = () => json({ serviceDescription: "Back again.", spatialReference: { wkid: 4326 } });
+
+/** Answers the first call with first and every later one with later, as a promise the test can hold. */
+const thenAnswer = (first, later) => {
+  let calls = 0;
+  let release = () => {};
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const handler = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return first();
+    }
+    await held;
+    return later();
+  };
+  return { handler, release };
+};
+
+test("the Retry button's name is \"Retry details for {name}\", and it follows the error line", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  fakeServer.override(PARCELS_JSON, BAD_GATEWAY);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  await expect(errorLine(row)).toHaveText("Details unavailable: HTTP 502");
+  const button = row.getByRole("button", { name: "Retry details for Parcels", exact: true });
+  await expect(button).toHaveText("Retry details for Parcels");
+  await expect(button.locator(".sdt-visually-hidden")).toHaveText(" details for Parcels", { useInnerText: false });
+  expect(await button.getAttribute("class")).toBe("sdt-button sdt-button--quiet");
+  expect(await button.getAttribute("type")).toBe("button");
+  const children = await row.locator(".sdt-annot").evaluate((annot) => [...annot.children].map((child) => child.classList[0]));
+  expect(children).toEqual(["sdt-status", "sdt-button"]);
+});
+
+test("a shape count that failed names its Retry for the shape count", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 500/);
+  fakeServer.override(layerQuery("SHAPE"), OOPS);
+  await page.goto(PARCELS_MAPSERVER);
+  await expect(serviceRow(page, LAYER).getByRole("button", { name: "Retry shape count for Parcels", exact: true })).toHaveCount(1);
+});
+
+test("two failed counts get one Retry, named for the feature count, and it re-sends both", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 500/);
+  const total = thenAnswer(OOPS, () => json({ count: 3 }));
+  const shape = thenAnswer(OOPS, () => json({ count: 2 }));
+  total.release();
+  shape.release();
+  fakeServer.override(layerQuery("OBJECTID"), total.handler);
+  fakeServer.override(layerQuery("SHAPE"), shape.handler);
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await expect(errorLine(row)).toHaveText(["Feature count failed: HTTP 500", "Shape count failed: HTTP 500"]);
+  await expect(retryButton(row)).toHaveCount(1);
+  const button = row.getByRole("button", { name: "Retry feature count for Parcels", exact: true });
+  await button.press("Enter");
+  await expect(countsOf(row)).toHaveText(["3 features", "2 with shapes"]);
+  await expect(retryButton(row)).toHaveCount(0);
+  expect(countCalls(fakeServer, "OBJECTID IS NOT NULL")).toHaveLength(2);
+  expect(countCalls(fakeServer, "SHAPE IS NOT NULL")).toHaveLength(2);
+  await expect(message(page)).toHaveText("Loaded details for 2 layers in 8 requests");
+});
+
+test("a data source's limit beside a failed count reads \"1 failed\", and Retry sends only the failed count", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 500/);
+  fakeServer.override(layerQuery("SHAPE"), NOT_SUPPORTED);
+  const total = thenAnswer(OOPS, () => json({ count: 3 }));
+  total.release();
+  fakeServer.override(layerQuery("OBJECTID"), total.handler);
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await expect(noteLine(row)).toHaveText("Shape count not supported by this data source");
+  await expect(errorLine(row)).toHaveText("Feature count failed: HTTP 500");
+  await expect(message(page)).toHaveText("Loaded details for 1 layer in 6 requests. 1 failed.");
+  await row.getByRole("button", { name: "Retry feature count for Parcels", exact: true }).press("Enter");
+  await expect(countsOf(row)).toHaveText(["3 features"]);
+  await expect(noteLine(row)).toHaveText("Shape count not supported by this data source");
+  await expect(retryButton(row)).toHaveCount(0);
+  expect(countCalls(fakeServer, "SHAPE IS NOT NULL")).toHaveLength(1);
+  expect(countCalls(fakeServer, "OBJECTID IS NOT NULL")).toHaveLength(2);
+  await expect(message(page)).toHaveText("Loaded details for 2 layers in 7 requests");
+});
+
+test("a request a data source can't answer stays unsent on Load more, and the skipped count goes", async ({ page, fakeServer }) => {
+  // The layer's total is request 50 and answers "not supported"; the budget refuses its shape count.
+  cutOffRoot(fakeServer);
+  fakeServer.override(layerQuery("OBJECTID"), NOT_SUPPORTED);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, LAYER);
+  await expect(noteLine(row)).toHaveText("Feature count not supported by this data source");
+  await loadMore(page).press("Enter");
+  await expect(countsOf(row)).toHaveText(["2 with shapes"]);
+  await expect(noteLine(row)).toHaveText("Feature count not supported by this data source");
+  expect(countCalls(fakeServer, "OBJECTID IS NOT NULL")).toHaveLength(1);
+  expect(countCalls(fakeServer, "SHAPE IS NOT NULL")).toHaveLength(1);
+});
+
+test("a 502 then success: Retry shows the row, and the bar says \"Loaded details for N services in M requests\" with no \"failed\"", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const answers = thenAnswer(BAD_GATEWAY, SERVICE);
+  answers.release();
+  fakeServer.override(PARCELS_JSON, answers.handler);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  await expect(message(page)).toHaveText("Loaded details for 2 services in 3 requests. 1 failed.");
+  await retryButton(row).press("Enter");
+  await expect(disclosure(row)).toHaveCount(1);
+  await expect(errorLine(row)).toHaveCount(0);
+  await expect(retryButton(row)).toHaveCount(0);
+  await expect(message(page)).toHaveText("Loaded details for 3 services in 4 requests");
+});
+
+test("Retry sends only what is missing", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 500/);
+  const shape = thenAnswer(OOPS, () => json({ count: 2 }));
+  shape.release();
+  fakeServer.override(layerQuery("SHAPE"), shape.handler);
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await expect(errorLine(row)).toHaveText("Shape count failed: HTTP 500");
+  await retryButton(row).press("Enter");
+  await expect(countsOf(row)).toHaveText(["3 features", "2 with shapes"]);
+  await expect(errorLine(row)).toHaveCount(0);
+  expect(countCalls(fakeServer, "SHAPE IS NOT NULL")).toHaveLength(2);
+  expect(countCalls(fakeServer, "OBJECTID IS NOT NULL")).toHaveLength(1);
+  expect(layerCalls(fakeServer)).toHaveLength(1);
+  await expect(message(page)).toHaveText("Loaded details for 2 layers in 7 requests");
+});
+
+test("Retry on a row that failed with its Details drawn keeps them, sends no JSON, and counts the row as failed once", async ({ page, fakeServer }) => {
+  fakeServer.override(layerJson(0), () => json(NO_ITERABLE_FIELDS));
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await expect(errorLine(row)).toHaveText("Details unavailable: Could not show this row's details.");
+  await expect(message(page)).toHaveText("Loaded details for 1 layer in 4 requests. 1 failed.");
+  await retryButton(row).press("Enter");
+  // The same data fails the same way: the row ends as it was, not stuck, and counted once.
+  await expect(retryButton(row)).not.toHaveAttribute("aria-disabled", "true");
+  await expect(retryButton(row)).toBeFocused();
+  await expect(errorLine(row)).toHaveCount(1);
+  await expect(disclosure(row)).toHaveCount(1);
+  expect(layerCalls(fakeServer)).toHaveLength(1);
+  await expect(message(page)).toHaveText("Loaded details for 1 layer in 4 requests. 1 failed.");
+});
+
+test("Retry that fails again keeps focus on the new Retry button", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  fakeServer.override(PARCELS_JSON, BAD_GATEWAY);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  const first = await retryButton(row).elementHandle();
+  await retryButton(row).press("Enter");
+  await expect.poll(() => parcelsCalls(fakeServer).length).toBe(2);
+  await expect(retryButton(row)).not.toHaveAttribute("aria-disabled", "true");
+  await expect(retryButton(row)).toBeFocused();
+  expect(await first.evaluate((element) => element.isConnected)).toBe(false);
+  await expect(errorLine(row)).toHaveText("Details unavailable: HTTP 502");
+  await expect(message(page)).toHaveText("Loaded details for 2 services in 4 requests. 1 failed.");
+});
+
+test("Retry that succeeds moves focus to the row's summary", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const answers = thenAnswer(BAD_GATEWAY, SERVICE);
+  answers.release();
+  fakeServer.override(PARCELS_JSON, answers.handler);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  await retryButton(row).press("Enter");
+  await expect(disclosure(row).locator("summary")).toBeFocused();
+});
+
+test("Retry that succeeds leaves focus alone if the user has moved on", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const answers = thenAnswer(BAD_GATEWAY, SERVICE);
+  fakeServer.override(PARCELS_JSON, answers.handler);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  await retryButton(row).press("Enter");
+  await expect(retryButton(row)).toHaveAttribute("aria-disabled", "true");
+  const elsewhere = disclosure(serviceRow(page, "Parcels/FeatureServer")).locator("summary");
+  await elsewhere.focus();
+  answers.release();
+  await expect(disclosure(row)).toHaveCount(1);
+  await expect(retryButton(row)).toHaveCount(0);
+  await expect(elsewhere).toBeFocused();
+});
+
+test("Retry cut off by leaving the page moves focus to the row's link, which has no summary", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const answers = thenAnswer(BAD_GATEWAY, SERVICE);
+  fakeServer.override(PARCELS_JSON, answers.handler);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  await retryButton(row).press("Enter");
+  await expect(retryButton(row)).toHaveAttribute("aria-disabled", "true");
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+  await expect(retryButton(row)).toHaveCount(0);
+  await expect(row.getByRole("link", { name: "Parcels", exact: true })).toBeFocused();
+  answers.release();
+});
+
+test("a second press while a Retry runs sends nothing, and the button stays focused", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const answers = thenAnswer(BAD_GATEWAY, SERVICE);
+  fakeServer.override(PARCELS_JSON, answers.handler);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  await retryButton(row).press("Enter");
+  const running = row.getByRole("button", { name: "Retry details for Parcels", exact: true });
+  await expect(running).toHaveAttribute("aria-disabled", "true");
+  await expect(running).toBeFocused();
+  await expect(row.locator(".sdt-annot .sdt-status")).toHaveText("Loading details");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(300);
+  expect(parcelsCalls(fakeServer)).toHaveLength(2);
+  await expect(running).toBeFocused();
+  answers.release();
+  await expect(disclosure(row).locator("summary")).toBeFocused();
+  expect(parcelsCalls(fakeServer)).toHaveLength(2);
+});
+
+test("a running Retry on a count keeps focus through each redraw", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 500/);
+  const shape = thenAnswer(OOPS, () => json({ count: 2 }));
+  fakeServer.override(layerQuery("SHAPE"), shape.handler);
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await retryButton(row).press("Enter");
+  await expect(row.locator(".sdt-annot .sdt-status")).toHaveText("Counting features");
+  const running = row.getByRole("button", { name: "Retry shape count for Parcels", exact: true });
+  await expect(running).toHaveAttribute("aria-disabled", "true");
+  await expect(running).toBeFocused();
+  shape.release();
+  await expect(disclosure(row).locator("summary")).toBeFocused();
+});
+
+test("a running Retry doesn't underline when hovered, because it does nothing", async ({ page, fakeServer, expectedErrors, seedStorage }) => {
+  expectedErrors.push(/status of 502/);
+  await seedStorage({ showMapImages: false });
+  const answers = thenAnswer(BAD_GATEWAY, SERVICE);
+  fakeServer.override(PARCELS_JSON, answers.handler);
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, PARCELS_ROW);
+  await retryButton(row).press("Enter");
+  await expect(retryButton(row)).toHaveAttribute("aria-disabled", "true");
+  await retryButton(row).hover();
+  expect(await retryButton(row).evaluate((element) => getComputedStyle(element).textDecorationLine)).toBe("none");
+  answers.release();
+  await expect(disclosure(row)).toHaveCount(1);
 });

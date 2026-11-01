@@ -402,6 +402,188 @@ test("pagehide cancels pending requests", async ({ page, fakeServer }) => {
   expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
 });
 
+// Retry goes through the limiter: past the cap, because a click starts it, and no further.
+const bulkPattern = (name) => new RegExp(`^/arcgis/rest/services/${name}/MapServer\\?f=json$`);
+const retry = (page, name) => page.getByRole("button", { name: `Retry details for ${name}`, exact: true });
+const callsTo = (fakeServer, name) => fakeServer.calls.filter((call) => call.path === `/arcgis/rest/services/${name}/MapServer`);
+
+/** An override that fails the first call and holds each later one until the test releases it. */
+const failThenHold = (fakeServer, name) => {
+  let calls = 0;
+  let release = () => {};
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  fakeServer.override(bulkPattern(name), async () => {
+    calls += 1;
+    if (calls === 1) {
+      return BAD_GATEWAY();
+    }
+    await held;
+    return bulkService();
+  });
+  return () => release();
+};
+
+test("Retry after the budget is spent sends the row's requests", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  failThenHold(fakeServer, "Bulk03")();
+  bulkRoot(60);
+  await page.goto(REST_ROOT);
+  await expect(bar(page).getByRole("button", { name: "Load 10 more services" })).toBeVisible();
+  expect(bulkCalls(fakeServer)).toHaveLength(50);
+  await retry(page, "Bulk03").press("Enter");
+  await expect(serviceRow(page, "Bulk03/MapServer").locator("details.sdt-details")).toHaveCount(1);
+  await page.waitForTimeout(300);
+  expect(bulkCalls(fakeServer)).toHaveLength(51);
+  expect(callsTo(fakeServer, "Bulk03")).toHaveLength(2);
+  await expect(bar(page).getByRole("button", { name: "Load 10 more services" })).toBeVisible();
+});
+
+test("two overlapping Retries on rows with no JSON both finish", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const releaseFirst = failThenHold(fakeServer, "Bulk02");
+  const releaseSecond = failThenHold(fakeServer, "Bulk03");
+  bulkRoot(6);
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText("Loaded details for 4 services in 6 requests. 2 failed.");
+  await retry(page, "Bulk02").press("Enter");
+  await retry(page, "Bulk03").press("Enter");
+  await expect(retry(page, "Bulk02")).toHaveAttribute("aria-disabled", "true");
+  await expect(retry(page, "Bulk03")).toHaveAttribute("aria-disabled", "true");
+  releaseFirst();
+  releaseSecond();
+  await expect(message(page)).toHaveText("Loaded details for 6 services in 8 requests");
+  await expect(page.locator("details.sdt-details")).toHaveCount(6);
+});
+
+test("the busy class stays until the last of two overlapping Retries finishes", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const releaseFirst = failThenHold(fakeServer, "Bulk02");
+  const releaseSecond = failThenHold(fakeServer, "Bulk03");
+  bulkRoot(6);
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText("Loaded details for 4 services in 6 requests. 2 failed.");
+  expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
+  await retry(page, "Bulk02").press("Enter");
+  await retry(page, "Bulk03").press("Enter");
+  await expect.poll(() => bodyClasses(page)).toMatch(/sdt-loading-metadata/);
+  releaseFirst();
+  await expect(serviceRow(page, "Bulk02/MapServer").locator("details.sdt-details")).toHaveCount(1);
+  await page.waitForTimeout(100);
+  expect(await bodyClasses(page)).toMatch(/sdt-loading-metadata/);
+  releaseSecond();
+  await expect(serviceRow(page, "Bulk03/MapServer").locator("details.sdt-details")).toHaveCount(1);
+  await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+});
+
+test("Load more hides while a Retry runs, and comes back after", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const release = failThenHold(fakeServer, "Bulk03");
+  bulkRoot(60);
+  await page.goto(REST_ROOT);
+  const button = bar(page).getByRole("button", { name: "Load 10 more services" });
+  await expect(button).toBeVisible();
+  await retry(page, "Bulk03").press("Enter");
+  await expect(bar(page).getByRole("button")).toHaveCount(0);
+  await expect(message(page)).toHaveText("Loading details: 49 of 60 services");
+  release();
+  await expect(button).toBeVisible();
+  await expect(message(page)).toHaveText("Paused after 51 automatic requests. 10 services not loaded yet.");
+  await pressLoadMore(button);
+  await expect(message(page)).toHaveText("Loaded details for 60 services in 61 requests");
+});
+
+test("a row whose JSON failed isn't re-sent by Load more, and keeps its error line and Retry", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  fakeServer.override(bulkPattern("Bulk03"), BAD_GATEWAY);
+  bulkRoot(60);
+  await page.goto(REST_ROOT);
+  await pressLoadMore(bar(page).getByRole("button", { name: "Load 10 more services" }));
+  await expect(message(page)).toHaveText("Loaded details for 59 services in 60 requests. 1 failed.");
+  expect(callsTo(fakeServer, "Bulk03")).toHaveLength(1);
+  await expect(serviceRow(page, "Bulk03/MapServer").getByText("Details unavailable: HTTP 502")).toBeVisible();
+  await expect(retry(page, "Bulk03")).toBeVisible();
+});
+
+for (const [title, focusOn, press] of [
+  ["focus on another row's Retry", "Bulk02", (page) => retry(page, "Bulk03").evaluate((button) => button.click())],
+  ["focus on the Retry that got the 429", "Bulk03", (page) => retry(page, "Bulk03").press("Enter")]
+]) {
+  test(`a 429 removes every Retry button, and ${title} moves to the bar's message`, async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+    expectedErrors.push(/status of (502|429)/);
+    fakeServer.override(bulkPattern("Bulk02"), BAD_GATEWAY);
+    let calls = 0;
+    fakeServer.override(bulkPattern("Bulk03"), () => {
+      calls += 1;
+      return calls === 1 ? BAD_GATEWAY() : { status: 429, contentType: "text/plain", body: "Slow down" };
+    });
+    bulkRoot(6);
+    await page.goto(REST_ROOT);
+    await expect(message(page)).toHaveText("Loaded details for 4 services in 6 requests. 2 failed.");
+    await retry(page, focusOn).focus();
+    await press(page);
+    await expect(message(page)).toHaveText(pushbackCopy(429));
+    await expect(page.getByRole("button", { name: /^Retry/ })).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => document.activeElement === document.querySelector(".sdt-statusbar [role=status]"))).toBe(true);
+    await expect(message(page)).toHaveAttribute("tabindex", "-1");
+    await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+  });
+}
+
+test("a 429 with focus elsewhere removes every Retry and leaves focus alone", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of (502|429)/);
+  fakeServer.override(bulkPattern("Bulk02"), BAD_GATEWAY);
+  let calls = 0;
+  fakeServer.override(bulkPattern("Bulk03"), () => {
+    calls += 1;
+    return calls === 1 ? BAD_GATEWAY() : { status: 429, contentType: "text/plain", body: "Slow down" };
+  });
+  bulkRoot(6);
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText("Loaded details for 4 services in 6 requests. 2 failed.");
+  const summary = page.locator("details.sdt-details summary").first();
+  await summary.focus();
+  await retry(page, "Bulk03").evaluate((button) => button.click());
+  await expect(message(page)).toHaveText(pushbackCopy(429));
+  await expect(page.getByRole("button", { name: /^Retry/ })).toHaveCount(0);
+  await expect(summary).toBeFocused();
+});
+
+test("no Retry is offered when canRetry is false", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of (502|429)/);
+  // Bulk02 has failed by the time Bulk05 pushes back, in the first batch: no Retry on any row after it.
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  fakeServer.override(bulkPattern("Bulk02"), BAD_GATEWAY);
+  fakeServer.override(bulkPattern("Bulk05"), async () => {
+    await held;
+    return { status: 429, contentType: "text/plain", body: "Slow down" };
+  });
+  bulkRoot(6);
+  await page.goto(REST_ROOT);
+  await expect(retry(page, "Bulk02")).toBeVisible();
+  release();
+  await expect(message(page)).toHaveText(pushbackCopy(429));
+  await expect(page.getByRole("button", { name: /^Retry/ })).toHaveCount(0);
+});
+
+test("a Retry button left on the page after pagehide sends nothing", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  fakeServer.override(bulkPattern("Bulk03"), BAD_GATEWAY);
+  bulkRoot(6);
+  await page.goto(REST_ROOT);
+  await expect(message(page)).toHaveText("Loaded details for 5 services in 6 requests. 1 failed.");
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+  await retry(page, "Bulk03").press("Enter");
+  await page.waitForTimeout(300);
+  expect(callsTo(fakeServer, "Bulk03")).toHaveLength(1);
+  await expect(retry(page, "Bulk03")).not.toHaveAttribute("aria-disabled", "true");
+  await expect(message(page)).toHaveText("Loaded details for 5 services in 6 requests. 1 failed.");
+});
+
 test.describe("with the back/forward cache on", () => {
   // Playwright turns the back/forward cache off by default.
   test.use({ droppedDefaultArgs: ["--disable-back-forward-cache"] });

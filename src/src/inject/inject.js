@@ -6,6 +6,8 @@
   let limiter = null;
   // The page's progress job (SDT.status): every request in a row's chain goes through it.
   let job = null;
+  // Set in the load handler: runs a failed row again. render wires each Retry button to it.
+  let retry = null;
 
   // The counts in the order a row shows them, and the word its notes and errors use for each.
   const COUNTS = [{ key: "total", label: "Feature count" }, { key: "shape", label: "Shape count" }];
@@ -88,28 +90,65 @@
     return node;
   };
 
+  /** The row's Retry button, the only button in its annot, or null. */
+  const retryButton = (row) => row.annot?.querySelector("button") ?? null;
+
+  /** True when focus is on the row's Retry button. Not :focus, which can miss in an inactive window. */
+  const retryHasFocus = (row) => {
+    const button = retryButton(row);
+    return button !== null && button === document.activeElement;
+  };
+
+  /** What Retry would run, for its hidden text: the row's error first, or the first failed count. */
+  const retryText = (row) => {
+    const count = COUNTS.find(({ key }) => row.counts[key]?.error !== undefined);
+    return ` ${row.error === null && count ? count.label.toLowerCase() : "details"} for ${row.name}`;
+  };
+
+  /** A running Retry stays, focusable, with aria-disabled, as Load more does. */
+  const retryNode = (row) => {
+    const running = row.retrying !== null;
+    const button = loadElement("button", { "class": "sdt-button sdt-button--quiet", "type": "button" }, "Retry");
+    button.appendChild(loadElement("span", { "class": "sdt-visually-hidden" }, running ? row.retrying : retryText(row)));
+    if (running) {
+      button.setAttribute("aria-disabled", "true");
+    }
+    SDT.guard.listen(button, "click", () => retry(row));
+    return button;
+  };
+
+  /**
+   * Notes which of the annot's controls has focus, before it is rebuilt. The function it returns
+   * puts focus on the rebuilt control, if there is one.
+   */
+  const holdFocus = (annot) => {
+    const tag = annot.contains(document.activeElement) ? document.activeElement.localName : null;
+    return () => {
+      if (tag) {
+        annot.querySelector(tag)?.focus({ preventScroll: true });
+      }
+    };
+  };
+
   /**
    * Draws a row from its model. The annot's children are rebuilt each time, in the order badges,
-   * spinner, counts, then notes and errors. The disclosure is made once and never replaced, so one
+   * spinner, counts, notes and errors, then Retry. The disclosure is made once and never replaced, so one
    * the user has open stays open. A row with nothing to show keeps no annot at all.
    * @function render
    * @param {object} row - the row model
    */
   const render = (row) => {
     row.annot ??= loadElement("span", { "class": "sdt sdt-annot" });
-    const badgeFocused = row.annot.querySelector("a:focus") !== null;
+    const restoreFocus = holdFocus(row.annot);
     cleanElement(row.annot);
     if (row.loading) {
       row.annot.appendChild(statusNode("Loading details"));
     }
     if (row.data) {
       const badge = badgeNode(SDT.row.spatialReference(row.data));
-      const cache = SDT.row.cacheLabel(row.data);
+      const cache = row.data.type === "Table" ? "Table" : SDT.row.cacheLabel(row.data);
       if (badge) {
         row.annot.appendChild(badge);
-        if (badgeFocused) {
-          badge.focus({ preventScroll: true });
-        }
       }
       if (cache) {
         row.annot.appendChild(loadElement("span", { "class": "sdt-badge" }, cache));
@@ -136,6 +175,9 @@
     if (row.error !== null) {
       row.annot.appendChild(errorNode(`Details unavailable: ${row.error}`));
     }
+    if (row.retrying !== null || (row.outcome === "failed" && SDT.status.canRetry())) {
+      row.annot.appendChild(retryNode(row));
+    }
     if (!row.annot.firstChild) {
       row.annot.remove();
     } else if (!row.annot.isConnected) {
@@ -145,6 +187,7 @@
       row.details = detailsNode(row.data);
       row.parent.appendChild(row.details);
     }
+    restoreFocus();
   };
 
   /** True when a row's request was left out: by the budget, after pushback, or because the page was left. */
@@ -171,18 +214,19 @@
    * @param {string} url - the layer's url
    * @param {object} data - the layer's JSON
    * @param {object} row - the row
+   * @param {boolean} [userAction] - a click sent this, so the request budget doesn't apply
    * @returns {Promise<"done" | "failed" | "skipped">}
    */
-  const getLayerCount = async (url, data, row) => {
+  const getLayerCount = async (url, data, row, userAction) => {
     let oid, shape;
     if (data.objectIdField) {
       oid = data.objectIdField;
     }
     for (const field of data.fields) {
-      if (field.type === "esriFieldTypeOID" || field.type === "") {
-        oid = field.name;
-      } else if (field.type === "esriFieldTypeGeometry") {
-        shape ??= field.name;
+      if (field?.type === "esriFieldTypeOID" || field?.type === "") {
+        oid = field?.name;
+      } else if (field?.type === "esriFieldTypeGeometry") {
+        shape ??= field?.name;
       }
     }
     shape ??= data.geometryField?.name;
@@ -204,7 +248,8 @@
     const queryUrl = `${url.replace(/\/+$/, "")}/query`;
     const results = await Promise.all(missing.map((key) => job.fetch(queryUrl, {
       params: { where: `${fields[key]} IS NOT NULL`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
-      token
+      token,
+      userAction
     })));
 
     row.counting = false;
@@ -564,19 +609,21 @@
       counts: {},
       fieldNotes: [],
       annot: null,
-      details: null
+      details: null,
+      // The running Retry's hidden text, kept because the error that named it is cleared; null when idle.
+      retrying: null
     }));
     const canCountFeatures = settings.autoFeatureCounts;
 
     /** Sends the requests the row is missing, and reports exactly one outcome for it to the job. */
-    const loadRow = async (row) => {
+    const loadRow = async (row, { userAction } = {}) => {
       let outcome = "failed";
       try {
         row.error = null;
         if (!row.data) {
           row.loading = true;
           render(row);
-          const result = await job.fetch(row.url, { params: { f: "json" }, token });
+          const result = await job.fetch(row.url, { params: { f: "json" }, token, userAction });
           row.loading = false;
           if (isLeftOut(result)) {
             outcome = "skipped";
@@ -593,7 +640,7 @@
         }
         // Only a layer's JSON has fields, so only layer rows get counts.
         outcome = canCountFeatures && row.data?.fields?.length
-          ? await getLayerCount(row.url, row.data, row)
+          ? await getLayerCount(row.url, row.data, row, userAction)
           : "done";
       } catch (error) {
         // A row that cannot be drawn fails alone, with an error line, and the others carry on.
@@ -610,14 +657,16 @@
       } finally {
         row.outcome = outcome;
         job[outcome]();
+        // After the job hears, so pushback removes a focused Retry first. Retry follows the outcome.
+        render(row);
       }
     };
 
     /** Loads the rows, with the busy class on <body> until every one has settled. */
-    const collectMetaData = async (batch) => {
+    const collectMetaData = async (batch, options) => {
       notifyLoading(true, LOADING_METADATA_CSS);
       try {
-        const results = await Promise.allSettled(batch.map(loadRow));
+        const results = await Promise.allSettled(batch.map((row) => loadRow(row, options)));
         const thrown = results.find((result) => result.status === "rejected");
         if (thrown) {
           throw thrown.reason;
@@ -627,7 +676,46 @@
       }
     };
 
+    retry = (row) => {
+      if (row.retrying !== null || !SDT.status.canRetry()) {
+        return;
+      }
+      row.retrying = retryText(row);
+      job.retryingFailed(1);
+      render(row);
+      collectMetaData([row], { userAction: true })
+        .catch(SDT.guard.wrap((error) => console.debug("SD Toolkit: Retry stopped", error)))
+        .finally(SDT.guard.wrap(() => {
+          const hadFocus = retryHasFocus(row);
+          row.retrying = null;
+          render(row);
+          // A Retry that failed again is back under focus; otherwise the button has gone.
+          if (hadFocus && !retryButton(row)) {
+            (row.details?.querySelector("summary") ?? row.anchor).focus({ preventScroll: true });
+          }
+        }));
+    };
+
+    /** After pushback no Retry can send, so every one goes, and focus on one moves to the bar's message. */
+    const removeRetries = ({ stopped }) => {
+      const offered = stopped ? rows.filter((row) => retryButton(row)) : [];
+      if (!offered.length) {
+        return;
+      }
+      const hadFocus = offered.some(retryHasFocus);
+      for (const row of offered) {
+        row.retrying = null;
+        render(row);
+      }
+      if (hadFocus) {
+        const status = document.querySelector(".sdt-statusbar [role=\"status\"]");
+        status?.setAttribute("tabindex", "-1");
+        status?.focus();
+      }
+    };
+
     if (rows.length && settings.autoMetadata) {
+      SDT.status.subscribe(removeRetries);
       job = SDT.status.job(type === "service" || type === "layer" ? "layers" : "services", rows.length);
       // Load more re-runs each row the budget or pushback left out.
       job.onLoadMore(() => {

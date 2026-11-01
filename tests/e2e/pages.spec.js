@@ -44,7 +44,7 @@ test("a MapServer page shows details and feature counts for each layer", async (
 
 // A FeatureServer layer names its shape field in geometryField, not in fields, so INJ-15's old
 // FeatureServer exclusion left these rows without the shape count.
-test("a FeatureServer layer row shows \"Features with shapes\" (INJ-15)", async ({ page }) => {
+test("a FeatureServer layer row shows \"with shapes\" (INJ-15)", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/FeatureServer`);
   await expect(page.locator("details.sdt-details")).toHaveCount(2);
   const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
