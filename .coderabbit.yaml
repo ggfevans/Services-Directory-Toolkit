@@ -60,6 +60,8 @@ reviews:
         The status bar in status.js has one listener on the bar, its Load more button's click, plus a
         pageshow listener on window, both added through SDT.guard; flag any other handler. Requests go through SDT.net.fetchJson or an SDT.status
         job's fetch (the identifier name job is reserved for it); flag any other fetch call.
+        Rows are built from the model in inject.js (render(row)) with SDT.row and SDT.dom.loadElement,
+        never HTML strings; server HTML goes through SDT.row.text. A Retry request passes userAction: true.
     - path: "src/manifest.json"
       instructions: |
         Flag any new permissions or host_permissions and explain why each is needed. The
@@ -70,7 +72,7 @@ reviews:
         .../query, and the GP group only GPServer/*/execute and GPServer/*/submitJob, each with
         or without a trailing slash and a query string. The
         version must match package.json. Every content_scripts group lists the lib files
-        first, in the order dom, guard, auth, url, net, status, page, settings, theme, icon, and the css
+        first, in the order dom, guard, auth, url, net, status, row, page, settings, theme, icon, and the css
         list starts with src/lib/sdt.css.
     - path: "src/src/options/**"
       instructions: |

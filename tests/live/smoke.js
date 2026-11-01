@@ -97,9 +97,13 @@ try {
   const WEB_MAP_JSON = "{\"operationalLayers\":[]}";
   await optionsPage.locator("#defaultwebmapasjson").fill(WEB_MAP_JSON);
   await optionsPage.locator("#save").click();
+  // mapImageWidth is in chrome.storage.sync, defaultWebMapAsJSON in chrome.storage.local.
   const savedMatches = (items) => items.mapImageWidth === 321 && items.defaultWebMapAsJSON === WEB_MAP_JSON;
   const saved = await poll(
-    () => optionsPage.evaluate(() => new Promise((res) => chrome.storage.sync.get(["mapImageWidth", "defaultWebMapAsJSON"], res))),
+    () => optionsPage.evaluate(async () => ({
+      ...(await chrome.storage.sync.get(["mapImageWidth"])),
+      ...(await chrome.storage.local.get(["defaultWebMapAsJSON"]))
+    })),
     savedMatches);
   record("options page: save writes chrome.storage", savedMatches(saved), JSON.stringify(saved));
 
@@ -115,8 +119,8 @@ try {
   record("MapServer: metadata blocks rendered", blocks > 0);
 
   const layer = await open("layer", `${BASE}/USA/MapServer/0`);
-  const fieldCounts = await count(layer.getByText("Features with values:"));
-  record("layer page: field value counts rendered", fieldCounts > 0);
+  // Field value counts are gone until Count values (Phase 5 part 3), so only check that the toolkit started.
+  record("layer page: extension started", (await count(layer.locator("html[data-sdt-theme]"))) > 0);
 
   const query = await open("query page", `${BASE}/USA/MapServer/0/query`);
   record("query page: side panel rendered", (await count(query.locator(".sdt-sidepanel"))) > 0);

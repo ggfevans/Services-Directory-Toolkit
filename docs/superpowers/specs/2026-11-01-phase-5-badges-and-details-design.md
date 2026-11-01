@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 issues: [45, 15, 16]
 phase: 5
 part: 2 of 3
@@ -78,13 +78,13 @@ Each row is `<a>Name</a> (MapServer)`, then `<span class="sdt sdt-annot">`, then
 |---|---|
 | Loading | In the annot: spinner and "Loading details" (`.sdt-status`) |
 | Counting | Badges, then spinner and "Counting features" |
-| Loaded | Badge, cache badge or counts, and Details |
+| Loaded | Badge, cache badge (a neutral Table badge for a table) and counts, and Details |
 | Failed | `.sdt-status[data-tone="error"]` "Details unavailable: {reason}" and a quiet Retry button with hidden " details for {name}" |
 | Count failed | The counts that worked, then "Shape count failed: {reason}" or "Feature count failed: {reason}", and Retry with hidden " shape count for {name}" or " feature count for {name}" |
 | Not loaded | Plain: no note, no spinner |
 
 - **Counts:** `<span class="sdt-count"><b>3</b> features</span>`, "rows" for tables, "1 feature" in the singular. Zero is `.sdt-badge--warn` with the warn icon, hidden "Warning: " and "0 features".
-- **Retry:** only a row whose outcome is `"failed"` offers it. It calls `job.retryingFailed(1)` and re-sends only what's missing, with `userAction: true` on every request. A row that has a skipped request is `"skipped"`, and Load more re-sends its missing requests, failed ones included. The button stays focusable while it runs (`aria-disabled`). Focus then moves to the row's `<summary>` when there is one, to the new Retry button if it failed again, or otherwise to the row's link.
+- **Retry:** only a row whose outcome is `"failed"` offers it, and only while something is missing: a row whose failure sits beside a drawn Details, or a count that is merely unsupported, has nothing to re-send and offers none. It calls `job.retryingFailed(1)` and re-sends only what's missing, with `userAction: true` on every request. A row that has a skipped request is `"skipped"`, and Load more re-sends its missing requests, failed ones included. The button stays focusable while it runs (`aria-disabled`). Focus then moves to the row's `<summary>` when there is one, to the new Retry button if it failed again, or otherwise to the row's link.
 - **After pushback:** a subscriber to `SDT.status` removes every Retry button once `snapshot().stopped` is set, and moves focus to the bar's message if a Retry had it.
 - **Busy class:** `notifyLoading` counts starts and stops per class, so a Retry that finishes while a batch runs can't clear the batch's class. A Retry sets it like any batch. The hidden status line stays silent on a page with a job, so the bar reports it.
 - **Row model:** a row keeps `data`, `outcome`, and `counts: { total, shape }`, each `{ value }`, `{ error }` or `{ unsupported: true }`. Nothing outside `inject.js` reads a row. `render(row)` rebuilds the annot and the disclosure from this, so `list`, `notes` and `counted` go.

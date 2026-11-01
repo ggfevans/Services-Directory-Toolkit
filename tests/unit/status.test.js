@@ -206,17 +206,17 @@ test("retryingFailed moves a failed row back to pending, so busy is true and fai
 test("canRetry is false with no job, after a 429, and after pagehide; true otherwise", async () => {
   const none = setup();
   assert.equal(none.status.canRetry(), false);
-  const { SDT, job } = withJob("services", 2);
+  const { SDT } = withJob("services", 2);
   assert.equal(SDT.status.canRetry(), true);
   const stopped = setup({ answer: () => ({ error: { type: "http", message: "x", url: at(0), status: 429 } }) });
   const stoppedJob = stopped.status.job("services", 1);
+  assert.equal(stopped.status.canRetry(), true);
   await stoppedJob.fetch(at(0));
   assert.equal(stopped.status.canRetry(), false);
   const { SDT: left, hide } = leftPage();
   assert.equal(left.status.canRetry(), true);
   hide();
   assert.equal(left.status.canRetry(), false);
-  assert.ok(job);
 });
 
 test("job.fetch with userAction is sent past the cap and counts in requests", async () => {

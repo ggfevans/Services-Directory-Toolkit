@@ -3,6 +3,7 @@
 import { test, expect, html, json, REST_ROOT } from "./fixtures.js";
 import { catalog } from "../fixtures/catalog.js";
 import { folderPage, layerPage } from "../fixtures/pages.js";
+import { axeViolations } from "./axe.js";
 
 const PARCELS_JSON = /^\/arcgis\/rest\/services\/Parcels\/MapServer\?f=json$/;
 const LONG_WKT = `PROJCS["Example_Local_Grid",GEOGCS["GCS_Example",DATUM["D_Example",SPHEROID["Example",6378137,298.25]]],${"PARAMETER[\"Scale\",1],".repeat(200)}UNIT["Meter",1]]`;
@@ -867,4 +868,62 @@ test("a running Retry doesn't underline when hovered, because it does nothing", 
   expect(await retryButton(row).evaluate((element) => getComputedStyle(element).textDecorationLine)).toBe("none");
   answers.release();
   await expect(disclosure(row)).toHaveCount(1);
+});
+
+// Accessibility (design review 6.4 to 6.6): axe over the rows, keyboard order and target size.
+const NO_VIOLATIONS = { light: [], dark: [] };
+const ROW_PARTS = ".sdt-annot, .sdt-details";
+
+/** A layer row that has the warning badge, a failed shape count with Retry, and an open Details. */
+const failedLayerRow = async (page, fakeServer, expectedErrors) => {
+  expectedErrors.push(/status of 500/);
+  fakeServer.override(layerQuery("OBJECTID"), () => json({ count: 0 }));
+  fakeServer.override(layerQuery("SHAPE"), OOPS);
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await expect(retryButton(row)).toHaveCount(1);
+  return row;
+};
+
+test("axe passes on a loaded root page's rows, and on a service page with counts, in light and dark, on a light and a dark host page", async ({ page }) => {
+  await page.goto(REST_ROOT);
+  await expect(disclosure(page.locator("li")).first()).toHaveCount(1);
+  await expect(page.locator(".sdt-details")).toHaveCount(3);
+  expect(await axeViolations(page, { include: ROW_PARTS, hostPage: true })).toEqual(NO_VIOLATIONS);
+  await page.goto(PARCELS_MAPSERVER);
+  await expect(countsOf(serviceRow(page, LAYER))).toHaveCount(2);
+  expect(await axeViolations(page, { include: ROW_PARTS, hostPage: true })).toEqual(NO_VIOLATIONS);
+});
+
+test("axe passes on a failed row with Retry, a warning badge, and an open disclosure", async ({ page, fakeServer, expectedErrors }) => {
+  const row = await failedLayerRow(page, fakeServer, expectedErrors);
+  await expect(warnBadge(row)).toHaveCount(1);
+  await disclosure(row).locator("summary").click();
+  await expect(disclosure(row)).toHaveAttribute("open", "");
+  expect(await axeViolations(page, { include: ROW_PARTS, hostPage: true })).toEqual(NO_VIOLATIONS);
+});
+
+test("every interactive part of a row is reachable by keyboard alone, in order: link, badge link, Retry, summary", async ({ page, fakeServer, expectedErrors }) => {
+  const row = await failedLayerRow(page, fakeServer, expectedErrors);
+  const names = [];
+  await row.getByRole("link").first().focus();
+  for (let i = 0; i < 4; i += 1) {
+    names.push(await page.evaluate(() => {
+      const element = document.activeElement;
+      return `${element.tagName.toLowerCase()}:${(element.textContent || "").trim().replace(/\s+/g, " ")}`;
+    }));
+    await page.keyboard.press("Tab");
+  }
+  expect(names[0]).toMatch(/^a:/);
+  expect(names[1]).toMatch(/^a:.*\d/);
+  expect(names[2]).toBe("button:Retry shape count for Parcels");
+  expect(names[3]).toMatch(/^summary:Details/);
+});
+
+test("the summary is at least 24 px tall", async ({ page }) => {
+  await page.goto(REST_ROOT);
+  const summary = disclosure(serviceRow(page, "Parcels/MapServer")).locator("summary");
+  await expect(summary).toBeVisible();
+  const box = await summary.boundingBox();
+  expect(box.height).toBeGreaterThanOrEqual(24);
 });
