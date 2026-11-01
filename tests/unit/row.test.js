@@ -157,3 +157,29 @@ test("text collapses whitespace and strips markup through DOMParser", () => {
 test("numbers use en-CA grouping", () => {
   assert.equal((1000).toLocaleString("en-CA"), "1,000");
 });
+
+test("an ImageServer with fields is a service, and a Group Layer is a layer", () => {
+  const image = { fields: [], capabilities: "Image", maxRecordCount: 1000 };
+  assert.equal(detailsOf(image)[0].group, "Service");
+  assert.equal(row.summary(image), "max 1,000 records");
+  const group = { type: "Group Layer", geometryType: null, fields: null, subLayers: [] };
+  assert.equal(detailsOf(group)[0].group, "Layer");
+  assert.equal(row.summary(group), "Group Layer");
+  assert.equal(row.summary({ type: "Feature Layer", geometryType: "esriGeometryPoint", fields: [1] }), "Point, 1 field");
+});
+
+test("details shows tables without layers, and \"0 tables\" beside layers", () => {
+  assert.equal(find(detailsOf({ tables: [{}, {}] }), "Layers and tables").value, "0 layers, 2 tables");
+  assert.equal(find(detailsOf({ layers: [{}, {}, {}], tables: [] }), "Layers and tables").value, "3 layers, 0 tables");
+  assert.equal(find(detailsOf({ layers: [{}] }), "Layers and tables").value, "1 layer, 0 tables");
+});
+
+test("a partial extent leaves its row out", () => {
+  const groups = detailsOf({ fullExtent: { xmin: 1, ymax: 4 }, initialExtent: { xmin: 1, ymin: 2, xmax: 3, ymax: 4 } });
+  assert.equal(find(groups, "Full"), undefined);
+  assert.equal(find(groups, "Initial").value, "1, 2, 3, 4");
+});
+
+test("an empty dateFieldsTimeReference leaves its row out", () => {
+  assert.equal(find(detailsOf({ dateFieldsTimeReference: {} }), "Date fields time zone"), undefined);
+});

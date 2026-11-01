@@ -64,7 +64,7 @@ SDT.row = {
 
   /** True when the data describes a layer or table rather than a service. */
   isLayer(data) {
-    return Boolean(data) && (data.type === "Table" || Boolean(data.geometryType) || Array.isArray(data.fields));
+    return Boolean(data) && (data.type === "Table" || /\bLayer$/.test(String(data.type)) || Boolean(data.geometryType));
   },
 
   /** The summary after "Details": "2 layers, max 1,000 records", "Polygon, 6 fields" or "Table, 9 fields". */
@@ -80,6 +80,8 @@ SDT.row = {
         parts.push("Table");
       } else if (data.geometryType) {
         parts.push(String(data.geometryType).replace("esriGeometry", ""));
+      } else if (data.type === "Group Layer") {
+        parts.push("Group Layer");
       }
       if (Array.isArray(data.fields)) {
         parts.push(count(data.fields.length, "field", "fields"));
@@ -107,7 +109,7 @@ SDT.row = {
       return null;
     }
     const values = ["xmin", "ymin", "xmax", "ymax"].map((key) => extent[key]);
-    return values.every((value) => value === undefined || value === null) ? null : values.join(", ");
+    return values.every((value) => typeof value === "number") ? values.join(", ") : null;
   },
 
   /**
@@ -135,10 +137,10 @@ SDT.row = {
     if (data.copyrightText) {
       add(main, "Copyright", toText(data.copyrightText));
     }
-    if (Array.isArray(data.layers)) {
+    if (Array.isArray(data.layers) || Array.isArray(data.tables)) {
       const tables = Array.isArray(data.tables) ? data.tables.length : 0;
-      const layers = data.layers.length;
-      add(main, "Layers and tables", `${layers} ${layers === 1 ? "layer" : "layers"}` + (tables ? `, ${tables} ${tables === 1 ? "table" : "tables"}` : ""));
+      const layers = Array.isArray(data.layers) ? data.layers.length : 0;
+      add(main, "Layers and tables", `${layers} ${layers === 1 ? "layer" : "layers"}, ${tables} ${tables === 1 ? "table" : "tables"}`);
     }
     if (data.capabilities) {
       add(main, "Capabilities", data.capabilities);
@@ -186,7 +188,7 @@ SDT.row = {
     if (typeof data.isDataVersioned === "boolean") {
       add(main, "Versioned data", yesNo(data.isDataVersioned));
     }
-    if (data.dateFieldsTimeReference && typeof data.dateFieldsTimeReference === "object") {
+    if (data.dateFieldsTimeReference?.timeZone) {
       add(main, "Date fields time zone", `${data.dateFieldsTimeReference.timeZone} (daylight saving ${data.dateFieldsTimeReference.respectsDaylightSaving ? "" : "not "}supported)`);
     }
     if (data.advancedQueryCapabilities && typeof data.advancedQueryCapabilities === "object") {
