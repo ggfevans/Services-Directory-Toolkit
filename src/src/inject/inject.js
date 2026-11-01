@@ -105,17 +105,18 @@
     return ` ${row.error === null && count ? count.label.toLowerCase() : "details"} for ${row.name}`;
   };
 
-  /** A running Retry stays, focusable, with aria-disabled, as Load more does. */
+  /** The Retry button for a row that is offering it. */
   const retryNode = (row) => {
-    const running = row.retrying !== null;
     const button = loadElement("button", { "class": "sdt-button sdt-button--quiet", "type": "button" }, "Retry");
-    button.appendChild(loadElement("span", { "class": "sdt-visually-hidden" }, running ? row.retrying : retryText(row)));
-    if (running) {
-      button.setAttribute("aria-disabled", "true");
-    }
+    button.appendChild(loadElement("span", { "class": "sdt-visually-hidden" }, retryText(row)));
     SDT.guard.listen(button, "click", () => retry(row));
     return button;
   };
+
+  /** True when a Retry would send something: not for an error beside Details, which nothing can mend. */
+  const offersRetry = (row) => row.outcome === "failed"
+    && (row.error === null || row.details === null)
+    && SDT.status.canRetry();
 
   /**
    * Notes which of the annot's controls has focus, before it is rebuilt. The function it returns
@@ -132,52 +133,63 @@
 
   /**
    * Draws a row from its model. The annot's children are rebuilt each time, in the order badges,
-   * spinner, counts, notes and errors, then Retry. The disclosure is made once and never replaced, so one
-   * the user has open stays open. A row with nothing to show keeps no annot at all.
+   * spinner, counts, notes and errors, then Retry. A running Retry is the one child left in place:
+   * moving or replacing it would blur it, and a screen reader would announce it again on each redraw.
+   * The disclosure is made once and never replaced, so one the user has open stays open. A row with
+   * nothing to show keeps no annot at all.
    * @function render
    * @param {object} row - the row model
    */
   const render = (row) => {
     row.annot ??= loadElement("span", { "class": "sdt sdt-annot" });
     const restoreFocus = holdFocus(row.annot);
-    cleanElement(row.annot);
+    const kept = row.retrying ? retryButton(row) : null;
+    for (const child of [...row.annot.childNodes]) {
+      if (child !== kept) {
+        child.remove();
+      }
+    }
+    const parts = document.createDocumentFragment();
     if (row.loading) {
-      row.annot.appendChild(statusNode("Loading details"));
+      parts.appendChild(statusNode("Loading details"));
     }
     if (row.data) {
       const badge = badgeNode(SDT.row.spatialReference(row.data));
       const cache = row.data.type === "Table" ? "Table" : SDT.row.cacheLabel(row.data);
       if (badge) {
-        row.annot.appendChild(badge);
+        parts.appendChild(badge);
       }
       if (cache) {
-        row.annot.appendChild(loadElement("span", { "class": "sdt-badge" }, cache));
+        parts.appendChild(loadElement("span", { "class": "sdt-badge" }, cache));
       }
       if (row.counting) {
-        row.annot.appendChild(statusNode("Counting features"));
+        parts.appendChild(statusNode("Counting features"));
       }
       for (const { key } of COUNTS) {
         if (row.counts[key]?.value !== undefined) {
-          row.annot.appendChild(countNode(key, row.counts[key].value, row.data));
+          parts.appendChild(countNode(key, row.counts[key].value, row.data));
         }
       }
       for (const note of row.fieldNotes) {
-        row.annot.appendChild(loadElement("span", { "class": "sdt-muted" }, note));
+        parts.appendChild(loadElement("span", { "class": "sdt-muted" }, note));
       }
       for (const { key, label } of COUNTS) {
         if (row.counts[key]?.unsupported) {
-          row.annot.appendChild(loadElement("span", { "class": "sdt-muted" }, `${label} not supported by this data source`));
+          parts.appendChild(loadElement("span", { "class": "sdt-muted" }, `${label} not supported by this data source`));
         } else if (row.counts[key]?.error !== undefined) {
-          row.annot.appendChild(errorNode(`${label} failed: ${row.counts[key].error}`));
+          parts.appendChild(errorNode(`${label} failed: ${row.counts[key].error}`));
         }
       }
     }
     if (row.error !== null) {
-      row.annot.appendChild(errorNode(`Details unavailable: ${row.error}`));
+      parts.appendChild(errorNode(`Details unavailable: ${row.error}`));
     }
-    if (row.retrying !== null || (row.outcome === "failed" && SDT.status.canRetry())) {
-      row.annot.appendChild(retryNode(row));
+    if (kept) {
+      kept.setAttribute("aria-disabled", "true");
+    } else if (offersRetry(row)) {
+      parts.appendChild(retryNode(row));
     }
+    row.annot.insertBefore(parts, kept);
     if (!row.annot.firstChild) {
       row.annot.remove();
     } else if (!row.annot.isConnected) {
@@ -610,8 +622,7 @@
       fieldNotes: [],
       annot: null,
       details: null,
-      // The running Retry's hidden text, kept because the error that named it is cleared; null when idle.
-      retrying: null
+      retrying: false
     }));
     const canCountFeatures = settings.autoFeatureCounts;
 
@@ -677,17 +688,17 @@
     };
 
     retry = (row) => {
-      if (row.retrying !== null || !SDT.status.canRetry()) {
+      if (row.retrying || !SDT.status.canRetry()) {
         return;
       }
-      row.retrying = retryText(row);
+      row.retrying = true;
       job.retryingFailed(1);
       render(row);
       collectMetaData([row], { userAction: true })
         .catch(SDT.guard.wrap((error) => console.debug("SD Toolkit: Retry stopped", error)))
         .finally(SDT.guard.wrap(() => {
           const hadFocus = retryHasFocus(row);
-          row.retrying = null;
+          row.retrying = false;
           render(row);
           // A Retry that failed again is back under focus; otherwise the button has gone.
           if (hadFocus && !retryButton(row)) {
@@ -704,7 +715,7 @@
       }
       const hadFocus = offered.some(retryHasFocus);
       for (const row of offered) {
-        row.retrying = null;
+        row.retrying = false;
         render(row);
       }
       if (hadFocus) {

@@ -550,9 +550,9 @@ test("a 429 with focus elsewhere removes every Retry and leaves focus alone", as
   await expect(summary).toBeFocused();
 });
 
-test("no Retry is offered when canRetry is false", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+test("a 429 in the first batch removes a Retry already offered on an earlier row", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
   expectedErrors.push(/status of (502|429)/);
-  // Bulk02 has failed by the time Bulk05 pushes back, in the first batch: no Retry on any row after it.
+  // Bulk02 has failed, and offers Retry, by the time Bulk05 pushes back in the same batch.
   let release;
   const held = new Promise((resolve) => {
     release = resolve;
@@ -587,6 +587,51 @@ test("a Retry button left on the page after pagehide sends nothing", async ({ pa
 test.describe("with the back/forward cache on", () => {
   // Playwright turns the back/forward cache off by default.
   test.use({ droppedDefaultArgs: ["--disable-back-forward-cache"] });
+
+  test("a Retry cut off by leaving the page is re-sent by Load more after a restore, and the bar ends right", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
+    expectedErrors.push(/status of 502/);
+    // Fails first, never answers the Retry while the page is left, and answers Load more.
+    let calls = 0;
+    let hold = true;
+    fakeServer.override(bulkPattern("Bulk02"), async () => {
+      calls += 1;
+      if (calls === 1) {
+        return BAD_GATEWAY();
+      }
+      if (hold) {
+        await never();
+      }
+      return bulkService();
+    });
+    bulkRoot(3);
+    await page.goto(REST_ROOT);
+    await expect(message(page)).toHaveText("Loaded details for 2 services in 3 requests. 1 failed.");
+    await page.evaluate(() => {
+      window.restoredFromCache = false;
+      window.addEventListener("pageshow", (event) => {
+        window.restoredFromCache = event.persisted;
+      });
+    });
+    await retry(page, "Bulk02").press("Enter");
+    await expect(retry(page, "Bulk02")).toHaveAttribute("aria-disabled", "true");
+    await expect.poll(() => calls).toBe(2);
+    await page.goto(LAYER_PAGE);
+    hold = false;
+    await page.goBack({ waitUntil: "commit" });
+    await page.waitForFunction(() => document.readyState === "complete");
+    expect(await page.evaluate(() => window.restoredFromCache)).toBe(true);
+    // The Retry was left out, so the row is Load more's now: no failure, no Retry, one more to load.
+    const button = bar(page).getByRole("button", { name: "Load 1 more service" });
+    await expect(button).toBeVisible();
+    await expect(message(page)).toHaveText("Paused after 4 automatic requests. 1 service not loaded yet.");
+    await expect(page.getByRole("button", { name: /^Retry/ })).toHaveCount(0);
+    await pressLoadMore(button);
+    await expect(message(page)).toHaveText("Loaded details for 3 services in 5 requests");
+    expect(callsTo(fakeServer, "Bulk02")).toHaveLength(3);
+    await expect(page.locator("details.sdt-details")).toHaveCount(3);
+    await expect(page.getByRole("button", { name: /^Retry/ })).toHaveCount(0);
+    await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
+  });
 
   test("back/forward restore after leaving mid-load leaves no row busy and no sdt-loading- class", async ({ page, fakeServer }, testInfo) => {
     // The first view's requests never answer, so the page is left mid-load; after that they answer.

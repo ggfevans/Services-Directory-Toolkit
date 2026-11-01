@@ -454,6 +454,8 @@ test("a row that can't be drawn says so in its annot, and keeps no half-drawn ba
   await expect(errorLine(row)).toHaveText("Details unavailable: Could not show this row's details.");
   await expect(badge(row)).toHaveCount(0);
   await expect(disclosure(row)).toHaveCount(0);
+  // Its JSON is dropped, so there is something to re-send.
+  await expect(row.locator(".sdt-annot").getByRole("button", { name: "Retry details for Parcels", exact: true })).toHaveCount(1);
 });
 
 test("a row that fails after its Details is drawn keeps them, with the error beside them", async ({ page, fakeServer }) => {
@@ -593,7 +595,7 @@ const thenAnswer = (first, later) => {
     await held;
     return later();
   };
-  return { handler, release };
+  return { handler, release: () => release() };
 };
 
 test("the Retry button's name is \"Retry details for {name}\", and it follows the error line", async ({ page, fakeServer, expectedErrors }) => {
@@ -705,20 +707,59 @@ test("Retry sends only what is missing", async ({ page, fakeServer, expectedErro
   await expect(message(page)).toHaveText("Loaded details for 2 layers in 7 requests");
 });
 
-test("Retry on a row that failed with its Details drawn keeps them, sends no JSON, and counts the row as failed once", async ({ page, fakeServer }) => {
+test("a row that failed with its Details drawn offers no Retry, because nothing is missing to re-send", async ({ page, fakeServer }) => {
   fakeServer.override(layerJson(0), () => json(NO_ITERABLE_FIELDS));
   await page.goto(PARCELS_MAPSERVER);
   const row = serviceRow(page, LAYER);
   await expect(errorLine(row)).toHaveText("Details unavailable: Could not show this row's details.");
   await expect(message(page)).toHaveText("Loaded details for 1 layer in 4 requests. 1 failed.");
-  await retryButton(row).press("Enter");
-  // The same data fails the same way: the row ends as it was, not stuck, and counted once.
-  await expect(retryButton(row)).not.toHaveAttribute("aria-disabled", "true");
-  await expect(retryButton(row)).toBeFocused();
-  await expect(errorLine(row)).toHaveCount(1);
   await expect(disclosure(row)).toHaveCount(1);
-  expect(layerCalls(fakeServer)).toHaveLength(1);
-  await expect(message(page)).toHaveText("Loaded details for 1 layer in 4 requests. 1 failed.");
+  await expect(retryButton(row)).toHaveCount(0);
+});
+
+test("a running Retry stays one node, connected and focused, through every redraw", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const details = thenAnswer(BAD_GATEWAY, () => json({
+    id: 0,
+    name: "Parcels",
+    type: "Feature Layer",
+    objectIdField: "OBJECTID",
+    spatialReference: { wkid: 4326 },
+    fields: [{ name: "OBJECTID", type: "esriFieldTypeOID" }, { name: "SHAPE", type: "esriFieldTypeGeometry" }]
+  }));
+  let releaseShape;
+  const shapeHeld = new Promise((resolve) => {
+    releaseShape = resolve;
+  });
+  fakeServer.override(layerJson(0), details.handler);
+  await page.goto(PARCELS_MAPSERVER);
+  const row = serviceRow(page, LAYER);
+  await expect(errorLine(row)).toHaveText("Details unavailable: HTTP 502");
+  fakeServer.override(layerQuery("SHAPE"), async () => {
+    await shapeHeld;
+    return json({ count: 2 });
+  });
+  await page.evaluate(() => {
+    window.sdtFocusins = 0;
+    document.addEventListener("focusin", () => {
+      window.sdtFocusins += 1;
+    });
+  });
+  const button = await retryButton(row).elementHandle();
+  await button.focus();
+  await page.keyboard.press("Enter");
+  const stillTheOne = () => button.evaluate((element) => ({ connected: element.isConnected, focused: element === document.activeElement, disabled: element.getAttribute("aria-disabled") }));
+  await expect(row.locator(".sdt-annot .sdt-status")).toHaveText("Loading details");
+  expect(await stillTheOne()).toEqual({ connected: true, focused: true, disabled: "true" });
+  details.release();
+  await expect(row.locator(".sdt-annot .sdt-status")).toHaveText("Counting features");
+  expect(await stillTheOne()).toEqual({ connected: true, focused: true, disabled: "true" });
+  const children = await row.locator(".sdt-annot").evaluate((annot) => [...annot.children].map((child) => child.classList[0]));
+  expect(children).toEqual(["sdt-badge", "sdt-status", "sdt-button"]);
+  await expect(retryButton(row)).toHaveText("Retry details for Parcels");
+  expect(await page.evaluate(() => window.sdtFocusins)).toBe(1);
+  releaseShape();
+  await expect(disclosure(row).locator("summary")).toBeFocused();
 });
 
 test("Retry that fails again keeps focus on the new Retry button", async ({ page, fakeServer, expectedErrors }) => {
