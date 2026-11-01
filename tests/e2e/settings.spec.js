@@ -49,20 +49,20 @@ test.describe("content scripts read validated settings", () => {
     // status.js runs last in the content-script group, after inject.js has started.
     await expect(toolkitStarted(page)).toBeAttached();
     await page.waitForTimeout(1000);
-    await expect(page.locator(".sdt-datablock")).toHaveCount(0);
+    await expect(page.locator("details.sdt-details")).toHaveCount(0);
     expect(fakeServer.calls.filter((call) => call.query.f === "json" || call.body.f === "json")).toEqual([]);
   });
 
   test("a stored autoMetadata that isn't true or false reads as the default, on", async ({ page, seedStorage }) => {
     await seedStorage({ autoMetadata: 0 });
     await page.goto(REST_ROOT);
-    await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+    await expect(page.locator("details.sdt-details")).toHaveCount(3);
   });
 
   test("with feature counts off, a MapServer page shows details but no counts", async ({ page, seedStorage }) => {
     await seedStorage({ autoFeatureCounts: false });
     await page.goto(`${REST_ROOT}/Parcels/MapServer`);
-    await expect(page.locator(".sdt-datablock")).toHaveCount(2);
+    await expect(page.locator("details.sdt-details")).toHaveCount(2);
     await expect(page.locator(".sdt-statusbar").getByRole("status")).toHaveText(/^Loaded details for/);
     await expect(page.locator("b", { hasText: /^Number of features:/ })).toHaveCount(0);
   });
@@ -73,7 +73,7 @@ test.describe("content scripts read validated settings", () => {
       fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/\?f=json$/, () => json({ initialExtent: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 } }));
       fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/export\?/, () => json({ href: IMAGE }));
       await page.goto(REST_ROOT);
-      await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+      await expect(page.locator("details.sdt-details")).toHaveCount(3);
       await page.getByRole("link", { name: "Parcels", exact: true }).first().hover();
       await expect(page.locator("#mapimage")).toHaveAttribute("src", IMAGE);
       expect(fakeServer.calls.find((call) => call.path.endsWith("/Parcels/MapServer/export")).query.size).toBe(size);

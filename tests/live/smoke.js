@@ -111,7 +111,7 @@ try {
   record("services root: spatial reference links rendered", srLinks > 0);
 
   const mapServer = await open("MapServer", `${BASE}/USA/MapServer`);
-  const blocks = await count(mapServer.locator(".sdt-datablock"));
+  const blocks = await count(mapServer.locator("details.sdt-details"));
   record("MapServer: metadata blocks rendered", blocks > 0);
 
   const layer = await open("layer", `${BASE}/USA/MapServer/0`);

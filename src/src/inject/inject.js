@@ -1,25 +1,11 @@
 {
   const { loadElement, clear: cleanElement } = SDT.dom;
-  // A Map, so a key such as "__proto__" or "constructor" is an ordinary key (SEC-8).
-  const COLOURS = new Map();
   let active = null;
   // Set in the load handler: the page's token, and the limiter every automatic request goes through.
   let token = null;
   let limiter = null;
   // The page's progress job (SDT.status): every request in a row's chain goes through it.
   let job = null;
-
-  // A row that the request budget left out, or that automatic work skipped after server pushback.
-  const skippedNote = (error, tag) => loadElement(tag, { "class": "sdt-note" }, tag === "span" ? ` ${error.message}` : error.message);
-  
-
-  /**
-   * Changes a text value from camel-case to title case
-   * @function unCamelCase
-   * @param {string} value - value to transform from camel case
-   * @returns {string} - a string in title case form.
-   */
-  const unCamelCase = (value) => value.substr(0, 1).toUpperCase() + value.substr(1).replace(/([a-z])([A-Z])/g, "$1 $2");
 
   /**
    * Adds a list item to a node if the property is there and maybe if a property is true.
@@ -52,7 +38,7 @@
     const node = loadElement("LI", {"class": className || ""});
     const ul = document.createElement("ul");
     for (let i in content) {
-      ul.appendChild(li(unCamelCase(i), content[i]));
+      ul.appendChild(li(SDT.row.unCamelCase(i), content[i]));
     }
     node.appendChild(loadElement("b", {}, title));
     node.appendChild(ul);
@@ -60,80 +46,9 @@
   };
 
   /**
-   * Calculates a random color for a string value
-   * @function getColor
-   * @param {string} item - a string value
-   * @returns {string} a CSS hex string for a color.
-   */
-  const getColor = (item) => {
-    if (!COLOURS.has(item)) {
-      COLOURS.set(item, "#" + (0x1000000 + (Math.random()) * 0xffffff).toString(16).substr(1, 6));
-    }
-    return COLOURS.get(item);
-  };
-
-  /**
    * Returns whether a field is queryable
    */
   const isQueryableField = (field) => ["esriFieldTypeGeometry","esriFieldTypeBlob","esriFieldTypeXML","esriFieldTypeRaster"].indexOf(field.type) === -1;
-
-  /**
-   * Calculates a complimentary shade or tint of a color to provide contrast
-   * @function getCompColor
-   * @param {string} item - a CSS hex string for a color
-   * @returns {string} a CSS hext string for a color that is either lighter or darker than the current color.
-   */
-  const getCompColor = (item) => {
-    const col = getColor(item),
-      mid = [col.substr(1,1),col.substr(3,1),col.substr(5,1)].sort()[1],
-      coltbl = "fedcba98".indexOf(mid) > -1 ? "0000000001234567" : "89abcdefffffffff";
-    let newcol = "";
-    for (let c = 0; c < col.length; c++) {
-      newcol += c%2 === 1 ? coltbl[parseInt(col.substr(c,1), 16)] : col.substr(c, 1);
-    }
-    return newcol;
-  };
-
-  /**
-   * Creates a node to display the spatial reference of a map service.
-   * @function showSpatialReferenceData
-   * @param {object} data - JSON response from the map service.
-   * @returns {object} an HTML DOM node with the spatial reference data.
-   */
-  const showSpatialReferenceData = (data) => {
-    let val="\u00a0No valid spatial reference available \u00a0",
-      nodeCSS,
-      container = null,
-      spatialRefNode,
-      cacheStatus,
-      sr;
-    if (data && Object.hasOwn(data, "spatialReference")) {
-      sr = data.spatialReference;
-      val = sr.latestWkid || sr.wkid || sr.latestWkt || sr.wkt || val;
-      nodeCSS = `color: ${getColor(val)};background: ${getCompColor(val)};border-radius:4px;padding:2px;`;
-      container = loadElement("span");
-      if (sr.latestWkid || sr.wkid) {
-        // link to well-known-id at spatialreference.org
-        spatialRefNode = loadElement("a", {
-          "href": `${window.location.protocol}//spatialreference.org/ref/?search=${val}`,
-          "style": nodeCSS
-        }, val);
-      } else {
-        spatialRefNode = loadElement("span", {
-          "style": nodeCSS
-        }, val);
-      }
-      container.appendChild(spatialRefNode);
-
-      // handle tiled or dynamic service
-      cacheStatus = data.singleFusedMapCache ? "tiled" : "dynamic";
-      container.appendChild(loadElement("b", {}, " " + cacheStatus));
-    }
-    
-    return container;
-  };
-
-  
 
   /**
    * Error reporting
@@ -171,117 +86,84 @@
     return addSubList("Error", err0r, "sdt-metadata-error");
   };
 
-  /**
-   * Creates a nested list to show service and layer metadata
-   * @function showMetadata
-   * @param {object} data - JSON response from the map service
-   * @returns {object} an HTML DOM node with the formatted metadata list
-   */
-  const showMetadata = (data) => {
-    const dF = document.createDocumentFragment(),
-      boolPreCheck = ["defaultVisibility", "isDataVersioned"];
-    if (data) {
-      const div = loadElement("DIV", {
-        "class": "sdt-datablock sdt-collapsed"
-      });
-      div.appendChild(document.createElement("br"));
-      const ul = document.createElement("ul");
-      div.appendChild(ul);
-
-      // handling errors
-      if (Object.hasOwn(data, "error") && data.error) {
-        dF.appendChild(reportError(data.error));
-      }
-
-      if (Object.hasOwn(data, "description") && data.description) {
-        dF.appendChild(li("Description", data.description));
-      }
-      if (Object.hasOwn(data, "serviceDescription") && data.serviceDescription) {
-        dF.appendChild(li("Service Description", data.serviceDescription));
-      }
-      if (Object.hasOwn(data, "copyrightText") && data.copyrightText) {
-        dF.appendChild(li("\u00a9", data.copyrightText));
-      }
-      if (Object.hasOwn(data, "layers")) {
-        dF.appendChild(li("# Layers", data.layers.length));
-      }
-      if (Object.hasOwn(data, "tables") && data.tables.length) {
-        dF.appendChild(li("# Tables", data.tables.length));
-      }
-      if (Object.hasOwn(data, "minScale")) {
-        dF.appendChild(li("Min Scale", data.minScale || "None"));
-      }
-      if (Object.hasOwn(data, "maxScale")) {
-        dF.appendChild(li("Max Scale", data.maxScale || "None"));
-      }
-      if (Object.hasOwn(data, "initialExtent")) {
-        dF.appendChild(addSubList("Initial Extent", data.initialExtent));
-      }
-      if (Object.hasOwn(data, "fullExtent")) {
-        dF.appendChild(addSubList("Full Extent", data.fullExtent));
-      }
-      if (Object.hasOwn(data, "extent")) {
-        dF.appendChild(addSubList("Extent", data.extent));
-      }
-      if (Object.hasOwn(data, "units") && data.units) {
-        dF.appendChild(li("Units", data.units.replace("esri", "")));              
-      }
-      if (Object.hasOwn(data, "documentInfo")) {
-        dF.appendChild(addSubList("Document Info", data.documentInfo));
-      }
-      if (Object.hasOwn(data, "documentInfo")) {
-        dF.appendChild(li("Max Record Count", data.maxRecordCount));
-      }
-      if (Object.hasOwn(data, "geometryType") && data.geometryType) {
-        dF.appendChild(li("Geometry", data.geometryType.replace("esriGeometry", "")));
-      }
-      if (data.definitionExpression) {
-        dF.appendChild(li("Definition Expression", data.definitionExpression));
-      }
-      if (Object.hasOwn(data, "defaultVisibility")) {
-        dF.appendChild(li("Visible by default", data.defaultVisibility.toString()));
-      }
-      if (Object.hasOwn(data, "displayField") && data.displayField) {
-        dF.appendChild(li("Display Field", data.displayField));
-      }
-      if (Object.hasOwn(data, "objectIdField") && data.objectIdField) {
-        dF.appendChild(li("Object ID Field", data.objectIdField));
-      }
-      if (Object.hasOwn(data, "globalIdField") && data.globalIdField) {
-        dF.appendChild(li("Global ID Field", data.globalIdField));
-      }
-      
-      if (data.relationships && data.relationships.length) {
-        dF.appendChild(li("Has Relationships"));
-      }
-      if (Object.hasOwn(data, "isDataVersioned")) {
-        dF.appendChild(li("Versioned Data", data.isDataVersioned ? "Yes" : "No"));
-      }
-
-      if (data.dateFieldsTimeReference) {
-        dF.appendChild(li("Date fields Time Zone", data.dateFieldsTimeReference.timeZone + "(Daylight Savings Time " + (data.dateFieldsTimeReference.respectsDaylightSaving ? "" : "not ") + "supported)"));
-      }
-
-      if (Object.hasOwn(data, "supportedQueryFormats")) {
-        dF.appendChild(li("Supported Query Formats", data.supportedQueryFormats ));
-      }
-      if (data.advancedQueryCapabilities) {
-        dF.appendChild(addSubList("Advanced Query Capabilities", data.advancedQueryCapabilities));
-      }
-
-      // show all data items where true, unless formatted value already available.
-      for (let item in data) {
-        if (typeof data[item] === "boolean" && data[item] && boolPreCheck.indexOf(item) === -1) {
-          dF.appendChild(li(unCamelCase(item)));
-        }
-      }
-      
-      ul.appendChild(dF);
-      SDT.guard.listen(div, "click", () => { toggleCollapse(div); });
-
-      return div;
+  /** The spatial reference badge: a link for a WKID, a neutral span for WKT, or null for no badge. */
+  const badgeNode = (sr) => {
+    const badge = SDT.row.badge(sr);
+    if (!badge) {
+      return null;
     }
-    return null;
+    const node = badge.kind === "wkid"
+      ? loadElement("a", { "class": `sdt-badge sdt-badge--sr sdt-badge--sr${badge.index}`, "href": badge.href })
+      : loadElement("span", { "class": "sdt-badge sdt-badge--sr", "title": badge.title });
+    node.append(loadElement("span", { "class": "sdt-visually-hidden" }, "Spatial reference "), document.createTextNode(badge.text));
+    return node;
+  };
+
+  /** One Details group: its label, then a definition list or a sentence. */
+  const detailsGroup = (group) => {
+    const nodes = [loadElement("p", { "class": "sdt-details__group" }, group.group)];
+    if (group.sentence) {
+      nodes.push(loadElement("p", { "style": "margin:0" }, group.sentence));
+      return nodes;
+    }
+    const list = loadElement("dl", { "class": "sdt-dl" });
+    for (const { term, value, mono } of group.items) {
+      list.append(loadElement("dt", {}, term), loadElement("dd", mono ? { "class": "sdt-mono" } : {}, value));
+    }
+    nodes.push(list);
+    return nodes;
+  };
+
+  /** The row's disclosure. Everything in it is a text node, because server HTML has become text. */
+  const detailsNode = (data) => {
+    const details = loadElement("details", { "class": "sdt sdt-details sdt-details--inline" });
+    const summary = loadElement("summary", {}, "Details ");
+    const meta = SDT.row.summary(data);
+    if (meta) {
+      summary.appendChild(loadElement("span", { "class": "sdt-details__meta" }, meta));
+    }
+    const body = loadElement("div", { "class": "sdt-details__body" });
+    for (const group of SDT.row.details(data, SDT.row.text)) {
+      body.append(...detailsGroup(group));
+    }
+    details.append(summary, body);
+    return details;
+  };
+
+  /**
+   * Draws a row from its model. The annot's children are rebuilt each time. The disclosure is made
+   * once and never replaced, so one the user has open stays open. A row with nothing to show keeps
+   * no annot at all.
+   * @function render
+   * @param {object} row - the row model
+   */
+  const render = (row) => {
+    row.annot ??= loadElement("span", { "class": "sdt sdt-annot" });
+    cleanElement(row.annot);
+    if (row.loading) {
+      const status = loadElement("span", { "class": "sdt-status" });
+      status.append(loadElement("span", { "class": "sdt-spinner", "aria-hidden": "true" }), document.createTextNode("Loading details"));
+      row.annot.appendChild(status);
+    }
+    if (row.data) {
+      const badge = badgeNode(SDT.row.spatialReference(row.data));
+      const cache = SDT.row.cacheLabel(row.data);
+      if (badge) {
+        row.annot.appendChild(badge);
+      }
+      if (cache) {
+        row.annot.appendChild(loadElement("span", { "class": "sdt-badge" }, cache));
+      }
+    }
+    if (!row.annot.firstChild) {
+      row.annot.remove();
+    } else if (!row.annot.isConnected) {
+      row.parent.insertBefore(row.annot, row.details ?? row.list);
+    }
+    if (row.data && !row.details) {
+      row.details = detailsNode(row.data);
+      row.parent.insertBefore(row.details, row.list);
+    }
   };
 
   /** True when a row's request was left out: by the budget, after pushback, or because the page was left. */
@@ -304,7 +186,7 @@
 
   /**
    * Counts a layer's features, and those with shapes, through the page's job. Each count that
-   * finishes goes into row.counted, so Load more sends only the ones still missing.
+   * finishes goes into row.counts, so Load more sends only the ones still missing.
    * @function getLayerCount
    * @param {string} url - the layer's url
    * @param {object} data - the layer's JSON
@@ -337,7 +219,7 @@
     const counts = [
       oid && { key: "total", field: oid, label: "Number of features", type: "esriFieldTypeOID" },
       shape && { key: "shape", field: shape, label: "Features with shapes", type: "esriFieldTypeGeometry" }
-    ].filter((count) => count && !row.counted.has(count.key));
+    ].filter((count) => count && !Object.hasOwn(row.counts, count.key));
     const queryUrl = `${url.replace(/\/+$/, "")}/query`;
     const results = await Promise.all(counts.map((count) => job.fetch(queryUrl, {
       params: { where: `${count.field} IS NOT NULL`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
@@ -348,7 +230,6 @@
     counts.forEach((count, i) => {
       const result = results[i];
       if (isLeftOut(result)) {
-        row.notes.push(ul.appendChild(skippedNote(result.error, "li")));
         outcome = "skipped";
       } else if (result.error) {
         row.notes.push(ul.appendChild(failure(result, { type: count.type })));
@@ -361,22 +242,13 @@
           outcome = "failed";
         }
       } else {
-        row.counted.add(count.key);
+        row.counts[count.key] = { value: result.data.count };
         if (result.data.count !== undefined && result.data.count !== null) {
           ul.appendChild(li(count.label, result.data.count));
         }
       }
     });
     return outcome;
-  };
-
-  /**
-   * toggles the collapeable state of an element.
-   * @function toggleCollapse
-   * @param {HTML} div
-   */
-  const toggleCollapse = (div) => {
-    div.classList.toggle("sdt-collapsed");
   };
 
   /**
@@ -677,8 +549,12 @@
 
   const LOADING_METADATA_CSS = "sdt-loading-metadata";
   const LOADING_SOMETHING_CSS = "sdt-loading-something";
+  // Starts and stops are counted per class, so work that finishes can't clear another's busy class.
+  const loadingCounts = new Map();
   const notifyLoading = (value, cssClass) => {
-    document.body.classList.toggle(cssClass, value);
+    const count = (loadingCounts.get(cssClass) ?? 0) + (value ? 1 : -1);
+    loadingCounts.set(cssClass, count);
+    document.body.classList.toggle(cssClass, count > 0);
   };
 
   SDT.guard.onLoad(async () => {
@@ -710,11 +586,16 @@
       anchor: tags[item.i],
       parent: tags[item.i].parentNode,
       url: item.url,
+      name: tags[item.i].textContent.trim(),
       data: null,
-      counted: new Set(),
+      outcome: null,
+      loading: false,
+      error: null,
+      counts: {},
+      annot: null,
+      details: null,
       list: null,
-      notes: [],
-      outcome: null
+      notes: []
     }));
     const canCountFeatures = settings.autoFeatureCounts;
 
@@ -726,29 +607,26 @@
         for (const note of row.notes.splice(0)) {
           note.remove();
         }
+        row.error = null;
         if (!row.data) {
+          row.loading = true;
+          render(row);
           const result = await job.fetch(row.url, { params: { f: "json" }, token });
+          row.loading = false;
+          const usable = !result.error && result.data !== null && typeof result.data === "object";
+          if (usable) {
+            row.data = result.data;
+          }
+          render(row);
           if (isLeftOut(result)) {
-            row.notes.push(row.parent.appendChild(skippedNote(result.error, "span")));
             outcome = "skipped";
             return;
           }
-          if (result.error) {
-            row.notes.push(rowList(row).appendChild(failure(result)));
+          if (!usable) {
+            const failed = result.error ? result : { error: { message: "The server's answer was not a service description." } };
+            row.error = SDT.row.failureText(failed);
+            row.notes.push(rowList(row).appendChild(failure(failed)));
             return;
-          }
-          if (result.data === null || typeof result.data !== "object") {
-            row.notes.push(rowList(row).appendChild(failure({ error: { message: "The server's answer was not a service description." } })));
-            return;
-          }
-          row.data = result.data;
-          const spatialReferenceNode = showSpatialReferenceData(row.data),
-            metadata = showMetadata(row.data);
-          if (spatialReferenceNode !== null) {
-            row.parent.insertBefore(spatialReferenceNode, row.list);
-          }
-          if (metadata !== null) {
-            row.parent.insertBefore(metadata, row.list);
           }
         }
         // Only a layer's JSON has fields, so only layer rows get counts.
@@ -758,7 +636,8 @@
       } catch (error) {
         // A row that cannot be drawn fails alone, with an error line, and the others carry on.
         console.debug("SD Toolkit: could not show a row", error);
-        row.notes.push(rowList(row).appendChild(failure({ error: { message: "Could not show this row's details." } })));
+        row.error = "Could not show this row's details.";
+        row.notes.push(rowList(row).appendChild(failure({ error: { message: row.error } })));
         outcome = "failed";
       } finally {
         row.outcome = outcome;
@@ -781,7 +660,7 @@
     };
 
     if (rows.length && settings.autoMetadata) {
-      job = SDT.status.job(type === "service" ? "layers" : "services", rows.length);
+      job = SDT.status.job(type === "service" || type === "layer" ? "layers" : "services", rows.length);
       // Load more re-runs each row the budget or pushback left out.
       job.onLoadMore(() => {
         const skipped = rows.filter((row) => row.outcome === "skipped");

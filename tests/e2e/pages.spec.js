@@ -17,30 +17,30 @@ test("the services root shows the status bar, spatial reference badges and servi
   await expect(page.locator(".sdt-statusbar")).toBeVisible();
   await expect(page.getByRole("link", { name: "3857" })).toHaveCount(2);
   await expect(page.getByRole("link", { name: "4326" })).toHaveCount(1);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+  await expect(page.locator("details.sdt-details")).toHaveCount(3);
   for (const description of [
     "Parcel boundaries and site addresses for an invented county.",
     "Editable parcel boundaries for an invented county.",
     "An invented elevation surface."
   ]) {
-    await expect(page.locator(".sdt-datablock", { hasText: `Service Description: ${description}` })).toHaveCount(1);
+    await expect(page.locator("details.sdt-details", { hasText: description })).toHaveCount(1);
   }
 });
 
-// Part 2 (#16) finishes INJ-11, which also shows server HTML as text. This case covers the entity literal.
-test("INJ-11: service details label the copyright text without a literal &copy;", async ({ page }) => {
+// tests/e2e/rows.spec.js covers the rest of INJ-11: server HTML and entities as text, through a real DOMParser.
+test("INJ-11: service details put the copyright text under a Copyright term, with no literal &copy;", async ({ page }) => {
   await page.goto(REST_ROOT);
-  await expect(page.getByText("Example County GIS").first()).toBeAttached();
+  await expect(page.locator("dt:text-is(\"Copyright\") + dd", { hasText: /^Example County GIS$/ })).toHaveCount(2);
   await expect(page.getByText("&copy;")).toHaveCount(0);
 });
 
 test("a MapServer page shows details and feature counts for each layer", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer`);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(2);
+  await expect(page.locator("details.sdt-details")).toHaveCount(2);
   await expect(label(page, "Number of features:")).toHaveCount(2);
   await expect(label(page, "Features with shapes:")).toHaveCount(2);
-  await expect(page.locator(".sdt-datablock", { hasText: "Display Field: OWNER_NAME" })).toHaveCount(1);
-  await expect(page.locator(".sdt-datablock", { hasText: "Display Field: ADDRESS" })).toHaveCount(1);
+  await expect(page.locator("details.sdt-details", { hasText: "OWNER_NAME" })).toHaveCount(1);
+  await expect(page.locator("details.sdt-details", { hasText: "ADDRESS" })).toHaveCount(1);
   const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
   for (const [name, { features, shapes }] of Object.entries(counts)) {
     await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);
@@ -52,7 +52,7 @@ test("a MapServer page shows details and feature counts for each layer", async (
 // FeatureServer exclusion left these rows without the shape count.
 test("a FeatureServer layer row shows \"Features with shapes\" (INJ-15)", async ({ page }) => {
   await page.goto(`${REST_ROOT}/Parcels/FeatureServer`);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(2);
+  await expect(page.locator("details.sdt-details")).toHaveCount(2);
   const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
   for (const [name, { features, shapes }] of Object.entries(counts)) {
     await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);

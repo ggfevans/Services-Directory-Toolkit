@@ -7,7 +7,6 @@ import { folderPage } from "../fixtures/pages.js";
 import { axeViolations } from "./axe.js";
 
 const ROOT_PAGE = /^\/arcgis\/rest\/services$/;
-const LIMIT_NOTE = "Not loaded: request limit reached (50)";
 
 // The services root opened with ?token= (TR-22).
 const withToken = (root, token) => `${root}?token=${token}`;
@@ -32,19 +31,17 @@ const ONLINE_LINKS =`<li><a href="${ONLINE_REST_ROOT}/Parcels/FeatureServer">Onl
 test("links to another server get no automatic requests", async ({ page, fakeServer }) => {
   fakeServer.override(ROOT_PAGE, () => html(rootWith(ONLINE_LINKS)));
   await page.goto(REST_ROOT);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+  await expect(page.locator("details.sdt-details")).toHaveCount(3);
   await page.waitForTimeout(500);
   expect(fakeServer.calls.filter((call) => call.origin !== FAKE_ORIGIN)).toEqual([]);
 });
 
-test("a page with 60 service links sends 50 requests, and the other rows say why they're empty", async ({ page, fakeServer, bulkRoot }) => {
+test("a page with 60 service links sends 50 requests, and the bar says why the other rows are empty", async ({ page, fakeServer, bulkRoot }) => {
   bulkRoot(60);
   await page.goto(REST_ROOT);
-  await expect(page.getByText(LIMIT_NOTE)).toHaveCount(10);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(50);
+  await expect(page.locator(".sdt-statusbar").getByRole("status")).toHaveText("Paused after 50 automatic requests. 10 services not loaded yet.");
+  await expect(page.locator("details.sdt-details")).toHaveCount(50);
   expect(fakeServer.calls.filter((call) => /\/Bulk\d+\/MapServer$/.test(call.path))).toHaveLength(50);
-  const lastRow = page.locator("li", { has: page.getByRole("link", { name: "Bulk60", exact: true }) });
-  await expect(lastRow).toContainText(LIMIT_NOTE);
 });
 
 test("one failed service request shows an error on its row, and the other rows load (INJ-2)", async ({ page, fakeServer, expectedErrors }) => {
@@ -54,7 +51,7 @@ test("one failed service request shows an error on its row, and the other rows l
   // Visible on the row, not tucked into a collapsed details block.
   await expect(serviceRow(page, "Parcels/MapServer").getByText(/HTTP 502/)).toBeVisible();
   for (const path of ["Parcels/FeatureServer", "Elevation/ImageServer"]) {
-    await expect(serviceRow(page, path).locator(".sdt-datablock")).toHaveCount(1);
+    await expect(serviceRow(page, path).locator("details.sdt-details")).toHaveCount(1);
   }
   await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
@@ -64,7 +61,7 @@ test("a service that answers 200 with an ArcGIS error body fails its row with th
   await page.goto(REST_ROOT);
   await expect(serviceRow(page, "Parcels/MapServer").getByText(/Token Required/)).toBeVisible();
   for (const path of ["Parcels/FeatureServer", "Elevation/ImageServer"]) {
-    await expect(serviceRow(page, path).locator(".sdt-datablock")).toHaveCount(1);
+    await expect(serviceRow(page, path).locator("details.sdt-details")).toHaveCount(1);
   }
   await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
@@ -85,8 +82,8 @@ test("a page opened with ?token= sends the token in each metadata request's POST
   const token = SERVER_TOKENS.jsmith;
   await page.goto(`${REST_ROOT}/Utilities?token=${token}`);
   // Valves and Mains are secured: their details appear only if the token reached the server.
-  await expect(page.locator(".sdt-datablock", { hasText: "Water valves for an invented utility." })).toHaveCount(1);
-  await expect(page.locator(".sdt-datablock", { hasText: "Water mains for an invented utility." })).toHaveCount(1);
+  await expect(page.locator("details.sdt-details", { hasText: "Water valves for an invented utility." })).toHaveCount(1);
+  await expect(page.locator("details.sdt-details", { hasText: "Water mains for an invented utility." })).toHaveCount(1);
   const metadata = fakeServer.calls.filter((call) => /\/(MapServer|FeatureServer)$/.test(call.path));
   expect(metadata).toHaveLength(2);
   for (const call of metadata) {
@@ -100,8 +97,8 @@ test("a page opened with ?token= sends the token in each metadata request's POST
 test("on ArcGIS Online, links that carry the page's token get metadata, with the token only in the body (TOK-3)", async ({ page, fakeServer }) => {
   const token = ONLINE_TOKENS.jsmith;
   await page.goto(withToken(ONLINE_REST_ROOT, token));
-  await expect(page.locator(".sdt-datablock")).toHaveCount(2);
-  await expect(page.locator(".sdt-datablock", { hasText: "Fire hydrants for an invented city." })).toHaveCount(1);
+  await expect(page.locator("details.sdt-details")).toHaveCount(2);
+  await expect(page.locator("details.sdt-details", { hasText: "Fire hydrants for an invented city." })).toHaveCount(1);
   const metadata = fakeServer.calls.filter((call) => call.origin === ONLINE_ORIGIN && /\/FeatureServer$/.test(call.path));
   expect(metadata).toHaveLength(2);
   for (const call of metadata) {
@@ -127,7 +124,7 @@ test("a request that carries the token stops at a 307, and nothing reaches the r
 test("hovering a link to another server sends nothing", async ({ page, fakeServer }) => {
   fakeServer.override(ROOT_PAGE, () => html(rootWith(ONLINE_LINKS)));
   await page.goto(REST_ROOT);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+  await expect(page.locator("details.sdt-details")).toHaveCount(3);
   await page.getByRole("link", { name: "Online parcels map", exact: true }).hover();
   await page.waitForTimeout(500);
   expect(fakeServer.calls.filter((call) => call.origin !== FAKE_ORIGIN)).toEqual([]);
@@ -139,7 +136,7 @@ test("hovering a link on this server shows its map preview, without the page's t
   fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/\?f=json$/, () => json({ initialExtent: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 } }));
   fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\/export\?/, () => json({ href: image }));
   await page.goto(withToken(REST_ROOT, SERVER_TOKENS.jsmith));
-  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+  await expect(page.locator("details.sdt-details")).toHaveCount(3);
   await page.getByRole("link", { name: "Parcels", exact: true }).first().hover();
   await expect(page.locator("#mapimage")).toHaveAttribute("src", image);
   const previews = fakeServer.calls.filter((call) => /\/Parcels\/MapServer\/(export)?$/.test(call.path));
@@ -165,6 +162,8 @@ const bulkService = () => json({
   spatialReference: { wkid: 102100, latestWkid: 3857 },
   layers: []
 });
+// String() throws on this, because its toString isn't a function and valueOf gives back the object.
+const UNPRINTABLE = { toString: null };
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const never = () => new Promise(() => {});
 const bodyClasses = (page) => page.evaluate(() => document.body.className);
@@ -191,7 +190,7 @@ test("60 rows send exactly 50, the bar offers \"Load 10 more services\", and one
   expect(bulkCalls(fakeServer)).toHaveLength(60);
   expect(new Set(bulkCalls(fakeServer).map((call) => call.path)).size).toBe(60);
   await expect(page.getByText(/Not loaded/)).toHaveCount(0);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(60);
+  await expect(page.locator("details.sdt-details")).toHaveCount(60);
   await expect(bar(page).getByRole("button")).toHaveCount(0);
 });
 
@@ -222,7 +221,9 @@ test("a row cut off mid-chain gets only its missing count on Load more", async (
   expect(layerJson()).toHaveLength(1);
   expect(counts()).toHaveLength(0);
   const layerRow = page.locator("li", { has: page.locator("a[href$=\"/Parcels/MapServer/0\"]") });
-  await expect(layerRow.getByText(LIMIT_NOTE)).toHaveCount(2);
+  await expect(message(page)).toHaveText("Paused after 50 automatic requests. 1 service not loaded yet.");
+  await expect(layerRow.locator("details.sdt-details")).toHaveCount(1);
+  await expect(layerRow.getByText(/Not loaded/)).toHaveCount(0);
   await pressLoadMore(button);
   await expect(message(page)).toHaveText("Loaded details for 50 services in 52 requests");
   await expect(layerRow.locator("b", { hasText: /^Number of features:/ })).toHaveCount(1);
@@ -267,8 +268,10 @@ for (const status of [429, 503]) {
     await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
     await page.waitForTimeout(800);
     expect(bulkCalls(fakeServer).map((call) => call.path.split("/")[4]).sort()).toEqual(["Bulk01", "Bulk02", "Bulk03", "Bulk04", "Bulk05"]);
-    // The rows in flight were cancelled, and the rest were never sent: each says why it is empty.
-    await expect(page.getByText(`Not loaded: the server answered HTTP ${status}, so automatic requests stopped`)).toHaveCount(11);
+    // The rows in flight were cancelled, and the rest were never sent: they stay plain, and the bar says why.
+    await expect(page.locator("details.sdt-details")).toHaveCount(1);
+    await expect(page.locator(".sdt-spinner")).toHaveCount(0);
+    await expect(page.getByText(/Not loaded/)).toHaveCount(0);
     await expect(message(page)).toHaveText(pushbackCopy(status));
     expect(await axeViolations(page, { include: ".sdt-statusbar", hostPage: true })).toEqual(NO_VIOLATIONS);
   });
@@ -309,11 +312,9 @@ test("pushback during a Load more batch removes the button and leaves no row bus
   await expect(bar(page)).toHaveAttribute("data-tone", "error");
   await expect(bar(page).getByRole("button")).toHaveCount(0);
   await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
-  // Every row of the batch settled: it loaded, or says the server stopped automatic requests.
-  for (let i = 51; i <= 60; i++) {
-    const row = page.locator("li", { has: page.getByRole("link", { name: `Bulk${i}`, exact: true }) });
-    await expect(row.locator(".sdt-datablock").or(row.getByText(/Not loaded: the server answered HTTP 429/))).toHaveCount(1);
-  }
+  // Every row of the batch settled: it loaded, or it stayed plain, because the bar says the server stopped them.
+  await expect(page.locator(".sdt-spinner")).toHaveCount(0);
+  await expect(page.getByText(/Not loaded/)).toHaveCount(0);
   // The button went away while it had focus: focus moved to the bar's message.
   expect(await page.evaluate(() => document.activeElement === document.querySelector(".sdt-statusbar [role=status]"))).toBe(true);
   // Nothing more went out after the pushback, and Bulk59 and 60 were never sent.
@@ -323,8 +324,8 @@ test("pushback during a Load more batch removes the button and leaves no row bus
 });
 
 test("a Load more batch whose row throws re-enables the bar, with no unhandled rejection", async ({ page, fakeServer, bulkRoot }) => {
-  // A null spatialReference makes inject.js throw while it draws Bulk55's row, and the row reports failed.
-  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk55\/MapServer\?f=json$/, () => json({ currentVersion: catalog.currentVersion, spatialReference: null }));
+  // A description that can't become a string makes inject.js throw while it draws Bulk55's row, and the row reports failed.
+  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk55\/MapServer\?f=json$/, () => json({ currentVersion: catalog.currentVersion, description: UNPRINTABLE }));
   bulkRoot(60);
   await page.goto(REST_ROOT);
   await pressLoadMore(bar(page).getByRole("button", { name: "Load 10 more services" }));
@@ -338,7 +339,7 @@ test("a Load more batch whose row throws re-enables the bar, with no unhandled r
 // A row whose JSON is unusable on the first automatic batch: no unhandled rejection, an error line on
 // that row, the other rows load, and the bar settles in the done state.
 for (const [title, body] of [
-  ["a null spatialReference", () => json({ currentVersion: catalog.currentVersion, spatialReference: null })],
+  ["a description that can't become a string", () => json({ currentVersion: catalog.currentVersion, description: UNPRINTABLE })],
   ["a literal null body", () => ({ status: 200, headers: { "content-type": "application/json" }, body: "null" })]
 ]) {
   test(`the first batch survives a row with ${title}: it shows an error line and the bar finishes`, async ({ page, fakeServer, bulkRoot }) => {
@@ -348,7 +349,7 @@ for (const [title, body] of [
     await expect(message(page)).toHaveText("Loaded details for 5 services in 6 requests. 1 failed.");
     await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
     await expect(page.getByText(/Could not show this row|not a service description/)).toHaveCount(1);
-    await expect(page.locator(".sdt-datablock")).toHaveCount(5);
+    await expect(page.locator("details.sdt-details")).toHaveCount(5);
     // The harness fails the test on an unhandled rejection, which the console reports as an error.
     await page.waitForTimeout(300);
   });
@@ -368,7 +369,7 @@ test("a count whose body is literal null shows an error line and fails the row",
   await expect(message(page)).toHaveText("Loaded details for 5 services in 7 requests. 1 failed.");
   await expect.poll(() => bodyClasses(page)).not.toMatch(/sdt-loading-/);
   await expect(page.getByText(/not a count/)).toHaveCount(1);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(6);
+  await expect(page.locator("details.sdt-details")).toHaveCount(6);
   await page.waitForTimeout(300);
 });
 
@@ -394,9 +395,10 @@ test("pagehide cancels pending requests", async ({ page, fakeServer }) => {
   release();
   await page.waitForTimeout(800);
   expect(bulkCalls(fakeServer)).toHaveLength(4);
-  // The eight queued rows were never sent, and say so; the four in flight were cancelled.
-  await expect(page.getByText("Not loaded: the page was left.")).toHaveCount(8);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(0);
+  // The eight queued rows were never sent and the four in flight were cancelled: all twelve stay plain.
+  await expect(page.locator(".sdt-annot")).toHaveCount(0);
+  await expect(page.getByText(/Not loaded/)).toHaveCount(0);
+  await expect(page.locator("details.sdt-details")).toHaveCount(0);
   await expect(message(page)).toHaveText("Loaded details for 0 services in 4 requests");
   expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
 });
@@ -446,7 +448,7 @@ test.describe("with the back/forward cache on", () => {
       await expect(message(page)).toHaveText("Loaded details for 12 services in 12 requests");
     }
     await expect(page.getByText(/Not loaded/)).toHaveCount(0);
-    await expect(page.locator(".sdt-datablock")).toHaveCount(12);
+    await expect(page.locator("details.sdt-details")).toHaveCount(12);
     expect(await bodyClasses(page)).not.toMatch(/sdt-loading-/);
   });
 });

@@ -89,8 +89,9 @@ test("keyframes names start with sdt-", () => {
   }
 });
 
-// Files outside the lib that are written for sdt.css: the status bar (#14) uses its components.
-const BUILT_FOR_SDT_CSS = new Set(["src/inject/status.js"]);
+// Files outside the lib that are written for sdt.css: the status bar (#14) and the rows (#15, #16)
+// use its components. The Find Helper classes in inject.js stay in inject.css, and sdt.css has none.
+const BUILT_FOR_SDT_CSS = new Set(["src/inject/status.js", "src/inject/inject.js"]);
 
 test("sdt.css styles no class that the extension's older code uses", () => {
   const styled = new Set(rules.flatMap(({ selectors }) => selectors.flatMap(classesIn)));
