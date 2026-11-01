@@ -12,6 +12,10 @@ const CONSOLE_FORMAT = "Start console calls with a string literal and pass value
 // Covers console.log(...) and window.console.log(...) (or self., globalThis.).
 const CONSOLE_FORMAT_SELECTOR = "CallExpression:matches([callee.object.name='console'], [callee.object.property.name='console'])[arguments.length>0]:not([arguments.0.value=type(string)])";
 
+// An HTML entity in a string would show as literal text, because the extension sets text, not markup.
+const NO_ENTITIES = "Write the character itself, or a \\u escape, not an HTML entity (TOOL-7).";
+const ENTITY = "/&(#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]+);/";
+
 // The rules for all code under src/. Each HTML selector appears twice: el.innerHTML has the name in
 // property.name, and el["innerHTML"] has it in property.value.
 const BASE_SELECTORS = [
@@ -21,7 +25,9 @@ const BASE_SELECTORS = [
   { selector: "CallExpression[callee.property.value='insertAdjacentHTML']", message: NO_HTML_STRINGS },
   { selector: "CallExpression[callee.object.name='document'][callee.property.name=/^(write|writeln)$/]", message: NO_HTML_STRINGS },
   { selector: "CallExpression[callee.object.name='document'][callee.property.value=/^(write|writeln)$/]", message: NO_HTML_STRINGS },
-  { selector: CONSOLE_FORMAT_SELECTOR, message: CONSOLE_FORMAT }
+  { selector: CONSOLE_FORMAT_SELECTOR, message: CONSOLE_FORMAT },
+  { selector: `Literal[value=${ENTITY}]`, message: NO_ENTITIES },
+  { selector: `TemplateElement[value.cooked=${ENTITY}]`, message: NO_ENTITIES }
 ];
 
 // All of an extension's content scripts in a frame share one isolated world, and so do a page's
@@ -44,11 +50,11 @@ const GUARD_SELECTORS = [
 ];
 
 // Every request goes through SDT.net.fetchJson, which checks the status, times out and keeps a token
-// out of the URL.
+// out of the URL. SDT.status's job.fetch is allowed: it sends through the page limiter.
 const NETWORK = "Send requests with SDT.net.fetchJson (src/src/lib/net.js).";
 const NETWORK_SELECTORS = [
   { selector: "CallExpression[callee.name='fetch']", message: NETWORK },
-  { selector: "CallExpression[callee.property.name='fetch']", message: NETWORK },
+  { selector: "CallExpression[callee.property.name='fetch']:not([callee.object.name='job'])", message: NETWORK },
   { selector: "NewExpression[callee.name='XMLHttpRequest']", message: NETWORK },
   { selector: "NewExpression[callee.property.name='XMLHttpRequest']", message: NETWORK }
 ];

@@ -32,11 +32,10 @@ test("INJ-1: a layer's JSON view gets no requests and no spinner", async ({ page
   expect(await page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
 
-// Phase 5 replaces these automatic per-field GET counts with an on-demand "Count values" button
-// backed by one statistics POST, which skips geometry fields. When that lands, rewrite this test
-// for the new flow; don't just turn knownBug() into test(). Keep the same intent: one failed count
-// request shows an error for that field and doesn't stop the others.
-knownBug("INJ-2", "one failed count query does not stop the counts for the other fields", async ({ page, fakeServer, expectedErrors }) => {
+// The automatic field counts are gone. Part 3 (#17) brings field counts back behind Count values;
+// rewrite this case for that flow then. Same intent: one failed count request shows an error for
+// that field and doesn't stop the others.
+test.fixme("INJ-2: one failed count query does not stop the counts for the other fields", async ({ page, fakeServer, expectedErrors }) => {
   fakeServer.override(/where=not\+PARCEL_ID\+is\+null&/, BAD_GATEWAY);
   expectedErrors.push(/status of 502/);
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0`);
@@ -57,12 +56,6 @@ knownBug("INJ-3", "the Find Helper inserts the raw value even when no form field
   await expect(value).toBeAttached();
   await value.dblclick();
   await expect(page.locator("#searchText")).toHaveValue("A. Example");
-});
-
-knownBug("INJ-11", "service details label the copyright text without a literal &copy;", async ({ page }) => {
-  await page.goto(REST_ROOT);
-  await expect(page.getByText("Example County GIS").first()).toBeAttached();
-  await expect(page.getByText("&copy;")).toHaveCount(0);
 });
 
 test("PRT-1: a geoprocessing JSON result gets no requests and no dialog", async ({ page, fakeServer }) => {

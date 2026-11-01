@@ -164,3 +164,137 @@ test("once the extension context is gone, pagehide settles none of the queued or
   await flush();
   assert.equal(settled, 0);
 });
+
+test("extend raises the cap: a third request is refused at max 2, then two more are accepted after extend(2)", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, fetchJson: fake.fetchJson });
+  limiter.fetchJson(at(0));
+  limiter.fetchJson(at(1));
+  assert.equal((await limiter.fetchJson(at(2))).error.type, "limit");
+  limiter.extend(2);
+  limiter.fetchJson(at(3));
+  limiter.fetchJson(at(4));
+  const refused = await limiter.fetchJson(at(5));
+  assert.equal(refused.error.type, "limit");
+  assert.equal(fake.sent(), 4);
+});
+
+test("extend after a 429 changes nothing: the next request settles as stopped", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, fetchJson: fake.fetchJson });
+  const first = limiter.fetchJson(at(0));
+  fake.open[0].finish({ error: { type: "http", message: "Too many", url: at(0), status: 429 } });
+  await first;
+  limiter.extend(5);
+  assert.equal(limiter.stats().max, 2);
+  assert.equal((await limiter.fetchJson(at(1))).error.type, "stopped");
+});
+
+test("extend after pagehide changes nothing: the next request settles as aborted", async () => {
+  const fake = fakeFetch();
+  const target = pageTarget();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, target, fetchJson: fake.fetchJson });
+  target.fire("pagehide");
+  limiter.extend(5);
+  assert.equal(limiter.stats().max, 2);
+  assert.equal((await limiter.fetchJson(at(0))).error.type, "aborted");
+});
+
+test("grant(n) allows n more requests from now: after 1 accepted at max 3, grant(2) lets exactly 2 more through", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 3, scope: SCOPE, fetchJson: fake.fetchJson });
+  limiter.fetchJson(at(0));
+  limiter.grant(2);
+  assert.equal(limiter.stats().max, 3);
+  limiter.fetchJson(at(1));
+  limiter.fetchJson(at(2));
+  assert.equal((await limiter.fetchJson(at(3))).error.type, "limit");
+  assert.equal(fake.sent(), 3);
+});
+
+test("grant after a 429 or pagehide changes nothing", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ max: 2, scope: SCOPE, fetchJson: fake.fetchJson });
+  const first = limiter.fetchJson(at(0));
+  fake.open[0].finish({ error: { type: "http", message: "Too many", url: at(0), status: 429 } });
+  await first;
+  limiter.grant(5);
+  assert.equal(limiter.stats().max, 2);
+  const target = pageTarget();
+  const aborted = net.createLimiter({ max: 2, scope: SCOPE, target, fetchJson: fake.fetchJson });
+  target.fire("pagehide");
+  aborted.grant(5);
+  assert.equal(aborted.stats().max, 2);
+});
+
+test("stats().max reports the cap: 50 by default, 100 after extend(50)", () => {
+  const limiter = net.createLimiter({ scope: SCOPE, fetchJson: fakeFetch().fetchJson });
+  assert.equal(limiter.stats().max, 50);
+  limiter.extend(50);
+  assert.equal(limiter.stats().max, 100);
+});
+
+test("stats().aborted is false until pagehide, then true", () => {
+  const target = pageTarget();
+  const limiter = net.createLimiter({ scope: SCOPE, target, fetchJson: fakeFetch().fetchJson });
+  assert.equal(limiter.stats().aborted, false);
+  target.fire("pagehide");
+  assert.equal(limiter.stats().aborted, true);
+});
+
+/** A lib whose page limiter is built by SDT.net.pageLimiter() for a page in SCOPE, on a stand-in window. */
+const pageLib = () => {
+  const window = pageTarget();
+  const { SDT } = loadLib({ globals: { window, location: { href: `${SCOPE}/rest/services` } } });
+  return { SDT, window };
+};
+
+test("resetPageLimiter after pagehide starts a new page view: a fresh limiter with its own 50", async () => {
+  const { SDT, window } = pageLib();
+  const first = SDT.net.pageLimiter();
+  window.fire("pagehide");
+  assert.equal(first.stats().aborted, true);
+  const second = SDT.net.resetPageLimiter();
+  assert.notStrictEqual(second, first);
+  assert.strictEqual(SDT.net.pageLimiter(), second);
+  assert.deepEqual(plain(second.stats()), { accepted: 0, active: 0, peak: 0, stopped: null, max: 50, aborted: false });
+  // The new limiter cancels on the next pagehide, as the first did.
+  window.fire("pagehide");
+  assert.equal(second.stats().aborted, true);
+});
+
+test("resetPageLimiter keeps a limiter stopped by pushback: a 429 holds for the page", async () => {
+  const { SDT } = pageLib();
+  SDT.state = { pageLimiter: SDT.net.createLimiter({ scope: SCOPE, fetchJson: async () => ({ error: { type: "http", message: "HTTP 429", status: 429 } }) }) };
+  const stopped = SDT.net.pageLimiter();
+  await stopped.fetchJson(at(0));
+  assert.equal(stopped.stats().stopped, 429);
+  assert.strictEqual(SDT.net.resetPageLimiter(), stopped);
+  assert.strictEqual(SDT.net.pageLimiter(), stopped);
+});
+
+test("onSend runs once for each request sent, just before it goes, and never for a queued one pagehide drains", async () => {
+  const fake = fakeFetch();
+  const target = pageTarget();
+  const limiter = net.createLimiter({ scope: SCOPE, target, fetchJson: fake.fetchJson });
+  const sent = [];
+  const results = Array.from({ length: 6 }, (_, i) => limiter.fetchJson(at(i), { params: { f: "json" }, onSend: () => sent.push(i) }));
+  await flush();
+  assert.deepEqual(sent, [0, 1, 2, 3]);
+  // The callback is the limiter's: SDT.net.fetchJson never sees it.
+  assert.ok(fake.open.every((job) => !("onSend" in job.options) && job.options.params.f === "json"));
+  target.fire("pagehide");
+  await Promise.all(results);
+  assert.deepEqual(sent, [0, 1, 2, 3]);
+});
+
+test("onSend never runs for a queued request that a 429 drains", async () => {
+  const fake = fakeFetch();
+  const limiter = net.createLimiter({ scope: SCOPE, fetchJson: fake.fetchJson });
+  let sent = 0;
+  const results = Array.from({ length: 6 }, (_, i) => limiter.fetchJson(at(i), { onSend: () => (sent += 1) }));
+  await flush();
+  fake.open[0].finish({ error: { type: "http", status: 429, message: "HTTP 429", url: at(0) } });
+  await Promise.all(results);
+  assert.equal(sent, 4);
+});

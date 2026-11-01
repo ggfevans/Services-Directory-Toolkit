@@ -340,7 +340,8 @@
   cursor: not-allowed;
 }
 
-.sdt-button[disabled]:hover {
+.sdt-button[disabled]:hover,
+.sdt-button[aria-disabled="true"]:hover {
   background: var(--sdt-bg);
 }
 

@@ -114,12 +114,12 @@ These are part of each phase's definition of done.
 Automatic requests are those the extension sends without a user action. They are limited as follows:
 
 - **Total:** at most 50 automatic requests per page view. Past that, the remaining rows show a "Load more" control.
-  Until Phase 5 adds Load more, each row left out shows the text "Not loaded: request limit reached (50)" (owner's decision on issue #44, 2026-10-20).
+  Load more and the status bar now exist (Phase 5 part 1), but until Phase 5 part 2 replaces it each row left out still shows the text "Not loaded: request limit reached (50)" (owner's decision on issue #44, 2026-10-20).
 - **Concurrency:** at most 4 requests in flight at once.
 - **Destination:** only the page's own origin and its `/rest/services` root. Links to other servers get no automatic requests.
 - **Cancellation:** pending requests are cancelled on `pagehide`.
 - **Server pushback:** an HTTP 429 or 503 stops automatic work on that page and shows a notice.
-  Until Phase 5's status bar, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent (owner's decision on issue #44, 2026-10-20).
+  Until Phase 5 part 2 replaces it, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent (owner's decision on issue #44, 2026-10-20).
 - **Token:** a `token` from the page URL goes only to the page's origin and REST root. It travels in a form POST body, and a request that carries it never follows a redirect.
 
 ### 4.4 Security rules
@@ -424,7 +424,7 @@ The classifier therefore takes the type from the pathname and `document.contentT
 
 **Schema (`SDT.settings`):**
 - Each entry has a key, type, default, allowed values, min and max, label, and storage area.
-- It leaves out `autoFieldCounts` and `autoDomainCounts`, which Phase 5's Count values button replaces (design review decision 2). Until then `inject.js` treats both as `true`, today's default, so field and domain counts run as they do now.
+- It leaves out `autoFieldCounts` and `autoDomainCounts`, which Phase 5's Count values button replaces (design review decision 2). Phase 5 part 1 removed field and domain counts from `inject.js`; they stay off until Count values (#17) brings them back.
 - Readers get validated values. Unknown values fall back to the default, so a stored `nothing` reads as `donothing`.
 - There is no migration step, because the extension has never been published.
 
@@ -455,6 +455,8 @@ The classifier therefore takes the type from the pathname and `document.contentT
 
 ### Phase 5: Service and layer pages (`inject.js`, excluding the Find Helper)
 
+Phase 5 ships as three pull requests: part 1 is the request chains and the status bar (#45, #14); part 2 is #15 and #16; part 3 is the Count values button (#17).
+
 **Failure handling.** Count and detail chains use `fetchJson` and the limiter. A failed item shows an error line and the chain continues. Busy states clear in `finally`.
 
 **Shared style and theme:**
@@ -465,7 +467,7 @@ Delivered early by #13, before the other Phase 5 work.
 
 **Status bar.** The Phase 3 indicator becomes a one-line status bar in the page flow, under the page's `<h2>` (design review section 6.3). It reports busy, done (with the number of requests made), budget reached (with a Load more button) and server pushback. Pages with nothing to report show no bar.
 
-**Settings.** The Count values button replaces `autoFieldCounts` and `autoDomainCounts`. Phase 4's schema already leaves them out, so the options page never offers them, and `inject.js` treats both as `true` until this phase replaces them with Count values. Nothing migrates, because 2.0.0 is unpublished.
+**Settings.** The Count values button replaces `autoFieldCounts` and `autoDomainCounts`. Phase 4's schema already leaves them out, so the options page never offers them. Part 1 removed the automatic counts from `inject.js`, and part 3 (#17) brings them back behind Count values. Nothing migrates, because 2.0.0 is unpublished.
 
 **Per-layer counts** stay automatic, within the request budget:
 - total features: `returnCountOnly`
@@ -788,7 +790,7 @@ Delivered early by #13, before the other Phase 5 work.
 | CWS-3 | M | Content-script patterns count as all-sites access | 3, S | Fix (patterns in 3, justification in S) |
 | SEC-4 | M | Web-accessible resources (duplicate of MAN-1) | 3 | Fix |
 | CWS-4 | M | `short_name` over 12 characters (duplicate of MAN-4) | 3 | Fix |
-| SEC-5 | L | Automatic requests to any origin, unbounded | 2, 5 | Fix (same origin and limiter in 2, lazy loading in 5) |
+| SEC-5 | L | Automatic requests to any origin, unbounded | 2, 5 | Fix (same origin and limiter in 2, Load more in 5) |
 | SEC-6 | L | Unencoded query building (duplicate of INJ-5, QRY-2) | 5, 7 | Fix |
 | SEC-7 | L | Export `href` as image source; http basemap default; http spatialreference link | 5, 6 | Fix; basemap default moot (empty default) |
 | SEC-8 | L | Prototype keys in the colour map stall metadata | 5 | Fix |

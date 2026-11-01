@@ -145,14 +145,16 @@ SDT.net = {
   },
 
   /**
-   * A queue for automatic requests. It sends only to URLs in scope, accepts at most max, keeps at
+   * A queue for automatic requests. It sends only to URLs in scope, accepts at most max (extend(n) and grant(n) raise it), keeps at
    * most concurrency in flight, cancels everything on target's pagehide, and stops for good after an
    * HTTP 429 or 503. fetchJson(url, options) takes SDT.net.fetchJson's options and never rejects.
+   * options.onSend, if given, is the limiter's own: it runs once, just before the request is sent,
+   * and never for a request that is refused or drained from the queue.
    */
   createLimiter({ max = SDT.net.BUDGET.max, concurrency = SDT.net.BUDGET.concurrency, scope = null, target = null, fetchJson = (url, options) => SDT.net.fetchJson(url, options) } = {}) {
     const controller = new AbortController();
     const queue = [];
-    const state = { accepted: 0, active: 0, peak: 0, stopped: null };
+    const state = { accepted: 0, active: 0, peak: 0, stopped: null, max };
     const refusal = (type, message, url, extra = {}) => ({ error: { type, message, url: SDT.url.withoutToken(url), ...extra } });
     const halted = (url) => (state.stopped
       ? refusal("stopped", SDT.net.stoppedNote(state.stopped), url, { status: state.stopped })
@@ -185,8 +187,10 @@ SDT.net = {
         const job = queue.shift();
         state.active += 1;
         state.peak = Math.max(state.peak, state.active);
-        const signal = job.options.signal ? AbortSignal.any([job.options.signal, controller.signal]) : controller.signal;
-        Promise.resolve(fetchJson(job.url, { ...job.options, signal })).then(
+        const { onSend, ...options } = job.options;
+        const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+        onSend?.();
+        Promise.resolve(fetchJson(job.url, { ...options, signal })).then(
           (result) => finish(job, result),
           () => finish(job, refusal("network", "The request failed before the server answered.", job.url))
         );
@@ -203,8 +207,8 @@ SDT.net = {
         if (!scope || SDT.auth.scopeOf(url) !== scope) {
           return Promise.resolve(refusal("destination", "Not requested: the link is on another server.", url));
         }
-        if (state.accepted >= max) {
-          return Promise.resolve(refusal("limit", SDT.net.limitNote(max), url, { max }));
+        if (state.accepted >= state.max) {
+          return Promise.resolve(refusal("limit", SDT.net.limitNote(state.max), url, { max: state.max }));
         }
         state.accepted += 1;
         return new Promise((resolve) => {
@@ -212,8 +216,22 @@ SDT.net = {
           pump();
         });
       },
+      /** Raises the accepted cap by n. It does nothing once the limiter has stopped or been aborted. */
+      extend(n) {
+        if (state.stopped || controller.signal.aborted) {
+          return;
+        }
+        state.max += n;
+      },
+      /** Allows n more requests from now: sets the cap to accepted + n. It does nothing once the limiter has stopped or been aborted. */
+      grant(n) {
+        if (state.stopped || controller.signal.aborted) {
+          return;
+        }
+        state.max = state.accepted + n;
+      },
       stats() {
-        return { ...state };
+        return { ...state, aborted: controller.signal.aborted };
       }
     };
   },
@@ -223,5 +241,18 @@ SDT.net = {
     SDT.state ??= {};
     SDT.state.pageLimiter ??= SDT.net.createLimiter({ scope: SDT.auth.scopeOf(location.href), target: window });
     return SDT.state.pageLimiter;
+  },
+
+  /**
+   * Starts a new page view (spec 4.3 counts the budget per page view), for a page restored from the
+   * back/forward cache: the limiter its pagehide cancelled is replaced by a fresh one. A limiter
+   * stopped by an HTTP 429 or 503 stays, because pushback stops automatic work on the page for good.
+   */
+  resetPageLimiter() {
+    if (!SDT.state?.pageLimiter?.stats().stopped) {
+      SDT.state ??= {};
+      SDT.state.pageLimiter = null;
+    }
+    return SDT.net.pageLimiter();
   }
 };

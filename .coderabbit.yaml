@@ -57,8 +57,9 @@ reviews:
         Content scripts never write to chrome.storage (set, remove or clear); lint enforces it.
         They read settings only with await SDT.settings.read(keys), which validates; lint rejects
         chrome.storage.*.get here.
-        The status indicator in status.js has no listeners and pointer-events: none; flag any
-        handler added to it.
+        The status bar in status.js has one listener on the bar, its Load more button's click, plus a
+        pageshow listener on window, both added through SDT.guard; flag any other handler. Requests go through SDT.net.fetchJson or an SDT.status
+        job's fetch (the identifier name job is reserved for it); flag any other fetch call.
     - path: "src/manifest.json"
       instructions: |
         Flag any new permissions or host_permissions and explain why each is needed. The
@@ -69,7 +70,7 @@ reviews:
         .../query, and the GP group only GPServer/*/execute and GPServer/*/submitJob, each with
         or without a trailing slash and a query string. The
         version must match package.json. Every content_scripts group lists the lib files
-        first, in the order dom, guard, auth, url, net, page, settings, theme, icon, and the css
+        first, in the order dom, guard, auth, url, net, status, page, settings, theme, icon, and the css
         list starts with src/lib/sdt.css.
     - path: "src/src/options/**"
       instructions: |

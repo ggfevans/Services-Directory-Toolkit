@@ -1,10 +1,13 @@
 {
   const { loadElement, clear: cleanElement } = SDT.dom;
-  const COLORHASH = {};
+  // A Map, so a key such as "__proto__" or "constructor" is an ordinary key (SEC-8).
+  const COLOURS = new Map();
   let active = null;
   // Set in the load handler: the page's token, and the limiter every automatic request goes through.
   let token = null;
   let limiter = null;
+  // The page's progress job (SDT.status): every request in a row's chain goes through it.
+  let job = null;
 
   // A row that the request budget left out, or that automatic work skipped after server pushback.
   const skippedNote = (error, tag) => loadElement(tag, { "class": "sdt-note" }, tag === "span" ? ` ${error.message}` : error.message);
@@ -63,9 +66,10 @@
    * @returns {string} a CSS hex string for a color.
    */
   const getColor = (item) => {
-    if (COLORHASH[item]) { return COLORHASH[item]; }
-    COLORHASH[item] = "#" + (0x1000000 + (Math.random()) * 0xffffff).toString(16).substr(1, 6);
-    return COLORHASH[item];
+    if (!COLOURS.has(item)) {
+      COLOURS.set(item, "#" + (0x1000000 + (Math.random()) * 0xffffff).toString(16).substr(1, 6));
+    }
+    return COLOURS.get(item);
   };
 
   /**
@@ -80,7 +84,7 @@
    * @returns {string} a CSS hext string for a color that is either lighter or darker than the current color.
    */
   const getCompColor = (item) => {
-    const col = COLORHASH[item],
+    const col = getColor(item),
       mid = [col.substr(1,1),col.substr(3,1),col.substr(5,1)].sort()[1],
       coltbl = "fedcba98".indexOf(mid) > -1 ? "0000000001234567" : "89abcdefffffffff";
     let newcol = "";
@@ -97,7 +101,7 @@
    * @returns {object} an HTML DOM node with the spatial reference data.
    */
   const showSpatialReferenceData = (data) => {
-    let val="&nbsp;No valid spatial reference available &nbsp;",
+    let val="\u00a0No valid spatial reference available \u00a0",
       nodeCSS,
       container = null,
       spatialRefNode,
@@ -196,7 +200,7 @@
         dF.appendChild(li("Service Description", data.serviceDescription));
       }
       if (Object.hasOwn(data, "copyrightText") && data.copyrightText) {
-        dF.appendChild(li("&copy;", data.copyrightText));
+        dF.appendChild(li("\u00a9", data.copyrightText));
       }
       if (Object.hasOwn(data, "layers")) {
         dF.appendChild(li("# Layers", data.layers.length));
@@ -280,68 +284,90 @@
     return null;
   };
 
-  /**
-   * Queries for the feature count and the features with geometries
-   * @function getLayerCount
-   * @param {string} url - map service url
-   * @param {object} data - the JSON data collected from the map service
-   * @param {function} callback - callback function once the query is complete.
-   */
-  const getLayerCount = (url, data, callback) => {
-    const ul = document.createElement("ul");
-    let oid, shape;
+  /** True when a row's request was left out: by the budget, after pushback, or because the page was left. */
+  const isLeftOut = (result) => SDT.net.isSkipped(result) || result?.error?.type === "aborted";
 
-    if (data && Object.hasOwn(data, "objectIdField") && data.objectIdField) {
+  /** The row's list of counts and errors, created once, after the row's other details. */
+  const rowList = (row) => {
+    if (!row.list) {
+      row.list = document.createElement("ul");
+      row.parent.appendChild(row.list);
+    }
+    return row.list;
+  };
+
+  /** Shows a failed request's error on its row: the server's ArcGIS error, or the request's message. */
+  const failure = (result, field) => {
+    const response = SDT.net.legacyResponse(result);
+    return reportError(response?.error ?? { message: result.error.message }, field);
+  };
+
+  /**
+   * Counts a layer's features, and those with shapes, through the page's job. Each count that
+   * finishes goes into row.counted, so Load more sends only the ones still missing.
+   * @function getLayerCount
+   * @param {string} url - the layer's url
+   * @param {object} data - the layer's JSON
+   * @param {object} row - the row: its counts and errors go in row.list
+   * @returns {Promise<"done" | "failed" | "skipped">}
+   */
+  const getLayerCount = async (url, data, row) => {
+    let oid, shape;
+    if (data.objectIdField) {
       oid = data.objectIdField;
     }
-    if (data && Object.hasOwn(data, "fields") && data.fields.length) {
-      data.fields.some((field) => {
-        switch(field.type) {
-          case "esriFieldTypeOID":
-          case "":
-            oid = field.name;
-            break;
-          case "esriFieldTypeGeometry":
-            shape = field.name;
-            break;
-        }
-        return oid && shape;
-      });
+    for (const field of data.fields) {
+      if (field.type === "esriFieldTypeOID" || field.type === "") {
+        oid = field.name;
+      } else if (field.type === "esriFieldTypeGeometry") {
+        shape ??= field.name;
+      }
     }
+    shape ??= data.geometryField?.name;
 
-    const count = async (field, label, fieldType) => {
-      const result = await limiter.fetchJson(`${url}/query`, {
-        params: { where: `not ${field} is null`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
-        token
-      });
-      if (SDT.net.isSkipped(result)) {
-        ul.appendChild(skippedNote(result.error, "li"));
-        return;
-      }
-      const response = SDT.net.legacyResponse(result);
-      if (response === null) {
-        return; // INJ-2: Phase 5 shows an error line here.
-      }
-      if (response.count !== undefined && response.count !== null) {
-        ul.appendChild(li(label, response.count));
-      }
-      if (Object.hasOwn(response, "error") && response.error) {
-        ul.appendChild(reportError(response.error, { "type": fieldType }));
-      }
-    };
-
-    if (oid) {
-      count(oid, "Number of features", "esriFieldTypeOID");
-    } else {
+    const firstRun = !row.list;
+    const ul = rowList(row);
+    if (firstRun && !oid) {
       ul.appendChild(li("No way to query features."));
     }
-    if (shape) {
-      count(shape, "Features with shapes", "esriFieldTypeGeometry");
-    } else if (!/\/featureserver\//i.test(url) && (data.type && data.type !== "Table")) {
+    if (firstRun && !shape && data.type && data.type !== "Table") {
       ul.appendChild(li("No visible shape field available."));
     }
 
-    callback(ul);
+    const counts = [
+      oid && { key: "total", field: oid, label: "Number of features", type: "esriFieldTypeOID" },
+      shape && { key: "shape", field: shape, label: "Features with shapes", type: "esriFieldTypeGeometry" }
+    ].filter((count) => count && !row.counted.has(count.key));
+    const queryUrl = `${url.replace(/\/+$/, "")}/query`;
+    const results = await Promise.all(counts.map((count) => job.fetch(queryUrl, {
+      params: { where: `${count.field} IS NOT NULL`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
+      token
+    })));
+
+    let outcome = "done";
+    counts.forEach((count, i) => {
+      const result = results[i];
+      if (isLeftOut(result)) {
+        row.notes.push(ul.appendChild(skippedNote(result.error, "li")));
+        outcome = "skipped";
+      } else if (result.error) {
+        row.notes.push(ul.appendChild(failure(result, { type: count.type })));
+        if (outcome !== "skipped") {
+          outcome = "failed";
+        }
+      } else if (result.data === null || typeof result.data !== "object" || Array.isArray(result.data)) {
+        row.notes.push(ul.appendChild(failure({ error: { message: "The server's answer was not a count." } }, { type: count.type })));
+        if (outcome !== "skipped") {
+          outcome = "failed";
+        }
+      } else {
+        row.counted.add(count.key);
+        if (result.data.count !== undefined && result.data.count !== null) {
+          ul.appendChild(li(count.label, result.data.count));
+        }
+      }
+    });
+    return outcome;
   };
 
   /**
@@ -351,164 +377,6 @@
    */
   const toggleCollapse = (div) => {
     div.classList.toggle("sdt-collapsed");
-  };
-
-  /**
-   * Gets the time difference between the current time and the time presented
-   * @function responseTime
-   * @param {number} timeValue - milliseconds since January 1, 1970 UTC 
-   * @returns {string} - text display of seconds or milliseconds between now and time submitted.
-   */
-  const responseTime = (timeValue) => {
-    const timeDiff = Date.now() - timeValue;
-    return "" + (timeDiff > 1000 ? timeDiff / 1000 : timeDiff + "m") + "s";
-  };
-
-  /**
-   * gets a <b>old element previous to the current element
-   * @function getPreviousLabel
-   * @param {object} node - HTML DOM node
-   * @returns {string} - content fo the <b> tag prior to the node
-   */
-  const getPreviousLabel = (node) => {
-    let h = node; 
-    while (h.previousSibling) { 
-      h = h.previousSibling; 
-      if (h.tagName === "B") {
-        break; 
-      } 
-    } 
-    return h.innerHTML;
-  };
-
-  /**
-   * Finds where the fields are listed on the current web page.
-   * @function getFieldList
-   * returns {object[]} - list of list items containing field data.
-   */
-  const getFieldList = () => {
-    const uls = document.getElementsByTagName("ul"),
-      labels = [].map.call(uls, getPreviousLabel);
-    for (let i = uls.length - 1; i > -1; i--) {
-      if (/^Fields:/.test(labels[i])) {
-        return [].slice.call(uls[i].children, 0);
-      }
-    }
-    return null;
-  };
-
-  /**
-   * Goes through each field in the list, requesting how many non-null values there are for that field.
-   * @function checkForNulls
-   * @param {string} url - map service url to query
-   * @param {object[]} fields - list of JSON field data on that map service
-   * @param {object[]} nodes - HTML DOM nodes corresponding to the fields in the other list.
-   */
-  const checkForNulls = async (url, fields, nodes) => {
-    if (!fields.length) {
-      notifyLoading(false, LOADING_NULLS_CSS);
-      return;
-    }
-    const field = fields.shift(),
-      node = nodes.shift(),
-      resultList = document.createElement("ul");
-    node.appendChild(resultList);
-    const countRow = async (where, label) => {
-      const timeCheck = Date.now();
-      const result = await limiter.fetchJson(`${url}/query`, { params: { where, returnGeometry: "false", returnCountOnly: "true", f: "json" }, token });
-      if (SDT.net.isSkipped(result)) {
-        resultList.appendChild(skippedNote(result.error, "li"));
-        return "skipped";
-      }
-      const response = SDT.net.legacyResponse(result);
-      if (response === null) {
-        return "failed"; // INJ-2: today's chain stops here; Phase 5 carries on with an error line.
-      }
-      const hasError = Object.hasOwn(response, "error") && !!response.error;
-      let item = document.createElement("li");
-      if (response.count !== undefined && response.count !== null) {
-        item.appendChild(loadElement("b", {}, label));
-        item.appendChild(document.createTextNode(` ${response.count} `));
-        if (response.count === 0) {
-          item.appendChild(loadElement("b", {"style": "color:#f00;"}, "!!! "));
-        }
-        item.appendChild(loadElement("i", {}, `Response time: ${responseTime(timeCheck)}`));
-      } else if (hasError) {
-        item = reportError(response.error, label === "Features with values:" ? field : undefined);
-      }
-      resultList.appendChild(item);
-      return hasError ? "error" : "counted";
-    };
-    const first = await countRow(`not ${field.name} is null`, "Features with values:");
-    if (first === "failed") {
-      return;
-    }
-    if (first === "counted" && field.type === "esriFieldTypeString") {
-      if (await countRow(`not ${field.name} is null and ${field.name} <> ''`, "Features without empty values:") === "failed") {
-        return;
-      }
-    }
-    checkForNulls(url, fields, nodes);
-  };
-
-  /**
-   * Queries domain values for each 
-   * @function checkDomains
-   * @param {string} url - map service url to query
-   * @param {object[]} fields - a list of field JSON provided by map service
-   * @param {object[]} nodes - list of HTML DOM nodes corresponding to the fields list
-   * @param {object} [tr] - possible list to attach domain search results to.
-   */
-  const checkDomains = async (url, fields, nodes, tr) => {
-    if (!fields.length) {
-      notifyLoading(false, LOADING_DOMAINS_CSS);
-      return;
-    }
-    if (!tr) {
-      const node = nodes.shift();
-      tr = document.createElement("ul");
-      node.appendChild(tr);
-    }
-    if (fields[0].length) {
-      const item = fields[0].shift(),
-        value = item.type === "esriFieldTypeString" ? "'" + item.code + "'" : item.code;
-      const result = await limiter.fetchJson(`${url}/query`, {
-        params: { where: `${item.field} = ${value}`, returnGeometry: "false", returnCountOnly: "true", f: "json" },
-        token
-      });
-      if (SDT.net.isSkipped(result)) {
-        tr.appendChild(skippedNote(result.error, "li"));
-      } else {
-        const response = SDT.net.legacyResponse(result);
-        if (response === null) {
-          return; // INJ-2: today's chain stops here; Phase 5 carries on with an error line.
-        }
-        let node = document.createElement("li");
-        const hasError = Object.hasOwn(response, "error") && !!response.error;
-        if (response.count !== undefined && response.count !== null) {
-          node.appendChild(loadElement("b", {}, `${item.name}: `));
-          node.appendChild(document.createTextNode(` ${response.count} `));
-          if (response.count === 0) {
-            node.appendChild(loadElement("b", {"style": "color:#f00;"}, "!!! "));
-          }
-        } else if (hasError) {
-          node = reportError(response.error);
-        }
-        tr.appendChild(node);
-      }
-      if (fields[0].length) {
-        checkDomains(url, fields, nodes, tr);
-      } else {
-        fields.shift();
-        if (fields.length) {
-          checkDomains(url, fields, nodes);
-        } else {
-          notifyLoading(false, LOADING_DOMAINS_CSS);
-        }
-      }
-    } else {
-      notifyLoading(false, LOADING_DOMAINS_CSS);
-    }
   };
 
   /**
@@ -807,70 +675,10 @@
   };
 
 
-  // Field and coded-value counts still run on every layer page. Phase 5 (#45) replaces them with a
-  // Count values button, so the settings schema has no keys for them (design review decision 2).
-  const COUNT_FIELD_VALUES = true;
-  const COUNT_DOMAIN_VALUES = true;
-
   const LOADING_METADATA_CSS = "sdt-loading-metadata";
-  const LOADING_NULLS_CSS = "sdt-loading-nulls";
-  const LOADING_DOMAINS_CSS = "sdt-loading-domains";
   const LOADING_SOMETHING_CSS = "sdt-loading-something";
   const notifyLoading = (value, cssClass) => {
-    const bodyClasses = (document.body.className || "").split(" ");
-    if (value) {
-      // add loading css to page
-      bodyClasses.push(cssClass);
-    } else {
-      let index = bodyClasses.indexOf(cssClass);
-      if (index > -1) {
-        // remove the loading CSS
-        bodyClasses.splice(index, 1);
-      }
-    }
-    document.body.className = bodyClasses.join(" ");
-  };
-
-  /** Counts values for each field and coded value of the layer at url. */
-  const countFields = async (url) => {
-    const results = SDT.net.legacyResponse(await limiter.fetchJson(url, { params: { f: "json" }, token }));
-    // The answer can arrive after an update has cut this script off.
-    if (!SDT.guard.alive()) {
-      return;
-    }
-    if (results && results.fields && results.fields.length > 0) {
-      const fieldHTML = getFieldList();
-      const hasDomainTest = (field) => !!field && field.domain && field.domain.codedValues;
-
-      const domainFields = [];
-      let domainFieldHTML;
-      if (COUNT_FIELD_VALUES) {
-        notifyLoading(true, LOADING_NULLS_CSS);
-        checkForNulls(url, results.fields.slice(0), fieldHTML.slice(0));
-      }
-      if (COUNT_DOMAIN_VALUES && results.fields.some(hasDomainTest)) {
-
-        domainFieldHTML = fieldHTML.slice(0);
-
-        results.fields.forEach((field, i) => {
-          if (hasDomainTest(field)) {
-            domainFields.push(field.domain.codedValues.map((item) => {
-              // future reference: check if Object.assign supported by Chrome
-              item.field = field.name;
-              item.type = field.type;
-              return item;
-            }));
-          } else {
-            domainFieldHTML[i] = null;
-          }
-        });
-
-        // filter out nulled out HTML nodes.
-        domainFieldHTML = domainFieldHTML.filter((item) => !!item );
-        notifyLoading(true, LOADING_DOMAINS_CSS);
-        checkDomains(url, domainFields, domainFieldHTML, null);
-      }
-    }
+    document.body.classList.toggle(cssClass, value);
   };
 
   SDT.guard.onLoad(async () => {
@@ -897,46 +705,90 @@
         && SDT.auth.scopeOf(item.url) === pageScope
         && /(map|feature|image|mobile)server(\/\d*\/?)?$/i.test(item.url));
 
-    /** Collects and shows each linked service's details, through the limiter. */
-    const collectMetaData = async (items, canCountFeatures) => {
-      await Promise.all(items.map(async (item) => {
-        const parent = tags[item.i].parentNode;
-        const result = await limiter.fetchJson(item.url, { params: { f: "json" }, token });
-        if (SDT.net.isSkipped(result)) {
-          parent.appendChild(skippedNote(result.error, "span"));
-          return;
+    // One row per link. A row keeps what it has loaded, so Load more sends only what is missing.
+    const rows = urls.map((item) => ({
+      anchor: tags[item.i],
+      parent: tags[item.i].parentNode,
+      url: item.url,
+      data: null,
+      counted: new Set(),
+      list: null,
+      notes: [],
+      outcome: null
+    }));
+    const canCountFeatures = settings.autoFeatureCounts;
+
+    /** Sends the requests the row is missing, and reports exactly one outcome for it to the job. */
+    const loadRow = async (row) => {
+      let outcome = "failed";
+      try {
+        // A Load more run replaces the notes and errors from the last one.
+        for (const note of row.notes.splice(0)) {
+          note.remove();
         }
-        if (result.error?.type === "aborted") {
-          return;
+        if (!row.data) {
+          const result = await job.fetch(row.url, { params: { f: "json" }, token });
+          if (isLeftOut(result)) {
+            row.notes.push(row.parent.appendChild(skippedNote(result.error, "span")));
+            outcome = "skipped";
+            return;
+          }
+          if (result.error) {
+            row.notes.push(rowList(row).appendChild(failure(result)));
+            return;
+          }
+          if (result.data === null || typeof result.data !== "object") {
+            row.notes.push(rowList(row).appendChild(failure({ error: { message: "The server's answer was not a service description." } })));
+            return;
+          }
+          row.data = result.data;
+          const spatialReferenceNode = showSpatialReferenceData(row.data),
+            metadata = showMetadata(row.data);
+          if (spatialReferenceNode !== null) {
+            row.parent.insertBefore(spatialReferenceNode, row.list);
+          }
+          if (metadata !== null) {
+            row.parent.insertBefore(metadata, row.list);
+          }
         }
-        const response = SDT.net.legacyResponse(result) ?? { error: { message: result.error.message } };
-        const spatialReferenceNode = showSpatialReferenceData(response),
-          metadata = showMetadata(response);
-        if (spatialReferenceNode !== null) {
-          parent.appendChild(spatialReferenceNode);
-        }
-        if (metadata !== null) {
-          parent.appendChild(metadata);
-        }
-        // if the service has fields, get the layer count
-        if (response.fields && response.fields.length && canCountFeatures) {
-          getLayerCount(item.url, response, (countList) => {
-            parent.appendChild(countList);
-          });
-        }
-      }));
-      notifyLoading(false, LOADING_METADATA_CSS);
+        // Only a layer's JSON has fields, so only layer rows get counts.
+        outcome = canCountFeatures && row.data?.fields?.length
+          ? await getLayerCount(row.url, row.data, row)
+          : "done";
+      } catch (error) {
+        // A row that cannot be drawn fails alone, with an error line, and the others carry on.
+        console.debug("SD Toolkit: could not show a row", error);
+        row.notes.push(rowList(row).appendChild(failure({ error: { message: "Could not show this row's details." } })));
+        outcome = "failed";
+      } finally {
+        row.outcome = outcome;
+        job[outcome]();
+      }
     };
 
-    // Field and domain counts on layer pages and ImageServer pages. These requests go to the limiter
-    // before the metadata requests, as they did when the settings arrived in a storage callback.
-    if (type === "layer" || (type === "service" && SDT.page.serviceType(location) === "ImageServer")) {
-      countFields(url);
-    }
-
-    if (urls.length && settings.autoMetadata) {
+    /** Loads the rows, with the busy class on <body> until every one has settled. */
+    const collectMetaData = async (batch) => {
       notifyLoading(true, LOADING_METADATA_CSS);
-      collectMetaData(urls, settings.autoFeatureCounts);
+      try {
+        const results = await Promise.allSettled(batch.map(loadRow));
+        const thrown = results.find((result) => result.status === "rejected");
+        if (thrown) {
+          throw thrown.reason;
+        }
+      } finally {
+        notifyLoading(false, LOADING_METADATA_CSS);
+      }
+    };
+
+    if (rows.length && settings.autoMetadata) {
+      job = SDT.status.job(type === "service" ? "layers" : "services", rows.length);
+      // Load more re-runs each row the budget or pushback left out.
+      job.onLoadMore(() => {
+        const skipped = rows.filter((row) => row.outcome === "skipped");
+        job.retrying(skipped.length);
+        return collectMetaData(skipped);
+      });
+      collectMetaData(rows).catch(SDT.guard.wrap((error) => console.debug("SD Toolkit: loading details stopped", error)));
     }
 
     if (type === "find") {

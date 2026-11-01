@@ -1,6 +1,6 @@
 // What the extension does today on each kind of page. These tests pass on the current code; a
 // later phase that changes a behaviour on purpose updates the matching test.
-import { test, expect, FAKE_ORIGIN, REST_ROOT } from "./fixtures.js";
+import { test, expect, FAKE_ORIGIN, REST_ROOT, toolkitStarted } from "./fixtures.js";
 
 // Labels the content scripts write in <b> elements, such as "Number of features: ".
 const label = (page, text) => page.locator("b", { hasText: new RegExp(`^${text}`) });
@@ -9,18 +9,12 @@ const label = (page, text) => page.locator("b", { hasText: new RegExp(`^${text}`
 // "Number of features: N" and "Features with shapes: N" items inside it.
 const layerItem = (page, name) => page.locator("li", { has: page.getByRole("link", { name, exact: true }) });
 
-// The list item for a field on a layer page: the children of the list that follows the "Fields:" label.
-// The extension nests the count items inside it.
-const field = (page, name) => page
-  .locator("xpath=//b[starts-with(normalize-space(.), 'Fields:')]/following-sibling::ul[1]/li")
-  .filter({ hasText: new RegExp(`^\\s*${name}\\b`) });
-
-// A nested list item whose text matches, such as "Features with values: 3 Response time: 12ms".
+// A nested list item whose text matches, such as "Number of features: 3".
 const item = (parent, pattern) => parent.locator("li", { hasText: pattern });
 
-test("the services root shows the status indicator, spatial reference badges and service details", async ({ page }) => {
+test("the services root shows the status bar, spatial reference badges and service details", async ({ page }) => {
   await page.goto(REST_ROOT);
-  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toBeVisible();
+  await expect(page.locator(".sdt-statusbar")).toBeVisible();
   await expect(page.getByRole("link", { name: "3857" })).toHaveCount(2);
   await expect(page.getByRole("link", { name: "4326" })).toHaveCount(1);
   await expect(page.locator(".sdt-datablock")).toHaveCount(3);
@@ -31,6 +25,13 @@ test("the services root shows the status indicator, spatial reference badges and
   ]) {
     await expect(page.locator(".sdt-datablock", { hasText: `Service Description: ${description}` })).toHaveCount(1);
   }
+});
+
+// Part 2 (#16) finishes INJ-11, which also shows server HTML as text. This case covers the entity literal.
+test("INJ-11: service details label the copyright text without a literal &copy;", async ({ page }) => {
+  await page.goto(REST_ROOT);
+  await expect(page.getByText("Example County GIS").first()).toBeAttached();
+  await expect(page.getByText("&copy;")).toHaveCount(0);
 });
 
 test("a MapServer page shows details and feature counts for each layer", async ({ page }) => {
@@ -47,22 +48,40 @@ test("a MapServer page shows details and feature counts for each layer", async (
   }
 });
 
-test("a layer page counts values for every field and every coded value", async ({ page }) => {
+// A FeatureServer layer names its shape field in geometryField, not in fields, so INJ-15's old
+// FeatureServer exclusion left these rows without the shape count.
+test("a FeatureServer layer row shows \"Features with shapes\" (INJ-15)", async ({ page }) => {
+  await page.goto(`${REST_ROOT}/Parcels/FeatureServer`);
+  await expect(page.locator(".sdt-datablock")).toHaveCount(2);
+  const counts = { Parcels: { features: 3, shapes: 2 }, Addresses: { features: 2, shapes: 2 } };
+  for (const [name, { features, shapes }] of Object.entries(counts)) {
+    await expect(item(layerItem(page, name), new RegExp(`^Number of features: ${features}$`))).toHaveCount(1);
+    await expect(item(layerItem(page, name), new RegExp(`^Features with shapes: ${shapes}$`))).toHaveCount(1);
+  }
+  await expect(page.getByText("No visible shape field available.")).toHaveCount(0);
+});
+
+test("a layer page sends no automatic field or domain count queries", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}/Parcels/MapServer/0`);
-  await expect(label(page, "Features with values:")).toHaveCount(6);
-  await expect(label(page, "Features without empty values:")).toHaveCount(3);
-  await expect(label(page, "Residential:")).toHaveCount(1);
-  await expect(label(page, "Commercial:")).toHaveCount(1);
-  const withValues = { OBJECTID: 3, SHAPE: 2, PARCEL_ID: 3, OWNER_NAME: 2, LAND_USE: 3, ACRES: 2 };
-  for (const [name, count] of Object.entries(withValues)) {
-    await expect(item(field(page, name), new RegExp(`^Features with values:\\s+${count}\\s`))).toHaveCount(1);
-  }
-  const withoutEmpty = { PARCEL_ID: 3, OWNER_NAME: 1, LAND_USE: 3 };
-  for (const [name, count] of Object.entries(withoutEmpty)) {
-    await expect(item(field(page, name), new RegExp(`^Features without empty values:\\s+${count}\\s`))).toHaveCount(1);
-  }
-  await expect(item(field(page, "LAND_USE"), /^Residential:\s+2\b/)).toHaveCount(1);
-  await expect(item(field(page, "LAND_USE"), /^Commercial:\s+1\b/)).toHaveCount(1);
+  await expect(toolkitStarted(page)).toBeAttached();
+  await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
+  await page.waitForTimeout(500);
+  expect(fakeServer.calls.filter((call) => /\/query$/.test(call.path) && (call.query.where || call.body.where))).toEqual([]);
+  await expect(label(page, "Features with values:")).toHaveCount(0);
+});
+
+// getColor kept colours in a plain object, so a spatial reference named like a prototype property
+// returned Object.prototype and threw, which left the other rows without their details.
+test("a service whose spatial reference wkid is \"__proto__\" still gets its badge (SEC-8)", async ({ page, fakeServer }) => {
+  fakeServer.override(/^\/arcgis\/rest\/services\/Parcels\/MapServer\?f=json$/, () => ({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ serviceDescription: "Odd service.", spatialReference: { wkid: "__proto__" } })
+  }));
+  await page.goto(REST_ROOT);
+  await expect(page.getByRole("link", { name: "__proto__" })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "3857" })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "4326" })).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => document.body.className)).not.toMatch(/sdt-loading-/);
 });
 
@@ -109,12 +128,13 @@ const extensionRequests = (fakeServer, page) => {
 };
 
 for (const path of ["?f=json", "/Parcels/MapServer?f=pjson", "/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task?f=pjson"]) {
-  test(`a JSON view gets no requests, no indicator and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
+  test(`a JSON view gets no requests, no status bar and no spinner: ${path}`, async ({ page, fakeServer, actionEnabled }) => {
     await page.goto(`${REST_ROOT}${path}`);
     // Nothing on a JSON view signals that the scripts are done, so give them a moment.
     await page.waitForTimeout(1000);
     expect(extensionRequests(fakeServer, page)).toEqual([]);
-    await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toHaveCount(0);
+    await expect(toolkitStarted(page)).toHaveCount(0);
+    await expect(page.locator(".sdt-statusbar")).toHaveCount(0);
     expect(await page.evaluate(() => document.body.className)).not.toMatch(/sdt-/);
     expect(await actionEnabled(page)).toBe(false);
   });
@@ -124,7 +144,8 @@ test("a page whose REST path is only in its query string gets nothing (TOK-6)", 
   // The content-script patterns match this URL, because they also test the query string.
   await page.goto(`${FAKE_ORIGIN}/other/page?x=/arcgis/rest/services/`);
   await page.waitForTimeout(1000);
-  await expect(page.getByRole("img", { name: "Services Directory Toolkit" })).toHaveCount(0);
+  await expect(toolkitStarted(page)).toHaveCount(0);
+  await expect(page.locator(".sdt-statusbar")).toHaveCount(0);
   expect(await actionEnabled(page)).toBe(false);
   expect(extensionRequests(fakeServer)).toEqual([]);
 });

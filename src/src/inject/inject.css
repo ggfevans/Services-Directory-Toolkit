@@ -67,7 +67,7 @@
     padding: 0.4em 0.8em;
     margin:  0.2em 0.4em 0.2em 0;
     background-color: #336;
-    color: White;
+    color: white;
     font-weight: bold;
     z-index: inherit;
 }
@@ -105,63 +105,8 @@ textarea.sdt-hidden {
     margin-top: -1px;
 }
 
-/* The status indicator (status.js). It never takes clicks, so the page under it stays usable. */
-.sdt-indicator {
-    position: fixed;
-    right: 16px;
-    bottom: 16px;
-    z-index: 2147483000;
-    width: 24px;
-    height: 24px;
-    margin: 0;
-    padding: 0;
-    line-height: 0;
-    pointer-events: none;
-}
-
-.sdt-indicator__ring {
-    display: block;
-    width: 24px;
-    height: 24px;
-}
-
-/* An opaque disc, so the ring keeps its contrast on any page. */
-.sdt-indicator__disc {
-    fill: #ffffff;
-    stroke: #7b8786;
-    stroke-width: 1;
-}
-
-.sdt-indicator__track {
-    fill: none;
-    stroke: #d3dad9;
-}
-
-/* A quarter of the ring: the circumference is about 44. */
-.sdt-indicator__arc {
-    fill: none;
-    stroke: #0d6b66;
-    stroke-dasharray: 11 33;
-}
-
-/* The sdt-spin keyframes are in src/src/lib/sdt.css, which loads first. */
-.sdt-indicator--busy .sdt-indicator__ring {
-    animation: sdt-spin 1s linear infinite;
-}
-
-/* No spin under reduced motion: busy shows two opposite quarters instead. */
-@media (prefers-reduced-motion: reduce) {
-    .sdt-indicator--busy .sdt-indicator__ring {
-        animation: none;
-    }
-
-    .sdt-indicator--busy .sdt-indicator__arc {
-        stroke-dasharray: 11 11;
-    }
-}
-
 .sdt-map-image-panel {
-    position:fixed;
+    position: fixed;
     top:0;
     right:0;
     border:1px solid #bbb;
@@ -171,8 +116,6 @@ textarea.sdt-hidden {
     width: 20%;
     height: 20%;
     overflow: visible;
-    display: table-cell;
-    vertical-align: bottom;
     text-align: center;
 }
 
@@ -188,5 +131,5 @@ textarea.sdt-hidden {
 
 .sdt-map-image-panel > p {
     text-align: center;
-    size: 0.8em;
+    font-size: 0.8em;
 }

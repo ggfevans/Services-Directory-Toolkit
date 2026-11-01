@@ -69,6 +69,8 @@ test("count queries evaluate the where clauses the extension sends", () => {
   assert.equal(count("1=1"), 3);
   assert.equal(count("not OBJECTID is null"), 3);
   assert.equal(count("not SHAPE is null"), 2);
+  assert.equal(count("OBJECTID IS NOT NULL"), 3);
+  assert.equal(count("SHAPE IS NOT NULL"), 2);
   assert.equal(count("not OWNER_NAME is null"), 2);
   assert.equal(count("not OWNER_NAME is null and OWNER_NAME <>''"), 1);
   assert.equal(count("LAND_USE = 'R'"), 2);

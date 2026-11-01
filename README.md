@@ -16,7 +16,7 @@ Sometimes you need more than one page shows. Collecting data from several map se
 - View metadata on multiple services without visiting each one.
 - Count the features in each map layer.
 - Color-code map service spatial references for easy comparison.
-- Count results for each field and domain in a map service layer.
+- See what the extension is doing in a status bar under the page heading, with a Load more button when the page has more services or layers than the extension requests on its own.
 - Build SQL queries with a click.
 - Simplify map export service testing.
 - Shorten query page URLs that carry long lists of unneeded parameters.
@@ -29,6 +29,8 @@ Services Directory Toolkit supports ArcGIS Online and every ArcGIS Enterprise an
 Unsupported means the extension may still work on a retired version, but a bug that happens only there won't be fixed.
 
 The extension needs Chrome 120 or later, or another browser based on Chromium 120 or later, such as Microsoft Edge.
+
+Known limitation: the map image preview panel is fixed to the window and can cover the Load more button while you hover a link with the mouse. Move the pointer away, or use the keyboard, which isn't affected. The panel gets a fix in Phase 6 (IMG-3).
 
 ## Install
 
@@ -51,12 +53,13 @@ Ken Doman wrote Map Services Enhanced between 2016 and 2020 to bundle the bookma
 Changes made on top of Ken's last commit:
 
 - Moved to Manifest V3. The toolbar button now turns on only on ArcGIS REST pages.
-- Replaced the gear and its in-page settings form with a small status indicator that takes no clicks. It spins while the extension loads data and tells screen readers when it has finished. Settings are on the options page, which the popup's new Options link opens.
+- Replaced the gear and its in-page settings form with a status bar under the page heading. It appears only when the extension has loaded or is loading details, says how many requests it made, offers Load more when it stops at 50 automatic requests, and tells you if the server asked for fewer requests. Screen readers hear the same messages. Settings are on the options page, which the popup's new Options link opens.
 - Defined every setting once, with its default and allowed values, and checked what is stored when it is read. The options page no longer breaks on a value saved by the old in-page form, and refuses a blank or out-of-range preview size instead of saving it.
 - Made the options page save only the settings you changed, check Chrome sync's size limits before saving, and say "Saved" only once the save has worked, or why it didn't. Errors appear under the fields they belong to.
 - Kept the print task's saved web map on this computer instead of syncing it, and started it empty.
 - Labelled every control on the options page, grouped the Select All choices, and added a note that changes apply when you reload a page.
 - Ran on the services root when its URL has a query string, such as `?f=html` or `?token=`, and on geoprocessing `submitJob` pages. The Query Helper now appears only on query pages.
+- Removed the automatic field and domain counts until a Count values button returns them on request.
 - Turned the toolbar button on only from the top frame of the page in the tab, not from frames, prerendered pages or pages in the back/forward cache.
 - Removed the extension's web-accessible files, which let any site detect that it was installed.
 - Replaced the Grunt build, which no longer installs, with npm scripts and ESLint 10.
