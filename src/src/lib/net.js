@@ -145,11 +145,13 @@ SDT.net = {
   },
 
   /**
-   * A queue for automatic requests. It sends only to URLs in scope, accepts at most max (extend(n) and grant(n) raise it), keeps at
+   * A queue for automatic requests. It sends only to URLs in scope, accepts at most max (grant(n) raises it), keeps at
    * most concurrency in flight, cancels everything on target's pagehide, and stops for good after an
    * HTTP 429 or 503. fetchJson(url, options) takes SDT.net.fetchJson's options and never rejects.
    * options.onSend, if given, is the limiter's own: it runs once, just before the request is sent,
-   * and never for a request that is refused or drained from the queue.
+   * and never for a request that is refused or drained from the queue. options.userAction, also the
+   * limiter's own, skips only the cap check (a click's request); it still counts in accepted, stays
+   * in scope, waits for a free slot, and is refused after pushback or pagehide.
    */
   createLimiter({ max = SDT.net.BUDGET.max, concurrency = SDT.net.BUDGET.concurrency, scope = null, target = null, fetchJson = (url, options) => SDT.net.fetchJson(url, options) } = {}) {
     const controller = new AbortController();
@@ -188,6 +190,7 @@ SDT.net = {
         state.active += 1;
         state.peak = Math.max(state.peak, state.active);
         const { onSend, ...options } = job.options;
+        delete options.userAction;
         const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
         onSend?.();
         Promise.resolve(fetchJson(job.url, { ...options, signal })).then(
@@ -207,7 +210,7 @@ SDT.net = {
         if (!scope || SDT.auth.scopeOf(url) !== scope) {
           return Promise.resolve(refusal("destination", "Not requested: the link is on another server.", url));
         }
-        if (state.accepted >= state.max) {
+        if (!options.userAction && state.accepted >= state.max) {
           return Promise.resolve(refusal("limit", SDT.net.limitNote(state.max), url, { max: state.max }));
         }
         state.accepted += 1;
@@ -216,19 +219,12 @@ SDT.net = {
           pump();
         });
       },
-      /** Raises the accepted cap by n. It does nothing once the limiter has stopped or been aborted. */
-      extend(n) {
-        if (state.stopped || controller.signal.aborted) {
-          return;
-        }
-        state.max += n;
-      },
-      /** Allows n more requests from now: sets the cap to accepted + n. It does nothing once the limiter has stopped or been aborted. */
+      /** Allows n more requests from now: raises the cap to accepted + n, never lowering it. It does nothing once the limiter has stopped or been aborted. */
       grant(n) {
         if (state.stopped || controller.signal.aborted) {
           return;
         }
-        state.max = state.accepted + n;
+        state.max = Math.max(state.max, state.accepted + n);
       },
       stats() {
         return { ...state, aborted: controller.signal.aborted };
