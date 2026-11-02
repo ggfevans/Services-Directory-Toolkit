@@ -349,6 +349,11 @@
   background: var(--sdt-accent);
 }
 
+.sdt-button--quiet[aria-disabled="true"]:hover {
+  background: transparent;
+  text-decoration: none;
+}
+
 /* ---- Badge ---- */
 .sdt-badge {
   --b-bg: var(--sdt-bg-subtle);
@@ -613,6 +618,10 @@ a.sdt-badge:hover {
 
 .sdt-details__group:first-child {
   margin-top: 0;
+}
+
+.sdt-details__sentence {
+  margin: 0;
 }
 
 /* ---- Compact definition list ---- */

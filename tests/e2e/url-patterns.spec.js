@@ -52,7 +52,7 @@ for (const { title, url, sd, helper } of CASES) {
 
 test("the services root opened with ?token= sends the token in each metadata request's body (TR-22)", async ({ page, fakeServer }) => {
   await page.goto(`${REST_ROOT}?token=${TOKEN}`);
-  await expect(page.locator(".sdt-datablock")).toHaveCount(3);
+  await expect(page.locator("details.sdt-details")).toHaveCount(3);
   const metadata = fakeServer.calls.filter((call) => /\/(MapServer|FeatureServer|ImageServer)$/.test(call.path));
   expect(metadata).toHaveLength(3);
   for (const call of metadata) {

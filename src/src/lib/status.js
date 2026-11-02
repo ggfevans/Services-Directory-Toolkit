@@ -68,6 +68,11 @@ SDT.status = {
         state.skipped = Math.max(0, state.skipped - n);
         SDT.status.notify();
       },
+      /** Moves n rows from failed back to pending, before a Retry runs them again. */
+      retryingFailed(n) {
+        state.failed = Math.max(0, state.failed - n);
+        SDT.status.notify();
+      },
       onLoadMore(fn) {
         state.callback = fn;
         SDT.status.notify();
@@ -75,6 +80,15 @@ SDT.status = {
     };
     SDT.status.notify();
     return state.job;
+  },
+
+  /** True when a job exists and the page limiter is neither stopped nor aborted, so a Retry can send. */
+  canRetry() {
+    if (!SDT.status.state().job) {
+      return false;
+    }
+    const stats = SDT.net.pageLimiter().stats();
+    return !stats.stopped && stats.aborted !== true;
   },
 
   snapshot() {

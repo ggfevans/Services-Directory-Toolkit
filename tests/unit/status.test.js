@@ -191,6 +191,44 @@ test("retrying moves rows from skipped back to pending", () => {
   assert.equal(snap().busy, true);
 });
 
+test("retryingFailed moves a failed row back to pending, so busy is true and failed goes down", () => {
+  const { job, snap } = withJob("layers", 2);
+  job.done();
+  job.failed();
+  assert.equal(snap().busy, false);
+  job.retryingFailed(1);
+  assert.equal(snap().failed, 0);
+  assert.equal(snap().busy, true);
+  job.retryingFailed(5);
+  assert.equal(snap().failed, 0);
+});
+
+test("canRetry is false with no job, after a 429, and after pagehide; true otherwise", async () => {
+  const none = setup();
+  assert.equal(none.status.canRetry(), false);
+  const { SDT } = withJob("services", 2);
+  assert.equal(SDT.status.canRetry(), true);
+  const stopped = setup({ answer: () => ({ error: { type: "http", message: "x", url: at(0), status: 429 } }) });
+  const stoppedJob = stopped.status.job("services", 1);
+  assert.equal(stopped.status.canRetry(), true);
+  await stoppedJob.fetch(at(0));
+  assert.equal(stopped.status.canRetry(), false);
+  const { SDT: left, hide } = leftPage();
+  assert.equal(left.status.canRetry(), true);
+  hide();
+  assert.equal(left.status.canRetry(), false);
+});
+
+test("job.fetch with userAction is sent past the cap and counts in requests", async () => {
+  const SDT = setup({ max: 1 });
+  const job = SDT.status.job("services", 3);
+  await job.fetch(at(0));
+  assert.equal((await job.fetch(at(1))).error.type, "limit");
+  const result = await job.fetch(at(2), { userAction: true });
+  assert.deepEqual(plain(result), { data: {} });
+  assert.equal(plain(SDT.status.snapshot()).requests, 2);
+});
+
 test("subscribe is called after each report, and unsubscribe stops it", () => {
   const { SDT, job } = withJob("services", 3);
   const seen = [];

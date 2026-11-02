@@ -114,12 +114,10 @@ These are part of each phase's definition of done.
 Automatic requests are those the extension sends without a user action. They are limited as follows:
 
 - **Total:** at most 50 automatic requests per page view. Past that, the remaining rows show a "Load more" control.
-  Load more and the status bar now exist (Phase 5 part 1), but until Phase 5 part 2 replaces it each row left out still shows the text "Not loaded: request limit reached (50)" (owner's decision on issue #44, 2026-10-20).
 - **Concurrency:** at most 4 requests in flight at once.
 - **Destination:** only the page's own origin and its `/rest/services` root. Links to other servers get no automatic requests.
 - **Cancellation:** pending requests are cancelled on `pagehide`.
 - **Server pushback:** an HTTP 429 or 503 stops automatic work on that page and shows a notice.
-  Until Phase 5 part 2 replaces it, each row skipped after the pushback shows "Not loaded: the server answered HTTP 503, so automatic requests stopped", with the status the server sent (owner's decision on issue #44, 2026-10-20).
 - **Token:** a `token` from the page URL goes only to the page's origin and REST root. It travels in a form POST body, and a request that carries it never follows a redirect.
 
 ### 4.4 Security rules
@@ -455,7 +453,7 @@ The classifier therefore takes the type from the pathname and `document.contentT
 
 ### Phase 5: Service and layer pages (`inject.js`, excluding the Find Helper)
 
-Phase 5 ships as three pull requests: part 1 is the request chains and the status bar (#45, #14); part 2 is #15 and #16; part 3 is the Count values button (#17).
+Phase 5 ships as three pull requests: part 1 is the request chains and the status bar (#45, #14); part 2 is #15 and #16, and moves the per-layer counts into the rows; part 3 is the Count values button (#17).
 
 **Failure handling.** Count and detail chains use `fetchJson` and the limiter. A failed item shows an error line and the chain continues. Busy states clear in `finally`.
 
