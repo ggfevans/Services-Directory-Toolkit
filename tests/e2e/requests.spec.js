@@ -173,6 +173,12 @@ const bulkListing = (fakeServer, count) => {
   fakeServer.override(ROOT_PAGE, () => html(folderPage({ folder: "", folders: [], services, version: catalog.currentVersion })));
   return services;
 };
+/** Like bulkRoot, for a page opened with ?token=: the listing's URL has a query, and the JSON requests are POSTs with none. */
+const tokenBulk = (fakeServer, count, jsonHandler = bulkService) => {
+  const services = Array.from({ length: count }, (_, i) => ({ name: `Bulk${String(i + 1).padStart(2, "0")}`, type: "MapServer" }));
+  fakeServer.override(/^\/arcgis\/rest\/services(\?.*)?$/, () => html(folderPage({ folder: "", folders: [], services, version: catalog.currentVersion })));
+  fakeServer.override(/^\/arcgis\/rest\/services\/Bulk\d+\/MapServer$/, jsonHandler);
+};
 // The map preview panel sits over the top right of the page, where the bar's button is (IMG-3,
 // Phase 6), so the tests press Load more from the keyboard, as a keyboard user does.
 const pressLoadMore = (button) => button.press("Enter");
@@ -192,6 +198,21 @@ test("60 rows send exactly 50, the bar offers \"Load 10 more services\", and one
   await expect(page.getByText(/Not loaded/)).toHaveCount(0);
   await expect(page.locator("details.sdt-details")).toHaveCount(60);
   await expect(bar(page).getByRole("button")).toHaveCount(0);
+});
+
+test("a Load more batch on a page opened with ?token= sends the token in each POST body, not the URL", async ({ page, fakeServer }) => {
+  const token = SERVER_TOKENS.jsmith;
+  tokenBulk(fakeServer, 60);
+  await page.goto(withToken(REST_ROOT, token));
+  await pressLoadMore(bar(page).getByRole("button", { name: "Load 10 more services" }));
+  await expect(message(page)).toHaveText("Loaded details for 60 services in 60 requests");
+  const sent = bulkCalls(fakeServer);
+  expect(sent).toHaveLength(60);
+  for (const call of sent) {
+    expect(call.method).toBe("POST");
+    expect(call.query).toEqual({});
+    expect(call.body).toEqual({ f: "json", token });
+  }
 });
 
 test("120 rows: Load more sends 50, then offers \"Load 20 more services\"", async ({ page, fakeServer, bulkRoot }) => {
@@ -438,6 +459,26 @@ test("Retry after the budget is spent sends the row's requests", async ({ page, 
   expect(bulkCalls(fakeServer)).toHaveLength(51);
   expect(callsTo(fakeServer, "Bulk03")).toHaveLength(2);
   await expect(bar(page).getByRole("button", { name: "Load 10 more services" })).toBeVisible();
+});
+
+test("a Retry on a page opened with ?token= sends the token in the POST body, not the URL", async ({ page, fakeServer, expectedErrors }) => {
+  expectedErrors.push(/status of 502/);
+  const token = SERVER_TOKENS.jsmith;
+  const failures = new Set(["Bulk03"]);
+  tokenBulk(fakeServer, 6, (url) => {
+    const name = url.pathname.split("/").at(-2);
+    return failures.delete(name) ? BAD_GATEWAY() : bulkService();
+  });
+  await page.goto(withToken(REST_ROOT, token));
+  await retry(page, "Bulk03").press("Enter");
+  await expect(serviceRow(page, "Bulk03/MapServer").locator("details.sdt-details")).toHaveCount(1);
+  const sent = callsTo(fakeServer, "Bulk03");
+  expect(sent).toHaveLength(2);
+  for (const call of sent) {
+    expect(call.method).toBe("POST");
+    expect(call.query).toEqual({});
+    expect(call.body).toEqual({ f: "json", token });
+  }
 });
 
 test("two overlapping Retries on rows with no JSON both finish", async ({ page, fakeServer, bulkRoot, expectedErrors }) => {
