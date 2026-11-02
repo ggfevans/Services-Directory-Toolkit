@@ -183,3 +183,19 @@ test("a partial extent leaves its row out", () => {
 test("an empty dateFieldsTimeReference leaves its row out", () => {
   assert.equal(find(detailsOf({ dateFieldsTimeReference: {} }), "Date fields time zone"), undefined);
 });
+
+test("documentInfo strings go through toText, and other values stay as they are", () => {
+  const groups = detailsOf({ documentInfo: { Comments: "<DIV><P>Parcel <B>data</B></P></DIV>", Keywords: "<i>a</i>,b", Count: 3 } });
+  assert.equal(find(groups, "Document comments").value, "Parcel data");
+  assert.equal(find(groups, "Keywords").value, "a,b");
+  assert.equal(find(groups, "Document count").value, "3");
+});
+
+test("a description, copyright or documentInfo value that is empty after toText gets no row", () => {
+  const groups = detailsOf({
+    description: "<DIV></DIV>", serviceDescription: "<p> </p>", copyrightText: "<br>",
+    documentInfo: { Title: "<span></span>", Comments: "<p>kept</p>" }
+  });
+  assert.deepEqual(terms(groups).filter((term) => ["Description", "Service description", "Copyright", "Document title"].includes(term)), []);
+  assert.equal(find(groups, "Document comments").value, "kept");
+});

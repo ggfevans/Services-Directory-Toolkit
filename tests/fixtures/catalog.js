@@ -156,7 +156,7 @@ const summarizeRoutesTask = {
   }
 };
 
-const documentInfo = (title, keywords) => ({ Title: title, Author: "", Comments: "", Subject: "", Category: "", Keywords: keywords });
+const documentInfo = (title, keywords, comments = "") => ({ Title: title, Author: "", Comments: comments, Subject: "", Category: "", Keywords: keywords });
 
 // The invented server's users. onlineRole is the role ArcGIS Online's community/self reports.
 export const users = {
@@ -220,7 +220,7 @@ export const catalog = {
         initialExtent: EXTENT,
         fullExtent: EXTENT,
         units: "esriMeters",
-        documentInfo: documentInfo("Parcels", "parcels,addresses"),
+        documentInfo: documentInfo("Parcels", "parcels,addresses", "<DIV STYLE=\"text-align:Left;\"><P><SPAN>Invented parcel <B>comments</B>.</SPAN></P></DIV>"),
         capabilities: "Map,Query,Data",
         supportedQueryFormats: "JSON, geoJSON, PBF",
         maxRecordCount: 1000,

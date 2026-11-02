@@ -128,14 +128,21 @@ SDT.row = {
     };
     const layer = SDT.row.isLayer(data);
 
+    // Server text, as plain text. A value that is empty once its markup is gone gets no row.
+    const addText = (term, value) => {
+      const text = String(toText(value)).trim();
+      if (text) {
+        add(main, term, text);
+      }
+    };
     if (data.description) {
-      add(main, "Description", toText(data.description));
+      addText("Description", data.description);
     }
     if (data.serviceDescription) {
-      add(main, "Service description", toText(data.serviceDescription));
+      addText("Service description", data.serviceDescription);
     }
     if (data.copyrightText) {
-      add(main, "Copyright", toText(data.copyrightText));
+      addText("Copyright", data.copyrightText);
     }
     if (Array.isArray(data.layers) || Array.isArray(data.tables)) {
       const tables = Array.isArray(data.tables) ? data.tables.length : 0;
@@ -154,7 +161,12 @@ SDT.row = {
     if (data.documentInfo && typeof data.documentInfo === "object") {
       for (const [key, value] of Object.entries(data.documentInfo)) {
         if (value !== "" && value !== null && value !== undefined) {
-          add(main, key === "Keywords" ? "Keywords" : "Document " + SDT.row.unCamelCase(key).toLowerCase(), value);
+          const term = key === "Keywords" ? "Keywords" : "Document " + SDT.row.unCamelCase(key).toLowerCase();
+          if (typeof value === "string") {
+            addText(term, value);
+          } else {
+            add(main, term, value);
+          }
         }
       }
     }
@@ -235,7 +247,7 @@ SDT.row = {
     const parsed = new DOMParser().parseFromString(String(html), "text/html");
     parsed.querySelectorAll("script, style, noscript, template, title, textarea, xmp, iframe, noembed, noframes").forEach((node) => node.remove());
     parsed.querySelectorAll("br").forEach((node) => node.replaceWith(" "));
-    parsed.querySelectorAll("p, div, ul, ol, li, dl, dt, dd, table, tr, td, th, h1, h2, h3, h4, h5, h6, blockquote, pre").forEach((node) => {
+    parsed.querySelectorAll("p, div, ul, ol, li, dl, dt, dd, table, tr, td, th, h1, h2, h3, h4, h5, h6, blockquote, pre, section, article, header, footer, hr, center, caption, figure, figcaption, nav, aside, main, address, fieldset").forEach((node) => {
       node.before(" ");
       node.after(" ");
     });

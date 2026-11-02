@@ -160,7 +160,10 @@ for (const [title, description, text] of [
   ["adjacent blocks", "<div>Parcels</div><div>Updated weekly</div>", "Parcels Updated weekly"],
   ["a line break", "Line one<br>Line two", "Line one Line two"],
   ["list items", "<ul><li>A</li><li>B</li></ul>", "A B"],
-  ["text right before a block", "Intro<div>more</div>", "Intro more"]
+  ["text right before a block", "Intro<div>more</div>", "Intro more"],
+  ["sections, articles, headers and footers", "<section>A</section><article>B</article><header>C</header><footer>D</footer><nav>E</nav><aside>F</aside><main>G</main>", "A B C D E F G"],
+  ["rules, centred text, figures and addresses", "A<hr>B<center>C</center><figure>D<figcaption>E</figcaption></figure><address>F</address><fieldset>G</fieldset>", "A B C D E F G"],
+  ["a table caption", "<table><caption>Cap</caption><tr><td>Cell</td></tr></table>", "Cap Cell"]
 ]) {
   test(`server HTML as text: ${title}`, async ({ page, fakeServer }) => {
     fakeServer.override(PARCELS_JSON, () => json({ serviceDescription: description, spatialReference: { wkid: 4326 } }));
@@ -169,6 +172,13 @@ for (const [title, description, text] of [
     expect(await detail(serviceRow(page, "Parcels/MapServer"), "Service description").textContent()).toBe(text);
   });
 }
+
+test("documentInfo comments that hold HTML show as text, with no tags or entities", async ({ page }) => {
+  await page.goto(REST_ROOT);
+  const row = serviceRow(page, "Parcels/MapServer");
+  await expect(detail(row, "Document comments")).toHaveText("Invented parcel comments.");
+  expect(await detail(row, "Document comments").locator("*").count()).toBe(0);
+});
 
 test("a <script> or <img onerror> in a description neither runs nor loads", async ({ page, fakeServer }) => {
   const image = "/arcgis/rest/static/injected.png";
