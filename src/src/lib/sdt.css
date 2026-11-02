@@ -620,6 +620,10 @@ a.sdt-badge:hover {
   margin-top: 0;
 }
 
+.sdt-details__sentence {
+  margin: 0;
+}
+
 /* ---- Compact definition list ---- */
 .sdt-dl {
   display: grid;

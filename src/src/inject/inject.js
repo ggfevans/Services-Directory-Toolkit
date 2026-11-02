@@ -36,7 +36,7 @@
   const detailsGroup = (group) => {
     const nodes = [loadElement("p", { "class": "sdt-details__group" }, group.group)];
     if (group.sentence) {
-      nodes.push(loadElement("p", { "style": "margin:0" }, group.sentence));
+      nodes.push(loadElement("p", { "class": "sdt-details__sentence" }, group.sentence));
       return nodes;
     }
     const list = loadElement("dl", { "class": "sdt-dl" });

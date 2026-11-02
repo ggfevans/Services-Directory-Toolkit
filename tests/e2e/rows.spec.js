@@ -180,6 +180,15 @@ test("documentInfo comments that hold HTML show as text, with no tags or entitie
   expect(await detail(row, "Document comments").locator("*").count()).toBe(0);
 });
 
+test("the Also true sentence is styled by a class, with no inline style", async ({ page, fakeServer }) => {
+  fakeServer.override(PARCELS_JSON, () => json({ supportsDynamicLayers: true, spatialReference: { wkid: 4326 } }));
+  await page.goto(REST_ROOT);
+  const sentence = serviceRow(page, "Parcels/MapServer").locator("p.sdt-details__sentence");
+  await expect(sentence).toHaveText("Supports Dynamic Layers");
+  await expect(sentence).not.toHaveAttribute("style", /.*/);
+  await expect(sentence).toHaveCSS("margin-top", "0px");
+});
+
 test("a <script> or <img onerror> in a description neither runs nor loads", async ({ page, fakeServer }) => {
   const image = "/arcgis/rest/static/injected.png";
   fakeServer.override(PARCELS_JSON, () => json({
